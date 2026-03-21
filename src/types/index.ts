@@ -68,6 +68,12 @@ export interface PhasePlanEntry {
   notes?: string;
 }
 
+export interface ProjectPhase {
+  id: string;
+  label: string;
+  icon?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -84,7 +90,8 @@ export interface Project {
   members: string[];
   tags: string[];
   currentSprint?: number;
-  phasePlan?: Partial<Record<WaterfallPhase, PhasePlanEntry>>;
+  phases?: ProjectPhase[];           // özel faz listesi; yoksa varsayılan 5 faz kullanılır
+  phasePlan?: Partial<Record<string, PhasePlanEntry>>;
   createdAt: string;
   updatedAt: string;
 }
@@ -118,7 +125,7 @@ export interface Task {
   storyPoints?: number;
   sprint?: number;
   // Waterfall
-  phase?: WaterfallPhase;
+  phase?: string;
   createdAt: string;
   updatedAt: string;
   order: number;

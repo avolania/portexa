@@ -8,7 +8,7 @@ import {
 import { useProjectStore } from "@/store/useProjectStore";
 import { useTeamStore } from "@/store/useTeamStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import type { Task, WaterfallPhase } from "@/types";
+import type { Task, ProjectPhase } from "@/types";
 import { PriorityBadge, StatusBadge } from "@/components/ui/Badge";
 import Avatar from "@/components/ui/Avatar";
 import TaskDetailPanel from "@/components/tasks/TaskDetailPanel";
@@ -16,22 +16,31 @@ import GanttChart from "@/components/gantt/GanttChart";
 import NewTaskModal from "@/components/tasks/NewTaskModal";
 import { cn } from "@/lib/utils";
 
-export const PHASES: {
-  id: WaterfallPhase;
-  label: string;
-  description: string;
-  icon: string;
-  color: string;
-  bg: string;
-  border: string;
-  headerBg: string;
-}[] = [
-  { id: "requirements", label: "Gereksinimler", description: "Kapsam, gereksinim analizi ve onay",   icon: "📋", color: "text-violet-700", bg: "bg-violet-50",  border: "border-violet-200", headerBg: "bg-violet-100" },
-  { id: "design",       label: "Tasarım",       description: "Mimari, UI/UX ve teknik tasarım",      icon: "🎨", color: "text-blue-700",   bg: "bg-blue-50",    border: "border-blue-200",   headerBg: "bg-blue-100"   },
-  { id: "development",  label: "Geliştirme",    description: "Kodlama ve entegrasyon",               icon: "⚙️", color: "text-amber-700",  bg: "bg-amber-50",   border: "border-amber-200",  headerBg: "bg-amber-100"  },
-  { id: "testing",      label: "Test",           description: "QA, entegrasyon ve kullanıcı testleri",icon: "🧪", color: "text-orange-700", bg: "bg-orange-50",  border: "border-orange-200", headerBg: "bg-orange-100" },
-  { id: "deployment",   label: "Dağıtım",        description: "Canlıya alma ve yayın",               icon: "🚀", color: "text-emerald-700",bg: "bg-emerald-50", border: "border-emerald-200",headerBg: "bg-emerald-100"},
+// Varsayılan fazlar (proje özel faz tanımlamadıysa kullanılır)
+export const DEFAULT_PHASES: ProjectPhase[] = [
+  { id: "requirements", label: "Gereksinimler", icon: "📋" },
+  { id: "design",       label: "Tasarım",       icon: "🎨" },
+  { id: "development",  label: "Geliştirme",    icon: "⚙️" },
+  { id: "testing",      label: "Test",           icon: "🧪" },
+  { id: "deployment",   label: "Dağıtım",        icon: "🚀" },
 ];
+
+// Geriye dönük uyumluluk için alias
+export const PHASES = DEFAULT_PHASES;
+
+// Her faz ID'sine karşılık gelen stil (bilinmeyen ID'ler için fallback var)
+const PHASE_STYLES: Record<string, { color: string; bg: string; border: string; headerBg: string; description: string }> = {
+  requirements: { color: "text-violet-700", bg: "bg-violet-50",  border: "border-violet-200", headerBg: "bg-violet-100", description: "Kapsam, gereksinim analizi ve onay" },
+  design:       { color: "text-blue-700",   bg: "bg-blue-50",    border: "border-blue-200",   headerBg: "bg-blue-100",   description: "Mimari, UI/UX ve teknik tasarım" },
+  development:  { color: "text-amber-700",  bg: "bg-amber-50",   border: "border-amber-200",  headerBg: "bg-amber-100",  description: "Kodlama ve entegrasyon" },
+  testing:      { color: "text-orange-700", bg: "bg-orange-50",  border: "border-orange-200", headerBg: "bg-orange-100", description: "QA, entegrasyon ve kullanıcı testleri" },
+  deployment:   { color: "text-emerald-700",bg: "bg-emerald-50", border: "border-emerald-200",headerBg: "bg-emerald-100",description: "Canlıya alma ve yayın" },
+};
+const DEFAULT_STYLE = { color: "text-indigo-700", bg: "bg-indigo-50", border: "border-indigo-200", headerBg: "bg-indigo-100", description: "" };
+
+function resolvePhaseStyle(id: string) {
+  return PHASE_STYLES[id] ?? DEFAULT_STYLE;
+}
 
 function getPhaseStatus(tasks: Task[]): "empty" | "active" | "completed" {
   if (tasks.length === 0) return "empty";
@@ -46,7 +55,7 @@ function ClosureModal({
   projectId,
   onClose,
 }: {
-  phase: typeof PHASES[number];
+  phase: ProjectPhase & { color: string; bg: string; border: string; headerBg: string };
   projectId: string;
   onClose: () => void;
 }) {
@@ -152,19 +161,24 @@ interface Props {
 }
 
 export default function WaterfallBoard({ projectId }: Props) {
-  const { tasks: allStoreTasks, addTask } = useProjectStore();
+  const { tasks: allStoreTasks, projects, addTask } = useProjectStore();
   const teamMembers = useTeamStore((s) => s.members);
   const profiles = useAuthStore((s) => s.profiles);
+
+  const project = projects.find((p) => p.id === projectId);
+  const effectivePhases: (ProjectPhase & ReturnType<typeof resolvePhaseStyle>)[] = (
+    project?.phases ?? DEFAULT_PHASES
+  ).map((p) => ({ ...p, ...resolvePhaseStyle(p.id) }));
 
   const allTasks = allStoreTasks.filter((t) => t.projectId === projectId);
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [view, setView] = useState<"phases" | "gantt">("phases");
-  const [expandedPhases, setExpandedPhases] = useState<Set<WaterfallPhase>>(
-    new Set(["requirements", "design", "development", "testing", "deployment"])
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(
+    new Set((project?.phases ?? DEFAULT_PHASES).map((p) => p.id))
   );
-  const [addingTaskPhase, setAddingTaskPhase] = useState<WaterfallPhase | null>(null);
-  const [closurePhase, setClosurePhase] = useState<typeof PHASES[number] | null>(null);
+  const [addingTaskPhase, setAddingTaskPhase] = useState<string | null>(null);
+  const [closurePhase, setClosurePhase] = useState<(ProjectPhase & ReturnType<typeof resolvePhaseStyle>) | null>(null);
 
   const resolveName = (id?: string) => {
     if (!id) return null;
@@ -174,7 +188,7 @@ export default function WaterfallBoard({ projectId }: Props) {
     return prof?.name ?? null;
   };
 
-  const togglePhase = (phase: WaterfallPhase) => {
+  const togglePhase = (phase: string) => {
     setExpandedPhases((prev) => {
       const next = new Set(prev);
       next.has(phase) ? next.delete(phase) : next.add(phase);
@@ -186,7 +200,7 @@ export default function WaterfallBoard({ projectId }: Props) {
   const doneTasks = allTasks.filter((t) => t.status === "done").length;
   const overallPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
-  const currentPhaseIdx = PHASES.findIndex((p) => {
+  const currentPhaseIdx = effectivePhases.findIndex((p) => {
     const pt = allTasks.filter((t) => t.phase === p.id);
     return pt.length > 0 && !pt.every((t) => t.status === "done");
   });
@@ -224,7 +238,7 @@ export default function WaterfallBoard({ projectId }: Props) {
               <div className="text-sm text-gray-500">{doneTasks}/{totalTasks} görev tamamlandı</div>
             </div>
             <div className="flex items-center gap-1 mb-4">
-              {PHASES.map((phase, idx) => {
+              {effectivePhases.map((phase, idx) => {
                 const phaseTasks = allTasks.filter((t) => t.phase === phase.id);
                 const status = getPhaseStatus(phaseTasks);
                 const isCurrent = idx === currentPhaseIdx;
@@ -236,11 +250,11 @@ export default function WaterfallBoard({ projectId }: Props) {
                       isCurrent ? "bg-indigo-100 text-indigo-700" :
                       "bg-gray-100 text-gray-500"
                     )}>
-                      <span>{phase.icon}</span>
+                      <span>{phase.icon ?? "📌"}</span>
                       <span className="hidden sm:inline truncate">{phase.label}</span>
                       {status === "completed" && <CheckCircle2 className="w-3.5 h-3.5 ml-auto" />}
                     </div>
-                    {idx < PHASES.length - 1 && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />}
+                    {idx < effectivePhases.length - 1 && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />}
                   </div>
                 );
               })}
@@ -252,7 +266,7 @@ export default function WaterfallBoard({ projectId }: Props) {
 
           {/* Phase cards */}
           <div className="space-y-3">
-            {PHASES.map((phase) => {
+            {effectivePhases.map((phase) => {
               const phaseTasks = allTasks.filter((t) => t.phase === phase.id);
               const phaseStatus = getPhaseStatus(phaseTasks);
               const isExpanded = expandedPhases.has(phase.id);
@@ -295,7 +309,7 @@ export default function WaterfallBoard({ projectId }: Props) {
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 mt-0.5">{phase.description}</div>
+                      {phase.description && <div className="text-xs text-gray-500 mt-0.5">{phase.description}</div>}
                     </div>
                     <div className="flex items-center gap-3 ml-auto">
                       {phaseTasks.length > 0 && (
@@ -362,7 +376,7 @@ export default function WaterfallBoard({ projectId }: Props) {
         <NewTaskModal
           projectId={projectId}
           isAgile={false}
-          defaultPhase={addingTaskPhase}
+          defaultPhase={addingTaskPhase ?? undefined}
           onClose={() => setAddingTaskPhase(null)}
         />
       )}

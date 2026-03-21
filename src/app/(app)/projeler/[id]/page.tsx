@@ -16,8 +16,8 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { ROLE_META } from "@/lib/permissions";
 import Avatar from "@/components/ui/Avatar";
 import * as XLSX from "xlsx";
-import type { Project, Task, TeamMember, User, WaterfallPhase, PhasePlanEntry } from "@/types";
-import { PHASES } from "@/components/kanban/WaterfallBoard";
+import type { Project, Task, TeamMember, User, PhasePlanEntry, ProjectPhase } from "@/types";
+import { DEFAULT_PHASES } from "@/components/kanban/WaterfallBoard";
 
 export default function ProjeDetayPage() {
   const params = useParams();
@@ -419,27 +419,42 @@ function PlanTab({
   onUpdate,
 }: {
   project: Project;
-  onUpdate: (phasePlan: Partial<Record<WaterfallPhase, PhasePlanEntry>>) => void;
+  onUpdate: (phasePlan: Partial<Record<string, PhasePlanEntry>>) => void;
 }) {
-  const { getProjectTasks } = useProjectStore();
+  const { getProjectTasks, updateProject } = useProjectStore();
   const allTasks = getProjectTasks(project.id);
 
-  const [form, setForm] = useState<Partial<Record<WaterfallPhase, PhasePlanEntry>>>(
+  // ── Faz listesi state ──────────────────────────────────────────────────────
+  const [phases, setPhases] = useState<ProjectPhase[]>(
+    project.phases ?? DEFAULT_PHASES.map((p) => ({ id: p.id, label: p.label, icon: p.icon }))
+  );
+  const [phasesDirty, setPhasesDirty] = useState(false);
+
+  // ── Plan entries state ─────────────────────────────────────────────────────
+  const [form, setForm] = useState<Partial<Record<string, PhasePlanEntry>>>(
     project.phasePlan ?? {}
   );
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const setField = (phase: WaterfallPhase, field: keyof PhasePlanEntry, value: string) => {
+  const anyDirty = dirty || phasesDirty;
+
+  const setField = (phaseId: string, field: keyof PhasePlanEntry, value: string) => {
     setForm((prev) => ({
       ...prev,
-      [phase]: { ...(prev[phase] ?? {}), [field]: value },
+      [phaseId]: { ...(prev[phaseId] ?? {}), [field]: value },
     }));
     setDirty(true);
     setSaved(false);
   };
 
   const handleSave = () => {
+    // Faz listesi değiştiyse kaydet
+    if (phasesDirty) {
+      updateProject(project.id, { phases });
+      setPhasesDirty(false);
+    }
+    // Plan girişlerini kaydet
     onUpdate(form);
     setDirty(false);
     setSaved(true);
@@ -447,130 +462,227 @@ function PlanTab({
   };
 
   const handleReset = () => {
+    setPhases(project.phases ?? DEFAULT_PHASES.map((p) => ({ id: p.id, label: p.label, icon: p.icon })));
     setForm(project.phasePlan ?? {});
     setDirty(false);
+    setPhasesDirty(false);
+    setSaved(false);
+  };
+
+  // ── Faz düzenleme helpers ──────────────────────────────────────────────────
+  const updatePhase = (idx: number, field: keyof ProjectPhase, value: string) => {
+    setPhases((prev) => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+    setPhasesDirty(true);
+    setSaved(false);
+  };
+
+  const movePhase = (idx: number, dir: -1 | 1) => {
+    const next = [...phases];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setPhases(next);
+    setPhasesDirty(true);
+    setSaved(false);
+  };
+
+  const removePhase = (idx: number) => {
+    setPhases((prev) => prev.filter((_, i) => i !== idx));
+    setPhasesDirty(true);
+    setSaved(false);
+  };
+
+  const addPhase = () => {
+    const id = `phase_${Date.now().toString(36)}`;
+    setPhases((prev) => [...prev, { id, label: "Yeni Faz", icon: "📌" }]);
+    setPhasesDirty(true);
     setSaved(false);
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header row */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900">Faz Planı</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Her faz için tarih aralığı, sorumlu ve notları düzenleyin.</p>
+    <div className="space-y-6">
+
+      {/* ── Faz yapılandırması ─────────────────────────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Fazları Düzenle</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Faz adlarını değiştirin, sıralayin, ekleyin veya silin.</p>
+          </div>
+          <button
+            onClick={addPhase}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Faz Ekle
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          {saved && (
-            <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Kaydedildi
-            </span>
+
+        <div className="divide-y divide-gray-100">
+          {phases.map((phase, idx) => (
+            <div key={phase.id} className="flex items-center gap-3 px-4 py-2.5">
+              {/* Icon input */}
+              <input
+                type="text"
+                value={phase.icon ?? ""}
+                onChange={(e) => updatePhase(idx, "icon", e.target.value)}
+                className="w-12 text-center text-lg border border-gray-200 rounded-lg px-1 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                title="Emoji ikonu"
+                maxLength={4}
+              />
+              {/* Label input */}
+              <input
+                type="text"
+                value={phase.label}
+                onChange={(e) => updatePhase(idx, "label", e.target.value)}
+                className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 font-medium"
+              />
+              {/* Up / Down */}
+              <div className="flex flex-col gap-0.5">
+                <button
+                  onClick={() => movePhase(idx, -1)}
+                  disabled={idx === 0}
+                  className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-25 rounded"
+                  title="Yukarı taşı"
+                >
+                  ▲
+                </button>
+                <button
+                  onClick={() => movePhase(idx, 1)}
+                  disabled={idx === phases.length - 1}
+                  className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-25 rounded"
+                  title="Aşağı taşı"
+                >
+                  ▼
+                </button>
+              </div>
+              {/* Delete */}
+              <button
+                onClick={() => removePhase(idx)}
+                className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                title="Fazı sil"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          {phases.length === 0 && (
+            <div className="text-center py-6 text-sm text-gray-400">
+              Hiç faz yok. "Faz Ekle" ile ekleyin.
+            </div>
           )}
-          {dirty && (
-            <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> Kaydedilmemiş değişiklik
-            </span>
-          )}
-          <button
-            onClick={handleReset}
-            disabled={!dirty}
-            className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            İptal
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!dirty}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Save className="w-3.5 h-3.5" />
-            Kaydet
-          </button>
         </div>
       </div>
 
-      {/* Phase rows */}
-      <div className="space-y-3">
-        {PHASES.map((phase) => {
-          const phaseTasks = allTasks.filter((t) => t.phase === phase.id);
-          const doneTasks = phaseTasks.filter((t) => t.status === "done");
-          const entry = form[phase.id] ?? {};
-          const phaseStatus =
-            phaseTasks.length === 0 ? "empty"
-            : doneTasks.length === phaseTasks.length ? "completed"
-            : "active";
+      {/* ── Plan girişleri ─────────────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Faz Planı</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Her faz için tarih aralığı, sorumlu ve notları düzenleyin.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {saved && (
+              <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Kaydedildi
+              </span>
+            )}
+            {anyDirty && (
+              <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" /> Kaydedilmemiş değişiklik
+              </span>
+            )}
+            <button
+              onClick={handleReset}
+              disabled={!anyDirty}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              İptal
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!anyDirty}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Save className="w-3.5 h-3.5" />
+              Kaydet
+            </button>
+          </div>
+        </div>
 
-          return (
-            <div key={phase.id} className={`border rounded-2xl overflow-hidden ${phase.border}`}>
-              {/* Phase header */}
-              <div className={`flex items-center gap-3 px-4 py-3 ${phase.headerBg}`}>
-                <span className="text-lg">{phase.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-semibold ${phase.color}`}>{phase.label}</div>
-                  <div className="text-xs text-gray-500">{phase.description}</div>
+        <div className="space-y-3">
+          {phases.map((phase) => {
+            const phaseTasks = allTasks.filter((t) => t.phase === phase.id);
+            const doneTasks = phaseTasks.filter((t) => t.status === "done");
+            const entry = form[phase.id] ?? {};
+            const phaseStatus =
+              phaseTasks.length === 0 ? "empty"
+              : doneTasks.length === phaseTasks.length ? "completed"
+              : "active";
+
+            return (
+              <div key={phase.id} className="border border-gray-200 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3 bg-gray-50">
+                  <span className="text-lg">{phase.icon ?? "📌"}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-800">{phase.label}</div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {phaseTasks.length > 0 && (
+                      <span className="text-xs text-gray-500">
+                        {doneTasks.length}/{phaseTasks.length} tamamlandı
+                      </span>
+                    )}
+                    {phaseStatus === "completed" && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                    {phaseStatus === "active"    && <Clock className="w-4 h-4 text-amber-500" />}
+                    {phaseStatus === "empty"     && <Circle className="w-4 h-4 text-gray-300" />}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {phaseTasks.length > 0 && (
-                    <span className="text-xs text-gray-500">
-                      {doneTasks.length}/{phaseTasks.length} tamamlandı
-                    </span>
-                  )}
-                  {phaseStatus === "completed" && (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  )}
-                  {phaseStatus === "active" && (
-                    <Clock className="w-4 h-4 text-amber-500" />
-                  )}
-                  {phaseStatus === "empty" && (
-                    <Circle className="w-4 h-4 text-gray-300" />
-                  )}
+
+                <div className="bg-white px-4 py-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Başlangıç Tarihi</label>
+                    <input
+                      type="date"
+                      value={entry.startDate ?? ""}
+                      onChange={(e) => setField(phase.id, "startDate", e.target.value)}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Bitiş Tarihi</label>
+                    <input
+                      type="date"
+                      value={entry.endDate ?? ""}
+                      onChange={(e) => setField(phase.id, "endDate", e.target.value)}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Sorumlu</label>
+                    <input
+                      type="text"
+                      value={entry.owner ?? ""}
+                      onChange={(e) => setField(phase.id, "owner", e.target.value)}
+                      placeholder="Sorumlu adı..."
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Notlar</label>
+                    <input
+                      type="text"
+                      value={entry.notes ?? ""}
+                      onChange={(e) => setField(phase.id, "notes", e.target.value)}
+                      placeholder="Kısa not..."
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </div>
                 </div>
               </div>
-
-              {/* Phase form */}
-              <div className="bg-white px-4 py-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Başlangıç Tarihi</label>
-                  <input
-                    type="date"
-                    value={entry.startDate ?? ""}
-                    onChange={(e) => setField(phase.id, "startDate", e.target.value)}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Bitiş Tarihi</label>
-                  <input
-                    type="date"
-                    value={entry.endDate ?? ""}
-                    onChange={(e) => setField(phase.id, "endDate", e.target.value)}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Sorumlu</label>
-                  <input
-                    type="text"
-                    value={entry.owner ?? ""}
-                    onChange={(e) => setField(phase.id, "owner", e.target.value)}
-                    placeholder="Sorumlu adı..."
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Notlar</label>
-                  <input
-                    type="text"
-                    value={entry.notes ?? ""}
-                    onChange={(e) => setField(phase.id, "notes", e.target.value)}
-                    placeholder="Kısa not..."
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
-                </div>
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
 "use client";
 
 import { X, Calendar, Clock, User, Tag, Link2, MessageSquare, CheckSquare, Plus, Save, RotateCcw } from "lucide-react";
-import type { Task, WaterfallPhase, IssueType, Priority, TaskStatus, Subtask } from "@/types";
+import type { Task, IssueType, Priority, TaskStatus, Subtask } from "@/types";
+import { DEFAULT_PHASES } from "@/components/kanban/WaterfallBoard";
 import { ISSUE_TYPE_META } from "@/types";
 import { PriorityBadge, StatusBadge } from "@/components/ui/Badge";
 import Avatar from "@/components/ui/Avatar";
@@ -19,7 +20,7 @@ const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "critical", label: "Kritik" },
 ];
 
-const WATERFALL_PHASES: { value: WaterfallPhase; label: string }[] = [
+const WATERFALL_PHASES_FALLBACK = [
   { value: "requirements", label: "Gereksinimler" },
   { value: "design",       label: "Tasarım" },
   { value: "development",  label: "Geliştirme" },
@@ -71,7 +72,7 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
     estimatedHours: "",
     storyPoints: "",
     sprint: "",
-    phase: "requirements" as WaterfallPhase,
+    phase: "requirements",
     tags: "",
     issueType: "task" as IssueType,
     subtasks: [] as Subtask[],
@@ -255,7 +256,9 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
             <div>
               <label className={labelCls}>Faz</label>
               <select value={form.phase} onChange={(e) => update("phase", e.target.value)} className={inputCls}>
-                {WATERFALL_PHASES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                {(project?.phases ?? DEFAULT_PHASES).map((p) => (
+                  <option key={p.id} value={p.id}>{p.icon ? `${p.icon} ` : ""}{p.label}</option>
+                ))}
               </select>
             </div>
           )}

@@ -5,8 +5,9 @@ import { X } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useTeamStore } from "@/store/useTeamStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import type { Task, Priority, TaskStatus, IssueType, WaterfallPhase } from "@/types";
+import type { Task, Priority, TaskStatus, IssueType } from "@/types";
 import { ISSUE_TYPE_META } from "@/types";
+import { DEFAULT_PHASES } from "@/components/kanban/WaterfallBoard";
 import Button from "@/components/ui/Button";
 
 const PRIORITIES: { value: Priority; label: string; color: string }[] = [
@@ -16,13 +17,6 @@ const PRIORITIES: { value: Priority; label: string; color: string }[] = [
   { value: "critical", label: "Kritik",  color: "text-red-600" },
 ];
 
-const WATERFALL_PHASES: { value: WaterfallPhase; label: string }[] = [
-  { value: "requirements", label: "Gereksinimler" },
-  { value: "design",       label: "Tasarım" },
-  { value: "development",  label: "Geliştirme" },
-  { value: "testing",      label: "Test" },
-  { value: "deployment",   label: "Dağıtım" },
-];
 
 const ISSUE_TYPES = Object.entries(ISSUE_TYPE_META) as [IssueType, typeof ISSUE_TYPE_META[IssueType]][];
 
@@ -30,7 +24,7 @@ interface Props {
   projectId: string;
   isAgile: boolean;
   currentSprint?: number;
-  defaultPhase?: WaterfallPhase;
+  defaultPhase?: string;
   onClose: () => void;
 }
 
@@ -64,7 +58,7 @@ export default function NewTaskModal({ projectId, isAgile, currentSprint, defaul
     estimatedHours: "",
     storyPoints: "",
     sprint: currentSprint ?? 1,
-    phase: defaultPhase ?? ("requirements" as WaterfallPhase),
+    phase: defaultPhase ?? "requirements",
     tags: "",
   });
 
@@ -231,10 +225,10 @@ export default function NewTaskModal({ projectId, isAgile, currentSprint, defaul
               <select
                 className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={form.phase}
-                onChange={(e) => setForm({ ...form, phase: e.target.value as WaterfallPhase })}
+                onChange={(e) => setForm({ ...form, phase: e.target.value })}
               >
-                {WATERFALL_PHASES.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
+                {(project?.phases ?? DEFAULT_PHASES).map((p) => (
+                  <option key={p.id} value={p.id}>{p.icon ? `${p.icon} ` : ""}{p.label}</option>
                 ))}
               </select>
             </div>
