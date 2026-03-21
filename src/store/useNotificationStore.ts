@@ -32,6 +32,6 @@ export const useNotificationStore = create<NotificationState>()(
         })),
       unreadCount: () => get().notifications.filter((n) => !n.read).length,
     }),
-    { name: "notification-storage", partialize: (state) => ({ notifications: state.notifications }) }
+    { name: "notification-storage", skipHydration: true, partialize: (state) => ({ notifications: state.notifications }) }
   )
 );

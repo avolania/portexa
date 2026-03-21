@@ -43,6 +43,6 @@ export const useReportStore = create<ReportState>()(
       getByType: (type) => get().reports.filter((r) => r.type === type),
       reset: (reports) => set({ reports }),
     }),
-    { name: "report-storage", partialize: (state) => ({ reports: state.reports }) }
+    { name: "report-storage", skipHydration: true, partialize: (state) => ({ reports: state.reports }) }
   )
 );

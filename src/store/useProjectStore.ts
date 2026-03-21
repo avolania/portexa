@@ -55,6 +55,7 @@ export const useProjectStore = create<ProjectState>()(
     }),
     {
       name: "project-storage",
+      skipHydration: true,
       partialize: (state) => ({
         projects: state.projects,
         tasks: state.tasks,

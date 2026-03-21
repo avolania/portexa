@@ -28,7 +28,7 @@ export const useGovernanceStore = create<GovernanceState>()(
           (i) => i.projectId === projectId && (!category || i.category === category)
         ),
     }),
-    { name: "governance-storage", partialize: (state) => ({ items: state.items }) }
+    { name: "governance-storage", skipHydration: true, partialize: (state) => ({ items: state.items }) }
   )
 );
 

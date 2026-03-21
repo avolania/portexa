@@ -47,6 +47,6 @@ export const useTeamStore = create<TeamState>()(
         })),
       reset: (members) => set({ members }),
     }),
-    { name: "team-storage", partialize: (s) => ({ members: s.members }) }
+    { name: "team-storage", skipHydration: true, partialize: (s) => ({ members: s.members }) }
   )
 );
