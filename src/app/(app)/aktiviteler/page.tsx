@@ -2,9 +2,14 @@
 
 import { useState, useMemo } from "react";
 import {
-  Plus, X, Check, Send, Edit2, Trash2,
+  Plus, X, Send, Edit2, Trash2,
   CheckCircle2, XCircle, Clock, AlertCircle, ChevronDown,
+  LayoutList, BarChart2,
 } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, AreaChart, Area, Legend,
+} from "recharts";
 import { useActivityStore } from "@/store/useActivityStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -367,6 +372,268 @@ function ApprovalModal({
   );
 }
 
+// ─── Dashboard View ────────────────────────────────────────────────────────────
+
+const PIE_COLORS = ["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#84cc16","#64748b"];
+
+function DashboardView({
+  scopeEntries,
+  isManager,
+}: {
+  scopeEntries: ActivityEntry[];
+  isManager: boolean;
+}) {
+  const { projects } = useProjectStore();
+  const { members } = useTeamStore();
+  const profiles = useAuthStore((s) => s.profiles);
+  const [rangeMonths, setRangeMonths] = useState(3);
+
+  const resolveName = (uid: string) => {
+    const tm = members.find((m) => m.id === uid);
+    if (tm) return tm.name;
+    const prof = Object.values(profiles).find((p) => p.id === uid);
+    return prof?.name ?? uid.slice(0, 8);
+  };
+
+  // ── By type (approved) ──────────────────────────────────────────────────
+  const byType = useMemo(() => {
+    const map: Record<string, number> = {};
+    scopeEntries.filter((e) => e.status === "approved").forEach((e) => {
+      map[e.type] = (map[e.type] ?? 0) + e.hours;
+    });
+    return Object.entries(map).map(([type, hours]) => ({
+      name: ACTIVITY_TYPE_META[type as ActivityType]?.label ?? type,
+      icon: ACTIVITY_TYPE_META[type as ActivityType]?.icon ?? "✏️",
+      hours: Math.round(hours * 10) / 10,
+    })).sort((a, b) => b.hours - a.hours);
+  }, [scopeEntries]);
+
+  // ── By project (approved) ────────────────────────────────────────────────
+  const byProject = useMemo(() => {
+    const map: Record<string, number> = {};
+    scopeEntries.filter((e) => e.status === "approved").forEach((e) => {
+      const name = projects.find((p) => p.id === e.projectId)?.name ?? e.projectId;
+      map[name] = (map[name] ?? 0) + e.hours;
+    });
+    return Object.entries(map).map(([name, hours]) => ({
+      name: name.length > 18 ? name.slice(0, 16) + "…" : name,
+      hours: Math.round(hours * 10) / 10,
+    })).sort((a, b) => b.hours - a.hours).slice(0, 8);
+  }, [scopeEntries, projects]);
+
+  // ── Daily trend (last N months) ──────────────────────────────────────────
+  const dailyTrend = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - rangeMonths);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+    // build weekly buckets
+    const buckets: Record<string, { submitted: number; approved: number }> = {};
+    scopeEntries
+      .filter((e) => e.date >= cutoffStr)
+      .forEach((e) => {
+        // round to start of week (Mon)
+        const d = new Date(e.date);
+        const day = d.getDay() === 0 ? 6 : d.getDay() - 1;
+        d.setDate(d.getDate() - day);
+        const key = d.toISOString().slice(0, 10);
+        if (!buckets[key]) buckets[key] = { submitted: 0, approved: 0 };
+        buckets[key].submitted += e.hours;
+        if (e.status === "approved") buckets[key].approved += e.hours;
+      });
+
+    return Object.entries(buckets)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({
+        date: new Date(date).toLocaleDateString("tr-TR", { day: "numeric", month: "short" }),
+        "Toplam": Math.round(v.submitted * 10) / 10,
+        "Onaylanan": Math.round(v.approved * 10) / 10,
+      }));
+  }, [scopeEntries, rangeMonths]);
+
+  // ── Status distribution ──────────────────────────────────────────────────
+  const statusDist = useMemo(() => {
+    const map = { draft: 0, submitted: 0, approved: 0, rejected: 0 };
+    scopeEntries.forEach((e) => { map[e.status] += e.hours; });
+    return [
+      { name: "Taslak",        value: Math.round(map.draft * 10) / 10,     color: "#9ca3af" },
+      { name: "Onay Bekliyor", value: Math.round(map.submitted * 10) / 10, color: "#f59e0b" },
+      { name: "Onaylandı",     value: Math.round(map.approved * 10) / 10,  color: "#10b981" },
+      { name: "Reddedildi",    value: Math.round(map.rejected * 10) / 10,  color: "#ef4444" },
+    ].filter((d) => d.value > 0);
+  }, [scopeEntries]);
+
+  // ── Top contributors (managers only) ─────────────────────────────────────
+  const topContributors = useMemo(() => {
+    if (!isManager) return [];
+    const map: Record<string, number> = {};
+    scopeEntries.filter((e) => e.status === "approved").forEach((e) => {
+      map[e.userId] = (map[e.userId] ?? 0) + e.hours;
+    });
+    return Object.entries(map)
+      .map(([uid, hours]) => ({ name: resolveName(uid), hours: Math.round(hours * 10) / 10 }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 8);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeEntries, isManager, members, profiles]);
+
+  const totalApproved = scopeEntries.filter((e) => e.status === "approved").reduce((s, e) => s + e.hours, 0);
+  const totalAll      = scopeEntries.reduce((s, e) => s + e.hours, 0);
+  const approvalRate  = totalAll > 0 ? Math.round((totalApproved / totalAll) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* KPI row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: "Toplam Saat",    value: `${Math.round(totalAll * 10) / 10}s`,      color: "text-indigo-700" },
+          { label: "Onaylanan Saat", value: `${Math.round(totalApproved * 10) / 10}s`, color: "text-emerald-700" },
+          { label: "Onay Oranı",     value: `%${approvalRate}`,                         color: approvalRate >= 80 ? "text-emerald-700" : "text-amber-700" },
+          { label: "Aktivite Sayısı",value: `${scopeEntries.length}`,                  color: "text-gray-900" },
+        ].map((s) => (
+          <div key={s.label} className="card py-3">
+            <div className="text-xs text-gray-500 mb-1">{s.label}</div>
+            <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Trend chart */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">Haftalık Saat Trendi</h3>
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            {[1, 3, 6].map((m) => (
+              <button
+                key={m}
+                onClick={() => setRangeMonths(m)}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
+                  rangeMonths === m ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                {m}A
+              </button>
+            ))}
+          </div>
+        </div>
+        {dailyTrend.length === 0 ? (
+          <div className="flex items-center justify-center h-40 text-sm text-gray-400">Bu dönemde veri yok</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={180}>
+            <AreaChart data={dailyTrend} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="areaTotal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="areaApproved" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+              <Area type="monotone" dataKey="Toplam" stroke="#6366f1" strokeWidth={2} fill="url(#areaTotal)" />
+              <Area type="monotone" dataKey="Onaylanan" stroke="#10b981" strokeWidth={2} fill="url(#areaApproved)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Type + Status side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* By type */}
+        <div className="card">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Aktivite Tipine Göre (Onaylanan Saat)</h3>
+          {byType.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-sm text-gray-400">Onaylanan veri yok</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={byType} layout="vertical" margin={{ top: 0, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={90} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v) => [`${v}s`, "Saat"]} />
+                <Bar dataKey="hours" radius={[0, 4, 4, 0]}>
+                  {byType.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Status distribution */}
+        <div className="card">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Durum Dağılımı (Saat)</h3>
+          {statusDist.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-sm text-gray-400">Veri yok</div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <ResponsiveContainer width="60%" height={200}>
+                <PieChart>
+                  <Pie data={statusDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={50}>
+                    {statusDist.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v) => [`${v}s`, ""]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-2">
+                {statusDist.map((d) => (
+                  <div key={d.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
+                      <span className="text-gray-600">{d.name}</span>
+                    </div>
+                    <span className="font-semibold text-gray-900">{d.value}s</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* By project */}
+      {byProject.length > 0 && (
+        <div className="card">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Projeye Göre (Onaylanan Saat)</h3>
+          <ResponsiveContainer width="100%" height={Math.max(120, byProject.length * 36)}>
+            <BarChart data={byProject} layout="vertical" margin={{ top: 0, right: 8, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 10 }} />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={130} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v) => [`${v}s`, "Saat"]} />
+              <Bar dataKey="hours" fill="#6366f1" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Top contributors (managers) */}
+      {isManager && topContributors.length > 0 && (
+        <div className="card">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">En Aktif Üyeler (Onaylanan Saat)</h3>
+          <ResponsiveContainer width="100%" height={Math.max(120, topContributors.length * 36)}>
+            <BarChart data={topContributors} layout="vertical" margin={{ top: 0, right: 8, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 10 }} />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={120} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v) => [`${v}s`, "Saat"]} />
+              <Bar dataKey="hours" fill="#10b981" radius={[0, 4, 4, 0]}>
+                {topContributors.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Activity Card ─────────────────────────────────────────────────────────────
 
 function ActivityCard({
@@ -482,6 +749,7 @@ export default function AktivitelerPage() {
   const user = useAuthStore((s) => s.user);
   const { projects } = useProjectStore();
 
+  const [view, setView] = useState<"list" | "dashboard">("list");
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState<ActivityEntry | undefined>();
@@ -491,11 +759,15 @@ export default function AktivitelerPage() {
   const isManager = user?.role === "admin" || user?.role === "pm";
   const isMember = user?.role === "member";
 
+  // Scope: members see only their own; managers see all
+  const scopeEntries = useMemo(
+    () => isMember ? entries.filter((e) => e.userId === user?.id) : entries,
+    [entries, isMember, user]
+  );
+
   // Members see only their own; managers see all
   const visibleEntries = useMemo(() => {
-    let list = isMember
-      ? entries.filter((e) => e.userId === user?.id)
-      : entries;
+    let list = scopeEntries.slice();
 
     if (filterProject !== "all") list = list.filter((e) => e.projectId === filterProject);
     if (activeTab !== "all") list = list.filter((e) => e.status === activeTab);
@@ -505,22 +777,22 @@ export default function AktivitelerPage() {
 
   // Stats (this month)
   const now = new Date();
-  const monthEntries = (isMember ? entries.filter((e) => e.userId === user?.id) : entries)
-    .filter((e) => e.date.startsWith(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`));
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const monthEntries = scopeEntries.filter((e) => e.date.startsWith(monthPrefix));
 
   const stats = {
-    total:     monthEntries.reduce((s, e) => s + e.hours, 0),
-    approved:  monthEntries.filter((e) => e.status === "approved").reduce((s, e) => s + e.hours, 0),
-    pending:   monthEntries.filter((e) => e.status === "submitted").length,
-    draft:     monthEntries.filter((e) => e.status === "draft").length,
+    total:    monthEntries.reduce((s, e) => s + e.hours, 0),
+    approved: monthEntries.filter((e) => e.status === "approved").reduce((s, e) => s + e.hours, 0),
+    pending:  monthEntries.filter((e) => e.status === "submitted").length,
+    draft:    monthEntries.filter((e) => e.status === "draft").length,
   };
 
   const tabs: { id: FilterTab; label: string; count: number }[] = [
-    { id: "all",       label: "Tümü",          count: (isMember ? entries.filter((e) => e.userId === user?.id) : entries).length },
-    { id: "draft",     label: "Taslak",         count: (isMember ? entries.filter((e) => e.userId === user?.id) : entries).filter((e) => e.status === "draft").length },
-    { id: "submitted", label: "Onay Bekliyor",  count: (isMember ? entries.filter((e) => e.userId === user?.id) : entries).filter((e) => e.status === "submitted").length },
-    { id: "approved",  label: "Onaylandı",      count: (isMember ? entries.filter((e) => e.userId === user?.id) : entries).filter((e) => e.status === "approved").length },
-    { id: "rejected",  label: "Reddedildi",     count: (isMember ? entries.filter((e) => e.userId === user?.id) : entries).filter((e) => e.status === "rejected").length },
+    { id: "all",       label: "Tümü",         count: scopeEntries.length },
+    { id: "draft",     label: "Taslak",        count: scopeEntries.filter((e) => e.status === "draft").length },
+    { id: "submitted", label: "Onay Bekliyor", count: scopeEntries.filter((e) => e.status === "submitted").length },
+    { id: "approved",  label: "Onaylandı",     count: scopeEntries.filter((e) => e.status === "approved").length },
+    { id: "rejected",  label: "Reddedildi",    count: scopeEntries.filter((e) => e.status === "rejected").length },
   ];
 
   return (
@@ -533,13 +805,32 @@ export default function AktivitelerPage() {
             {isManager ? "Ekip aktivitelerini görüntüleyin ve onaylayın." : "Aktivitelerinizi kaydedin ve onaya gönderin."}
           </p>
         </div>
-        <button
-          onClick={() => { setEditEntry(undefined); setShowModal(true); }}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          Yeni Aktivite
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* View toggle */}
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setView("list")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                view === "list" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
+            >
+              <LayoutList className="w-4 h-4" /> Liste
+            </button>
+            <button
+              onClick={() => setView("dashboard")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                view === "dashboard" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}
+            >
+              <BarChart2 className="w-4 h-4" /> Rapor
+            </button>
+          </div>
+          <button
+            onClick={() => { setEditEntry(undefined); setShowModal(true); }}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Yeni Aktivite
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -557,73 +848,72 @@ export default function AktivitelerPage() {
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        {/* Tabs */}
-        <div className="flex gap-1 overflow-x-auto">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap",
-                activeTab === tab.id
-                  ? "bg-indigo-600 text-white"
-                  : "text-gray-500 hover:bg-gray-100"
-              )}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span className={cn(
-                  "text-xs px-1.5 py-0.5 rounded-full",
-                  activeTab === tab.id ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
-                )}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Project filter */}
-        <div className="relative">
-          <select
-            value={filterProject}
-            onChange={(e) => setFilterProject(e.target.value)}
-            className="appearance-none text-sm border border-gray-200 rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
-          >
-            <option value="all">Tüm Projeler</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-        </div>
-      </div>
-
-      {/* List */}
-      <div className="space-y-2">
-        {visibleEntries.length === 0 ? (
-          <div className="text-center py-16 bg-white border border-dashed border-gray-200 rounded-2xl">
-            <div className="text-4xl mb-3">📋</div>
-            <p className="text-sm font-medium text-gray-700">Aktivite bulunamadı</p>
-            <p className="text-xs text-gray-400 mt-1">
-              {activeTab === "all" ? "Henüz aktivite eklenmemiş." : "Bu filtreyle eşleşen aktivite yok."}
-            </p>
+      {view === "list" && (
+        <>
+          {/* Filters */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex gap-1 overflow-x-auto">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap",
+                    activeTab === tab.id ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-100"
+                  )}
+                >
+                  {tab.label}
+                  {tab.count > 0 && (
+                    <span className={cn("text-xs px-1.5 py-0.5 rounded-full",
+                      activeTab === tab.id ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600")}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <select
+                value={filterProject}
+                onChange={(e) => setFilterProject(e.target.value)}
+                className="appearance-none text-sm border border-gray-200 rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+              >
+                <option value="all">Tüm Projeler</option>
+                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
           </div>
-        ) : (
-          visibleEntries.map((entry) => (
-            <ActivityCard
-              key={entry.id}
-              entry={entry}
-              canManage={entry.userId === user?.id && entry.status === "draft"}
-              canApprove={isManager}
-              onEdit={() => { setEditEntry(entry); setShowModal(true); }}
-              onApprove={() => setApprovalEntry(entry)}
-            />
-          ))
-        )}
-      </div>
+
+          {/* List */}
+          <div className="space-y-2">
+            {visibleEntries.length === 0 ? (
+              <div className="text-center py-16 bg-white border border-dashed border-gray-200 rounded-2xl">
+                <div className="text-4xl mb-3">📋</div>
+                <p className="text-sm font-medium text-gray-700">Aktivite bulunamadı</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {activeTab === "all" ? "Henüz aktivite eklenmemiş." : "Bu filtreyle eşleşen aktivite yok."}
+                </p>
+              </div>
+            ) : (
+              visibleEntries.map((entry) => (
+                <ActivityCard
+                  key={entry.id}
+                  entry={entry}
+                  canManage={entry.userId === user?.id && entry.status === "draft"}
+                  canApprove={isManager}
+                  onEdit={() => { setEditEntry(entry); setShowModal(true); }}
+                  onApprove={() => setApprovalEntry(entry)}
+                />
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      {view === "dashboard" && (
+        <DashboardView scopeEntries={scopeEntries} isManager={isManager} />
+      )}
 
       {/* Modals */}
       {showModal && (
