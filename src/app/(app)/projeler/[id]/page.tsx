@@ -8,7 +8,7 @@ import KanbanBoard from "@/components/kanban/KanbanBoard";
 import WaterfallBoard from "@/components/kanban/WaterfallBoard";
 import GovernancePanel from "@/components/governance/GovernancePanel";
 import NewTaskModal from "@/components/tasks/NewTaskModal";
-import { ArrowLeft, Calendar, Users, DollarSign, Settings, Zap, GitMerge, Download, LayoutList, Shield, Plus, Database, UserPlus, Trash2, Search, X } from "lucide-react";
+import { ArrowLeft, Calendar, Users, DollarSign, Settings, Zap, GitMerge, Download, LayoutList, Shield, Plus, Database, UserPlus, Trash2, Search, X, ClipboardList, CheckCircle2, Circle, Clock, Save } from "lucide-react";
 import Link from "next/link";
 import { exportProjectPlan } from "@/lib/exportExcel";
 import { useTeamStore } from "@/store/useTeamStore";
@@ -16,7 +16,8 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { ROLE_META } from "@/lib/permissions";
 import Avatar from "@/components/ui/Avatar";
 import * as XLSX from "xlsx";
-import type { Project, Task, TeamMember, User } from "@/types";
+import type { Project, Task, TeamMember, User, WaterfallPhase, PhasePlanEntry } from "@/types";
+import { PHASES } from "@/components/kanban/WaterfallBoard";
 
 export default function ProjeDetayPage() {
   const params = useParams();
@@ -24,7 +25,7 @@ export default function ProjeDetayPage() {
   const { members: teamMembers, assignProject, unassignProject } = useTeamStore();
   const profiles = useAuthStore((s) => s.profiles);
   const project = projects.find((p) => p.id === params.id);
-  const [activeTab, setActiveTab] = useState<"tasks" | "governance" | "team" | "data">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "governance" | "team" | "plan" | "data">("tasks");
   const [showNewTask, setShowNewTask] = useState(false);
 
   if (!project) {
@@ -193,6 +194,7 @@ export default function ProjeDetayPage() {
             { id: "tasks",      label: "Görevler",      icon: LayoutList },
             { id: "governance", label: "Yönetişim",     icon: Shield },
             { id: "team",       label: "Ekip",          icon: Users },
+            ...(!isAgile ? [{ id: "plan" as const, label: "Plan", icon: ClipboardList }] : []),
             { id: "data",       label: "Veri Yönetimi", icon: Database },
           ] as const).map(({ id, label, icon: Icon }) => (
             <button
@@ -240,6 +242,10 @@ export default function ProjeDetayPage() {
           onAdd={handleAddMember}
           onRemove={handleRemoveMember}
         />
+      )}
+
+      {activeTab === "plan" && (
+        <PlanTab project={project} onUpdate={(phasePlan) => updateProject(project.id, { phasePlan })} />
       )}
 
       {activeTab === "data" && <DataTab project={project} />}
@@ -401,6 +407,170 @@ function TeamTab({
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Plan Tab ────────────────────────────────────────────────────────────────
+
+function PlanTab({
+  project,
+  onUpdate,
+}: {
+  project: Project;
+  onUpdate: (phasePlan: Partial<Record<WaterfallPhase, PhasePlanEntry>>) => void;
+}) {
+  const { getProjectTasks } = useProjectStore();
+  const allTasks = getProjectTasks(project.id);
+
+  const [form, setForm] = useState<Partial<Record<WaterfallPhase, PhasePlanEntry>>>(
+    project.phasePlan ?? {}
+  );
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const setField = (phase: WaterfallPhase, field: keyof PhasePlanEntry, value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      [phase]: { ...(prev[phase] ?? {}), [field]: value },
+    }));
+    setDirty(true);
+    setSaved(false);
+  };
+
+  const handleSave = () => {
+    onUpdate(form);
+    setDirty(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const handleReset = () => {
+    setForm(project.phasePlan ?? {});
+    setDirty(false);
+    setSaved(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Faz Planı</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Her faz için tarih aralığı, sorumlu ve notları düzenleyin.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {saved && (
+            <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Kaydedildi
+            </span>
+          )}
+          {dirty && (
+            <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> Kaydedilmemiş değişiklik
+            </span>
+          )}
+          <button
+            onClick={handleReset}
+            disabled={!dirty}
+            className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            İptal
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!dirty}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Save className="w-3.5 h-3.5" />
+            Kaydet
+          </button>
+        </div>
+      </div>
+
+      {/* Phase rows */}
+      <div className="space-y-3">
+        {PHASES.map((phase) => {
+          const phaseTasks = allTasks.filter((t) => t.phase === phase.id);
+          const doneTasks = phaseTasks.filter((t) => t.status === "done");
+          const entry = form[phase.id] ?? {};
+          const phaseStatus =
+            phaseTasks.length === 0 ? "empty"
+            : doneTasks.length === phaseTasks.length ? "completed"
+            : "active";
+
+          return (
+            <div key={phase.id} className={`border rounded-2xl overflow-hidden ${phase.border}`}>
+              {/* Phase header */}
+              <div className={`flex items-center gap-3 px-4 py-3 ${phase.headerBg}`}>
+                <span className="text-lg">{phase.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className={`text-sm font-semibold ${phase.color}`}>{phase.label}</div>
+                  <div className="text-xs text-gray-500">{phase.description}</div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {phaseTasks.length > 0 && (
+                    <span className="text-xs text-gray-500">
+                      {doneTasks.length}/{phaseTasks.length} tamamlandı
+                    </span>
+                  )}
+                  {phaseStatus === "completed" && (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  )}
+                  {phaseStatus === "active" && (
+                    <Clock className="w-4 h-4 text-amber-500" />
+                  )}
+                  {phaseStatus === "empty" && (
+                    <Circle className="w-4 h-4 text-gray-300" />
+                  )}
+                </div>
+              </div>
+
+              {/* Phase form */}
+              <div className="bg-white px-4 py-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Başlangıç Tarihi</label>
+                  <input
+                    type="date"
+                    value={entry.startDate ?? ""}
+                    onChange={(e) => setField(phase.id, "startDate", e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Bitiş Tarihi</label>
+                  <input
+                    type="date"
+                    value={entry.endDate ?? ""}
+                    onChange={(e) => setField(phase.id, "endDate", e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Sorumlu</label>
+                  <input
+                    type="text"
+                    value={entry.owner ?? ""}
+                    onChange={(e) => setField(phase.id, "owner", e.target.value)}
+                    placeholder="Sorumlu adı..."
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Notlar</label>
+                  <input
+                    type="text"
+                    value={entry.notes ?? ""}
+                    onChange={(e) => setField(phase.id, "notes", e.target.value)}
+                    placeholder="Kısa not..."
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

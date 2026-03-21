@@ -61,6 +61,13 @@ export const ISSUE_TYPE_META: Record<IssueType, { label: string; icon: string; c
   test:        { label: "Test",       icon: "🧪", color: "text-cyan-700",   bg: "bg-cyan-100" },
 };
 
+export interface PhasePlanEntry {
+  startDate?: string;
+  endDate?: string;
+  owner?: string;
+  notes?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -77,6 +84,7 @@ export interface Project {
   members: string[];
   tags: string[];
   currentSprint?: number;
+  phasePlan?: Partial<Record<WaterfallPhase, PhasePlanEntry>>;
   createdAt: string;
   updatedAt: string;
 }
