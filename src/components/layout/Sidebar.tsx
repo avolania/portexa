@@ -21,7 +21,7 @@ const navItems = [
   { href: "/portfolyo", icon: Briefcase, label: "Portföy" },
   { href: "/gorevler", icon: CheckSquare, label: "Görevler" },
   { href: "/ekip", icon: Users, label: "Ekip" },
-  { href: "/zaman-takibi", icon: Clock, label: "Zaman Takibi" },
+  { href: "/aktiviteler", icon: Clock, label: "Aktiviteler" },
   { href: "/butce", icon: DollarSign, label: "Bütçe" },
   { href: "/dosyalar", icon: FileText, label: "Dosyalar" },
   { href: "/raporlar", icon: BarChart3, label: "Raporlar" },

@@ -7,6 +7,7 @@ import { useTeamStore } from "@/store/useTeamStore";
 import { useGovernanceStore } from "@/store/useGovernanceStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { useReportStore } from "@/store/useReportStore";
+import { useActivityStore } from "@/store/useActivityStore";
 
 export default function StoreHydration() {
   useEffect(() => {
@@ -16,6 +17,7 @@ export default function StoreHydration() {
     useGovernanceStore.persist.rehydrate();
     useNotificationStore.persist.rehydrate();
     useReportStore.persist.rehydrate();
+    useActivityStore.persist.rehydrate();
   }, []);
 
   return null;

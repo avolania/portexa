@@ -208,6 +208,51 @@ export interface Report {
   updatedAt: string;
 }
 
+// ─── Activities ───────────────────────────────────────────────────────────────
+
+export type ActivityType =
+  | "development"
+  | "design"
+  | "meeting"
+  | "testing"
+  | "review"
+  | "documentation"
+  | "deployment"
+  | "planning"
+  | "other";
+
+export type ActivityStatus = "draft" | "submitted" | "approved" | "rejected";
+
+export const ACTIVITY_TYPE_META: Record<ActivityType, { label: string; icon: string; color: string; bg: string }> = {
+  development:   { label: "Geliştirme",     icon: "💻", color: "text-blue-700",    bg: "bg-blue-100"    },
+  design:        { label: "Tasarım",         icon: "🎨", color: "text-violet-700",  bg: "bg-violet-100"  },
+  meeting:       { label: "Toplantı",        icon: "👥", color: "text-indigo-700",  bg: "bg-indigo-100"  },
+  testing:       { label: "Test",            icon: "🧪", color: "text-orange-700",  bg: "bg-orange-100"  },
+  review:        { label: "İnceleme",        icon: "🔍", color: "text-cyan-700",    bg: "bg-cyan-100"    },
+  documentation: { label: "Dokümantasyon",   icon: "📝", color: "text-gray-700",    bg: "bg-gray-100"    },
+  deployment:    { label: "Dağıtım",         icon: "🚀", color: "text-emerald-700", bg: "bg-emerald-100" },
+  planning:      { label: "Planlama",        icon: "📋", color: "text-amber-700",   bg: "bg-amber-100"   },
+  other:         { label: "Diğer",           icon: "✏️",  color: "text-slate-700",   bg: "bg-slate-100"   },
+};
+
+export interface ActivityEntry {
+  id: string;
+  userId: string;
+  projectId: string;
+  type: ActivityType;
+  title: string;
+  description?: string;
+  date: string;         // YYYY-MM-DD
+  hours: number;
+  status: ActivityStatus;
+  submittedAt?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  rejectionNote?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Governance ───────────────────────────────────────────────────────────────
 
 export interface GovernanceItem {
