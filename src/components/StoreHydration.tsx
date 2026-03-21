@@ -11,13 +11,17 @@ import { useActivityStore } from "@/store/useActivityStore";
 
 export default function StoreHydration() {
   useEffect(() => {
+    // Auth session: localStorage ile yükle (oturum cihaza özel)
     useAuthStore.persist.rehydrate();
-    useProjectStore.persist.rehydrate();
-    useTeamStore.persist.rehydrate();
-    useGovernanceStore.persist.rehydrate();
-    useNotificationStore.persist.rehydrate();
-    useReportStore.persist.rehydrate();
-    useActivityStore.persist.rehydrate();
+
+    // Diğer tüm veriler: Supabase'den yükle (tüm cihazlarda paylaşımlı)
+    useAuthStore.getState().loadProfiles();
+    useProjectStore.getState().load();
+    useTeamStore.getState().load();
+    useGovernanceStore.getState().load();
+    useNotificationStore.getState().load();
+    useReportStore.getState().load();
+    useActivityStore.getState().load();
   }, []);
 
   return null;

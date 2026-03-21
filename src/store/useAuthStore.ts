@@ -1,15 +1,16 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { User } from "@/types";
+import { dbLoadProfiles, dbUpsertProfile } from "@/lib/db";
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  profiles: Record<string, User>; // email → saved profile (logout sonrası da korunur)
+  profiles: Record<string, User>;
+  loadProfiles: () => Promise<void>;
   login: (user: User) => void;
   logout: () => void;
   updateUser: (data: Partial<User>) => void;
-  // Admin: herhangi bir kullanıcının profilini günceller (rol değişikliği vb.)
   updateProfile: (email: string, data: Partial<User>) => void;
 }
 
@@ -19,59 +20,68 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       profiles: {},
+
+      loadProfiles: async () => {
+        const profiles = await dbLoadProfiles();
+        // Merge with local profiles so offline-created ones aren't lost
+        set((s) => ({ profiles: { ...s.profiles, ...profiles } }));
+      },
+
       login: (incoming) => {
-        // Daha önce kaydedilmiş profil varsa birleştir (id, name, title vb. korunur)
         const saved = get().profiles[incoming.email];
-        // saved profil öncelikli (ad, unvan vb.), sadece rememberMe güncel girişten alınır
         const merged: User = saved
           ? { ...incoming, ...saved, rememberMe: incoming.rememberMe }
           : incoming;
-        set((state) => ({
+        set((s) => ({
           user: merged,
           isAuthenticated: true,
-          profiles: { ...state.profiles, [merged.email]: merged },
+          profiles: { ...s.profiles, [merged.email]: merged },
         }));
+        dbUpsertProfile(merged.email, merged);
         if (typeof window !== "undefined") {
           sessionStorage.setItem("portexa-session", "1");
         }
       },
+
       logout: () => {
-        // user'ı koruyoruz — bir sonraki girişte aynı email ile girince
-        // existing kontrolü gerçek adı bulabilsin
         set({ isAuthenticated: false });
         if (typeof window !== "undefined") {
           sessionStorage.removeItem("portexa-session");
         }
       },
+
       updateUser: (data) =>
-        set((state) => {
-          const updated = state.user ? { ...state.user, ...data } : null;
+        set((s) => {
+          const updated = s.user ? { ...s.user, ...data } : null;
+          if (updated) dbUpsertProfile(updated.email, updated);
           return {
             user: updated,
             profiles: updated
-              ? { ...state.profiles, [updated.email]: updated }
-              : state.profiles,
+              ? { ...s.profiles, [updated.email]: updated }
+              : s.profiles,
           };
         }),
+
       updateProfile: (email, data) =>
-        set((state) => {
-          const existing = state.profiles[email];
+        set((s) => {
+          const existing = s.profiles[email];
           if (!existing) return {};
           const updated = { ...existing, ...data };
+          dbUpsertProfile(email, updated);
           return {
-            profiles: { ...state.profiles, [email]: updated },
-            // Aktif kullanıcı aynı kişiyse onu da güncelle
-            user: state.user?.email === email ? { ...state.user, ...data } : state.user,
+            profiles: { ...s.profiles, [email]: updated },
+            user: s.user?.email === email ? { ...s.user, ...data } : s.user,
           };
         }),
     }),
     {
       name: "auth-storage",
       skipHydration: true,
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-        profiles: state.profiles,
+      // Only persist session state locally — profiles are loaded from Supabase
+      partialize: (s) => ({
+        user: s.user,
+        isAuthenticated: s.isAuthenticated,
+        profiles: s.profiles,
       }),
     }
   )

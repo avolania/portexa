@@ -1,9 +1,10 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import type { ActivityEntry } from "@/types";
+import { dbLoadAll, dbUpsert, dbDelete } from "@/lib/db";
 
 interface ActivityState {
   entries: ActivityEntry[];
+  load: () => Promise<void>;
   addEntry: (entry: ActivityEntry) => void;
   updateEntry: (id: string, data: Partial<ActivityEntry>) => void;
   deleteEntry: (id: string) => void;
@@ -13,56 +14,74 @@ interface ActivityState {
   reset: (entries?: ActivityEntry[]) => void;
 }
 
-export const useActivityStore = create<ActivityState>()(
-  persist(
-    (set) => ({
-      entries: [],
+export const useActivityStore = create<ActivityState>()((set) => ({
+  entries: [],
 
-      addEntry: (entry) =>
-        set((s) => ({ entries: [entry, ...s.entries] })),
+  load: async () => {
+    const entries = await dbLoadAll<ActivityEntry>("activity_entries");
+    set({ entries });
+  },
 
-      updateEntry: (id, data) =>
-        set((s) => ({
-          entries: s.entries.map((e) =>
-            e.id === id ? { ...e, ...data, updatedAt: new Date().toISOString() } : e
-          ),
-        })),
+  reset: (entries = []) => {
+    set({ entries });
+    entries.forEach((e) => dbUpsert("activity_entries", e.id, e));
+  },
 
-      deleteEntry: (id) =>
-        set((s) => ({ entries: s.entries.filter((e) => e.id !== id) })),
+  addEntry: (entry) => {
+    set((s) => ({ entries: [entry, ...s.entries] }));
+    dbUpsert("activity_entries", entry.id, entry);
+  },
 
-      submitEntry: (id) =>
-        set((s) => ({
-          entries: s.entries.map((e) =>
-            e.id === id
-              ? { ...e, status: "submitted", submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-              : e
-          ),
-        })),
-
-      approveEntry: (id, reviewerId) =>
-        set((s) => ({
-          entries: s.entries.map((e) =>
-            e.id === id
-              ? { ...e, status: "approved", reviewedBy: reviewerId, reviewedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-              : e
-          ),
-        })),
-
-      rejectEntry: (id, reviewerId, note) =>
-        set((s) => ({
-          entries: s.entries.map((e) =>
-            e.id === id
-              ? { ...e, status: "rejected", reviewedBy: reviewerId, reviewedAt: new Date().toISOString(), rejectionNote: note, updatedAt: new Date().toISOString() }
-              : e
-          ),
-        })),
-
-      reset: (entries = []) => set({ entries }),
+  updateEntry: (id, data) =>
+    set((s) => {
+      const entries = s.entries.map((e) =>
+        e.id === id ? { ...e, ...data, updatedAt: new Date().toISOString() } : e
+      );
+      const updated = entries.find((e) => e.id === id);
+      if (updated) dbUpsert("activity_entries", id, updated);
+      return { entries };
     }),
-    {
-      name: "activity-storage",
-      skipHydration: true,
-    }
-  )
-);
+
+  deleteEntry: (id) => {
+    set((s) => ({ entries: s.entries.filter((e) => e.id !== id) }));
+    dbDelete("activity_entries", id);
+  },
+
+  submitEntry: (id) =>
+    set((s) => {
+      const entries = s.entries.map((e) =>
+        e.id === id
+          ? { ...e, status: "submitted" as const, submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+          : e
+      );
+      const updated = entries.find((e) => e.id === id);
+      if (updated) dbUpsert("activity_entries", id, updated);
+      return { entries };
+    }),
+
+  approveEntry: (id, reviewerId) =>
+    set((s) => {
+      const now = new Date().toISOString();
+      const entries = s.entries.map((e) =>
+        e.id === id
+          ? { ...e, status: "approved" as const, reviewedBy: reviewerId, reviewedAt: now, updatedAt: now }
+          : e
+      );
+      const updated = entries.find((e) => e.id === id);
+      if (updated) dbUpsert("activity_entries", id, updated);
+      return { entries };
+    }),
+
+  rejectEntry: (id, reviewerId, note) =>
+    set((s) => {
+      const now = new Date().toISOString();
+      const entries = s.entries.map((e) =>
+        e.id === id
+          ? { ...e, status: "rejected" as const, reviewedBy: reviewerId, reviewedAt: now, rejectionNote: note, updatedAt: now }
+          : e
+      );
+      const updated = entries.find((e) => e.id === id);
+      if (updated) dbUpsert("activity_entries", id, updated);
+      return { entries };
+    }),
+}));
