@@ -165,12 +165,17 @@ export default function WaterfallBoard({ projectId }: Props) {
   const teamMembers = useTeamStore((s) => s.members);
   const profiles = useAuthStore((s) => s.profiles);
 
+  const user = useAuthStore((s) => s.user);
+
   const project = projects.find((p) => p.id === projectId);
   const effectivePhases: (ProjectPhase & ReturnType<typeof resolvePhaseStyle>)[] = (
     project?.phases ?? DEFAULT_PHASES
   ).map((p) => ({ ...p, ...resolvePhaseStyle(p.id) }));
 
-  const allTasks = allStoreTasks.filter((t) => t.projectId === projectId);
+  const isMemberOnly = user?.role === "member";
+  const allTasks = allStoreTasks
+    .filter((t) => t.projectId === projectId)
+    .filter((t) => !isMemberOnly || t.assigneeId === user?.id);
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [view, setView] = useState<"phases" | "gantt">("phases");
@@ -222,6 +227,12 @@ export default function WaterfallBoard({ projectId }: Props) {
           <BarChart2 className="w-4 h-4" /> Gantt Şeması
         </button>
       </div>
+
+      {isMemberOnly && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+          <span className="font-medium">Yalnızca size atanmış görevler gösteriliyor.</span>
+        </div>
+      )}
 
       {view === "gantt" && (
         <div className="card overflow-hidden">

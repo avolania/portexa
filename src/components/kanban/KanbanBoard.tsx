@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Zap } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import type { Task, TaskStatus } from "@/types";
 import KanbanCard from "./KanbanCard";
 import TaskDetailPanel from "@/components/tasks/TaskDetailPanel";
@@ -36,11 +37,16 @@ interface Props {
 
 export default function KanbanBoard({ projectId, currentSprint }: Props) {
   const { getProjectTasks, moveTask, addTask } = useProjectStore();
+  const user = useAuthStore((s) => s.user);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<TaskStatus | null>(null);
 
-  const allTasks = getProjectTasks(projectId);
+  const allTasksRaw = getProjectTasks(projectId);
+  const isMemberOnly = user?.role === "member";
+  const allTasks = isMemberOnly
+    ? allTasksRaw.filter((t) => t.assigneeId === user?.id)
+    : allTasksRaw;
 
   const handleDragStart = (taskId: string) => setDraggedId(taskId);
   const handleDragOver = (e: React.DragEvent, col: TaskStatus) => {
@@ -121,6 +127,12 @@ export default function KanbanBoard({ projectId, currentSprint }: Props) {
               </span>
             </div>
           </div>
+        </div>
+      )}
+
+      {isMemberOnly && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+          <span className="font-medium">Yalnızca size atanmış görevler gösteriliyor.</span>
         </div>
       )}
 
