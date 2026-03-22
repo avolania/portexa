@@ -1,4 +1,22 @@
 export type UserRole = "admin" | "pm" | "member" | "approver" | "viewer";
+
+// ─── Org Settings ─────────────────────────────────────────────────────────────
+
+export interface OrgSettings {
+  orgName: string;
+  timezone: string;
+  dateFormat: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
+  currency: string;
+  workingDays: number[];     // 0=Sun, 1=Mon, …, 6=Sat
+  workingHoursPerDay: number;
+  fiscalYearStart: number;   // 1–12
+  integrations: {
+    slackWebhook?: string;
+    jiraUrl?: string;
+    jiraToken?: string;
+    googleClientId?: string;
+  };
+}
 export type ProjectType = "agile" | "waterfall";
 
 export type Permission =
