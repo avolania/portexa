@@ -203,6 +203,7 @@ export default function DosyalarPage() {
   const [currentFolderId, setCurrentFolderId] = useState<string | undefined>(undefined);
   const [folderPath, setFolderPath] = useState<FileFolder[]>([]); // breadcrumb trail
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const isManager = user?.role === "admin" || user?.role === "pm";
 
@@ -304,8 +305,13 @@ export default function DosyalarPage() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? []);
     if (!picked.length || !user || !selectedProjectId || !activePhaseId) return;
-    for (const f of picked) {
-      await uploadFile(f, selectedProjectId, activePhaseId, user.id, currentFolderId);
+    setUploadError(null);
+    try {
+      for (const f of picked) {
+        await uploadFile(f, selectedProjectId, activePhaseId, user.id, currentFolderId);
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Yükleme başarısız");
     }
     e.target.value = "";
   };
@@ -333,6 +339,16 @@ export default function DosyalarPage() {
 
   return (
     <div className="space-y-4">
+      {uploadError && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          <X className="w-4 h-4 flex-shrink-0" />
+          <span className="flex-1">{uploadError}</span>
+          <button onClick={() => setUploadError(null)} className="p-0.5 hover:bg-red-100 rounded">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <h1 className="text-xl font-bold text-gray-900">Dosya Yönetimi</h1>
