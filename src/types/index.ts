@@ -255,12 +255,24 @@ export interface ActivityEntry {
 
 // ─── File Management ──────────────────────────────────────────────────────────
 
+export interface FileFolder {
+  id: string;
+  name: string;
+  projectId: string;
+  phaseId: string;
+  parentFolderId?: string; // undefined = phase root
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface ProjectFile {
   id: string;
   name: string;
   size: number;        // bytes
   mimeType: string;
   projectId: string;
+  phaseId: string;
+  folderId?: string;   // undefined = phase root
   uploadedBy: string;  // user id
   storagePath: string; // supabase storage path
   createdAt: string;
