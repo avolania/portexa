@@ -8,6 +8,7 @@ import { useGovernanceStore } from "@/store/useGovernanceStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { useReportStore } from "@/store/useReportStore";
 import { useActivityStore } from "@/store/useActivityStore";
+import { useFileStore } from "@/store/useFileStore";
 
 export default function StoreHydration() {
   useEffect(() => {
@@ -22,6 +23,7 @@ export default function StoreHydration() {
     useNotificationStore.getState().load();
     useReportStore.getState().load();
     useActivityStore.getState().load();
+    useFileStore.getState().load();
   }, []);
 
   return null;

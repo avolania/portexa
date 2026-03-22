@@ -253,6 +253,19 @@ export interface ActivityEntry {
   updatedAt: string;
 }
 
+// ─── File Management ──────────────────────────────────────────────────────────
+
+export interface ProjectFile {
+  id: string;
+  name: string;
+  size: number;        // bytes
+  mimeType: string;
+  projectId: string;
+  uploadedBy: string;  // user id
+  storagePath: string; // supabase storage path
+  createdAt: string;
+}
+
 // ─── Governance ───────────────────────────────────────────────────────────────
 
 export interface GovernanceItem {

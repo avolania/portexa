@@ -33,3 +33,22 @@ export async function dbUpsertProfile(email: string, data: unknown): Promise<voi
   const { error } = await supabase.from("auth_profiles").upsert({ email, data });
   if (error) console.error("[db] upsert auth_profiles:", error.message);
 }
+
+// ─── Storage helpers ──────────────────────────────────────────────────────────
+
+const BUCKET = "project-files";
+
+export async function dbUploadFile(path: string, file: File): Promise<void> {
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true });
+  if (error) throw new Error(error.message);
+}
+
+export async function dbGetFileUrl(path: string): Promise<string> {
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+export async function dbDeleteFile(path: string): Promise<void> {
+  const { error } = await supabase.storage.from(BUCKET).remove([path]);
+  if (error) console.error("[db] delete file:", error.message);
+}
