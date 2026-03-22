@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
+import MobileNav from "@/components/layout/MobileNav";
 import { useAuthStore } from "@/store/useAuthStore";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -35,10 +36,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Topbar />
-        <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
+        <main className="flex-1 overflow-y-auto p-3 md:p-6 bg-gray-50 pb-20 md:pb-6">
           {children}
         </main>
       </div>
+      <MobileNav />
     </div>
   );
 }

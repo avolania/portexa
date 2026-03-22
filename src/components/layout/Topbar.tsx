@@ -1,6 +1,7 @@
 "use client";
 
-import { Bell, Search, Menu, LogOut } from "lucide-react";
+import { Bell, Search, LogOut } from "lucide-react";
+import Image from "next/image";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import Avatar from "@/components/ui/Avatar";
@@ -21,13 +22,16 @@ export default function Topbar() {
 
   return (
     <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-4 sticky top-0 z-30">
-      {/* Mobile menu */}
-      <button className="md:hidden p-2 text-gray-500">
-        <Menu className="w-5 h-5" />
-      </button>
+      {/* Mobil logo */}
+      <div className="flex md:hidden items-center gap-2 flex-1">
+        <div className="w-7 h-7 rounded-lg bg-[#1a2d5a] flex items-center justify-center overflow-hidden flex-shrink-0">
+          <Image src="/logo.png" alt="Portexa" width={28} height={28} unoptimized className="object-cover w-full h-full" />
+        </div>
+        <span className="text-sm font-bold text-[#1a2d5a]">Portexa</span>
+      </div>
 
-      {/* Search */}
-      <div className="flex-1 max-w-md">
+      {/* Search — masaüstünde göster */}
+      <div className="hidden md:block flex-1 max-w-md">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input

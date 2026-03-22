@@ -52,6 +52,12 @@
 }
 
 @layer utilities {
+  /* iPhone safe area — bottom nav clearance */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+
   .sidebar-item {
     display: flex;
     align-items: center;
