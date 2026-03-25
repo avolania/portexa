@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Mail, Lock, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -20,7 +20,7 @@ type FormData = z.infer<typeof schema>;
 
 export default function GirisPage() {
   const router = useRouter();
-  const { signIn } = useAuthStore();
+  const { signIn, isAuthenticated } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -31,14 +31,18 @@ export default function GirisPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, router]);
+
   const onSubmit = async (data: FormData) => {
     setAuthError(null);
     const error = await signIn(data.email, data.password);
     if (error) {
       setAuthError(error);
-      return;
     }
-    router.push("/dashboard");
   };
 
   return (
