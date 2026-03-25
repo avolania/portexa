@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import type { Report, ReportType } from "@/types";
-import { dbLoadAll, dbUpsert, dbDelete } from "@/lib/db";
+import { useAuthStore } from "@/store/useAuthStore";
+import {
+  loadReports,
+  createReport,
+  updateReport,
+  updateReportSection,
+  deleteReport,
+  resetReports,
+} from "@/services/reportService";
 
 interface ReportState {
   reports: Report[];
@@ -17,51 +25,60 @@ export const useReportStore = create<ReportState>()((set, get) => ({
   reports: [],
 
   load: async () => {
-    const reports = await dbLoadAll<Report>("reports");
+    const reports = await loadReports();
     set({ reports });
   },
 
   reset: (reports) => {
     set({ reports });
-    reports.forEach((r) => dbUpsert("reports", r.id, r));
+    resetReports(reports);
   },
 
   addReport: (report) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ reports: [report, ...s.reports] }));
-    dbUpsert("reports", report.id, report);
+    createReport(report, orgId);
   },
 
-  updateReport: (id, data) =>
+  updateReport: (id, patch) =>
     set((s) => {
-      const reports = s.reports.map((r) =>
-        r.id === id ? { ...r, ...data, updatedAt: new Date().toISOString() } : r
-      );
-      const updated = reports.find((r) => r.id === id);
-      if (updated) dbUpsert("reports", id, updated);
-      return { reports };
+      updateReport(id, patch, s.reports).then((updated) => {
+        if (updated)
+          set((s2) => ({ reports: s2.reports.map((r) => (r.id === id ? updated : r)) }));
+      });
+      return {
+        reports: s.reports.map((r) =>
+          r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r
+        ),
+      };
     }),
 
   updateSection: (reportId, sectionId, content) =>
     set((s) => {
-      const reports = s.reports.map((r) =>
-        r.id === reportId
-          ? {
-              ...r,
-              updatedAt: new Date().toISOString(),
-              sections: r.sections.map((sec) =>
-                sec.id === sectionId ? { ...sec, content } : sec
-              ),
-            }
-          : r
-      );
-      const updated = reports.find((r) => r.id === reportId);
-      if (updated) dbUpsert("reports", reportId, updated);
-      return { reports };
+      updateReportSection(reportId, sectionId, content, s.reports).then((updated) => {
+        if (updated)
+          set((s2) => ({
+            reports: s2.reports.map((r) => (r.id === reportId ? updated : r)),
+          }));
+      });
+      return {
+        reports: s.reports.map((r) =>
+          r.id === reportId
+            ? {
+                ...r,
+                updatedAt: new Date().toISOString(),
+                sections: r.sections.map((sec) =>
+                  sec.id === sectionId ? { ...sec, content } : sec
+                ),
+              }
+            : r
+        ),
+      };
     }),
 
   deleteReport: (id) => {
     set((s) => ({ reports: s.reports.filter((r) => r.id !== id) }));
-    dbDelete("reports", id);
+    deleteReport(id);
   },
 
   getByType: (type) => get().reports.filter((r) => r.type === type),

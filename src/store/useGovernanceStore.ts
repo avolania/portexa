@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import type { GovernanceItem, GovernanceCategory, GovernanceStatus } from "@/types";
-import { dbLoadAll, dbUpsert, dbDelete } from "@/lib/db";
+import { useAuthStore } from "@/store/useAuthStore";
+import {
+  loadGovernanceItems,
+  createGovernanceItem,
+  updateGovernanceItem,
+  deleteGovernanceItem,
+  resetGovernanceItems,
+} from "@/services/governanceService";
 
 interface GovernanceState {
   items: GovernanceItem[];
@@ -16,31 +23,32 @@ export const useGovernanceStore = create<GovernanceState>()((set, get) => ({
   items: [],
 
   load: async () => {
-    const items = await dbLoadAll<GovernanceItem>("governance_items");
+    const items = await loadGovernanceItems();
     set({ items });
   },
 
   reset: (items) => {
     set({ items });
-    items.forEach((i) => dbUpsert("governance_items", i.id, i));
+    resetGovernanceItems(items);
   },
 
   addItem: (item) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ items: [...s.items, item] }));
-    dbUpsert("governance_items", item.id, item);
+    createGovernanceItem(item, orgId);
   },
 
-  updateItem: (id, data) =>
+  updateItem: (id, patch) =>
     set((s) => {
-      const items = s.items.map((i) => (i.id === id ? { ...i, ...data } : i));
-      const updated = items.find((i) => i.id === id);
-      if (updated) dbUpsert("governance_items", id, updated);
-      return { items };
+      updateGovernanceItem(id, patch, s.items).then((updated) => {
+        if (updated) set((s2) => ({ items: s2.items.map((i) => (i.id === id ? updated : i)) }));
+      });
+      return { items: s.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) };
     }),
 
   deleteItem: (id) => {
     set((s) => ({ items: s.items.filter((i) => i.id !== id) }));
-    dbDelete("governance_items", id);
+    deleteGovernanceItem(id);
   },
 
   getProjectItems: (projectId, category) =>

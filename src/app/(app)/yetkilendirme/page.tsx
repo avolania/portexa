@@ -401,7 +401,7 @@ export default function YetkilendirmePage() {
     useAuthStore.setState((state) => ({
       profiles: {
         ...state.profiles,
-        [email]: { id, name, email, role, language: "tr", title },
+        [email]: { id, name, email, role, language: "tr" as const, title, orgId: useAuthStore.getState().user?.orgId ?? "" },
       },
     }));
   };

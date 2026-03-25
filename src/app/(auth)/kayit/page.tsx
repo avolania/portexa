@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { User, Mail, Lock, Building2, Briefcase, LayoutGrid, Phone } from "lucide-react";
+import { User, Mail, Lock, Building2, Briefcase, LayoutGrid, Phone, AlertCircle } from "lucide-react";
+import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { useAuthStore } from "@/store/useAuthStore";
-import { clearAllData } from "@/lib/loadDemoData";
 
 const schema = z.object({
   name: z.string().min(2, "Ad Soyad en az 2 karakter olmalıdır"),
@@ -26,7 +26,8 @@ type FormData = z.infer<typeof schema>;
 
 export default function KayitPage() {
   const router = useRouter();
-  const login = useAuthStore((s) => s.login);
+  const { signUp } = useAuthStore();
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const {
     register,
@@ -35,20 +36,18 @@ export default function KayitPage() {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const onSubmit = async (data: FormData) => {
-    await new Promise((r) => setTimeout(r, 1000));
-    clearAllData();
-    login({
-      id: crypto.randomUUID(),
+    setAuthError(null);
+    const error = await signUp(data.email, data.password, {
       name: data.name,
-      email: data.email,
       company: data.company,
       title: data.title,
       department: data.department,
       phone: data.phone,
-      role: "viewer",
-      language: "tr",
-      rememberMe: true,
     });
+    if (error) {
+      setAuthError(error);
+      return;
+    }
     router.push("/dashboard");
   };
 
@@ -61,6 +60,12 @@ export default function KayitPage() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {authError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {authError}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <Input

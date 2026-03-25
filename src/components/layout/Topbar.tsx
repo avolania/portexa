@@ -11,12 +11,12 @@ import { cn } from "@/lib/utils";
 
 export default function Topbar() {
   const unreadCount = useNotificationStore((s) => s.unreadCount());
-  const { user, logout } = useAuthStore();
+  const { user, signOut } = useAuthStore();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
-    logout();
+    signOut();
     router.push("/giris");
   };
 

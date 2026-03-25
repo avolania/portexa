@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   UserPlus, Trash2, ChevronDown, Shield, Users,
-  Mail, Briefcase, Building2, Check, X, FolderKanban, Search,
+  Mail, Briefcase, Building2, Check, X, FolderKanban, Search, Send,
 } from "lucide-react";
 import { useTeamStore } from "@/store/useTeamStore";
 import { useProjectStore } from "@/store/useProjectStore";
@@ -389,6 +389,97 @@ function AddMemberModal({
   );
 }
 
+// ─── Davet Modal ──────────────────────────────────────────────────────────────
+
+function InviteModal({ onClose, orgId, orgName, invitedBy }: {
+  onClose: () => void;
+  orgId: string;
+  orgName: string;
+  invitedBy: string;
+}) {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  const handleSend = async () => {
+    if (!email.trim()) { setError("E-posta adresi gerekli."); return; }
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), orgId, orgName, invitedBy }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? "Davet gönderilemedi."); return; }
+      setSuccess(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">E-posta ile Davet Gönder</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-6 py-5">
+          {success ? (
+            <div className="text-center py-4">
+              <Check className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+              <p className="font-semibold text-gray-900">Davet gönderildi!</p>
+              <p className="text-sm text-gray-500 mt-1">{email} adresine davet e-postası iletildi.</p>
+              <button onClick={onClose} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">
+                Kapat
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">
+                Davet bağlantısı e-posta ile gönderilecek. Kullanıcı linke tıklayarak organizasyonunuza katılabilir.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">E-posta Adresi</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  placeholder="kisi@sirket.com"
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  autoFocus
+                />
+              </div>
+              {error && <p className="text-sm text-red-500">{error}</p>}
+            </div>
+          )}
+        </div>
+        {!success && (
+          <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+            <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100">
+              İptal
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={loading}
+              className="flex-1 py-2.5 text-sm bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              <Send className="w-4 h-4" />
+              {loading ? "Gönderiliyor..." : "Davet Gönder"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Yetki Matrisi ────────────────────────────────────────────────────────────
 
 const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: string }[] }[] = [
@@ -479,6 +570,7 @@ export default function EkipPage() {
   const canManage = usePermission("team.manage");
   const [tab, setTab] = useState<"members" | "matrix">("members");
   const [showAdd, setShowAdd] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all");
 
   const filtered = members.filter((m) => roleFilter === "all" || m.role === roleFilter);
@@ -492,12 +584,20 @@ export default function EkipPage() {
           <p className="text-sm text-gray-500 mt-1">{members.length} üye · {projects.length} proje</p>
         </div>
         {canManage && (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
-          >
-            <UserPlus className="w-4 h-4" /> Üye Ekle
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowInvite(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-700 bg-indigo-50 rounded-xl text-sm font-semibold hover:bg-indigo-100 transition-colors"
+            >
+              <Send className="w-4 h-4" /> Davet Gönder
+            </button>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
+            >
+              <UserPlus className="w-4 h-4" /> Üye Ekle
+            </button>
+          </div>
         )}
       </div>
 
@@ -592,6 +692,15 @@ export default function EkipPage() {
           onClose={() => setShowAdd(false)}
           onAdd={addMember}
           existingEmails={members.map((m) => m.email)}
+        />
+      )}
+
+      {showInvite && currentUser && (
+        <InviteModal
+          onClose={() => setShowInvite(false)}
+          orgId={currentUser.orgId}
+          orgName={currentUser.company ?? "Organizasyon"}
+          invitedBy={currentUser.id}
         />
       )}
     </div>

@@ -10,13 +10,15 @@ import { useReportStore } from "@/store/useReportStore";
 import { useActivityStore } from "@/store/useActivityStore";
 import { useFileStore } from "@/store/useFileStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { useRequestStore } from "@/store/useRequestStore";
+import { useWorkflowStore } from "@/store/useWorkflowStore";
 
 export default function StoreHydration() {
   useEffect(() => {
-    // Auth session: localStorage ile yükle (oturum cihaza özel)
-    useAuthStore.persist.rehydrate();
+    // Supabase Auth session kontrolü + listener kurulumu
+    useAuthStore.getState().initAuth();
 
-    // Diğer tüm veriler: Supabase'den yükle (tüm cihazlarda paylaşımlı)
+    // Uygulama verileri: Supabase'den yükle
     useAuthStore.getState().loadProfiles();
     useProjectStore.getState().load();
     useTeamStore.getState().load();
@@ -26,6 +28,8 @@ export default function StoreHydration() {
     useActivityStore.getState().load();
     useFileStore.getState().load();
     useSettingsStore.getState().load();
+    useRequestStore.getState().load();
+    useWorkflowStore.getState().load();
   }, []);
 
   return null;

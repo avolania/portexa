@@ -1,17 +1,23 @@
 import { create } from "zustand";
 import type { ProjectFile, FileFolder } from "@/types";
-import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbDeleteFile } from "@/lib/db";
+import { useAuthStore } from "@/store/useAuthStore";
+import {
+  loadFiles,
+  createFolder,
+  renameFolder,
+  deleteFolder,
+  uploadFile,
+  deleteFile,
+} from "@/services/fileService";
 
 interface FileState {
   files: ProjectFile[];
   folders: FileFolder[];
   uploading: boolean;
   load: () => Promise<void>;
-  // folders
   addFolder: (folder: FileFolder) => void;
   renameFolder: (id: string, name: string) => void;
   deleteFolder: (id: string) => void;
-  // files
   uploadFile: (
     file: File,
     projectId: string,
@@ -28,83 +34,46 @@ export const useFileStore = create<FileState>()((set, get) => ({
   uploading: false,
 
   load: async () => {
-    const [files, folders] = await Promise.all([
-      dbLoadAll<ProjectFile>("project_files"),
-      dbLoadAll<FileFolder>("file_folders"),
-    ]);
+    const { files, folders } = await loadFiles();
     set({ files, folders });
   },
 
   addFolder: (folder) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ folders: [...s.folders, folder] }));
-    dbUpsert("file_folders", folder.id, folder);
+    createFolder(folder, orgId);
   },
 
   renameFolder: (id, name) => {
-    set((s) => ({
-      folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)),
-    }));
-    const updated = get().folders.find((f) => f.id === id);
-    if (updated) dbUpsert("file_folders", id, updated);
+    set((s) => ({ folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)) }));
+    renameFolder(id, name, get().folders);
   },
 
   deleteFolder: (id) => {
-    // also delete child folders and their files recursively
     const { folders, files } = get();
-    const toDelete = new Set<string>();
-    const queue = [id];
-    while (queue.length) {
-      const cur = queue.pop()!;
-      toDelete.add(cur);
-      folders.filter((f) => f.parentFolderId === cur).forEach((f) => queue.push(f.id));
-    }
-    const filesToDelete = files.filter((f) => f.folderId && toDelete.has(f.folderId));
-    set((s) => ({
-      folders: s.folders.filter((f) => !toDelete.has(f.id)),
-      files: s.files.filter((f) => !f.folderId || !toDelete.has(f.folderId)),
-    }));
-    toDelete.forEach((fid) => dbDelete("file_folders", fid));
-    filesToDelete.forEach((f) => {
-      dbDeleteFile(f.storagePath);
-      dbDelete("project_files", f.id);
+    deleteFolder(id, folders, files).then(({ deletedFolderIds, deletedFiles }) => {
+      const deletedFileIds = new Set(deletedFiles.map((f) => f.id));
+      set((s) => ({
+        folders: s.folders.filter((f) => !deletedFolderIds.has(f.id)),
+        files: s.files.filter((f) => !deletedFileIds.has(f.id)),
+      }));
     });
   },
 
   uploadFile: async (file, projectId, phaseId, userId, folderId) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set({ uploading: true });
     try {
-      const id = crypto.randomUUID();
-      const ext = file.name.split(".").pop() ?? "";
-      const folderSegment = folderId ?? "root";
-      const storagePath = `${projectId}/${phaseId}/${folderSegment}/${id}${ext ? "." + ext : ""}`;
-
-      await dbUploadFile(storagePath, file);
-
-      const entry: ProjectFile = {
-        id,
-        name: file.name,
-        size: file.size,
-        mimeType: file.type,
-        projectId,
-        phaseId,
-        folderId,
-        uploadedBy: userId,
-        storagePath,
-        createdAt: new Date().toISOString(),
-      };
-
+      const entry = await uploadFile(file, projectId, phaseId, userId, orgId, folderId);
       set((s) => ({ files: [entry, ...s.files] }));
-      await dbUpsert("project_files", id, entry);
     } finally {
       set({ uploading: false });
     }
   },
 
   deleteFile: async (fileId) => {
-    const file = get().files.find((f) => f.id === fileId);
-    if (!file) return;
+    const { files } = get();
     set((s) => ({ files: s.files.filter((f) => f.id !== fileId) }));
-    await dbDeleteFile(file.storagePath);
-    await dbDelete("project_files", fileId);
+    await deleteFile(fileId, files);
   },
 }));

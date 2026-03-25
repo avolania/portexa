@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
+import { Mail, ArrowLeft, CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import { useAuthStore } from "@/store/useAuthStore";
 
 const schema = z.object({
   email: z.string().email("Geçerli bir e-posta adresi girin"),
@@ -17,6 +18,8 @@ type FormData = z.infer<typeof schema>;
 
 export default function SifremiUnuttumPage() {
   const [sent, setSent] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const { resetPassword } = useAuthStore();
 
   const {
     register,
@@ -24,8 +27,13 @@ export default function SifremiUnuttumPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
-  const onSubmit = async () => {
-    await new Promise((r) => setTimeout(r, 800));
+  const onSubmit = async (data: FormData) => {
+    setAuthError(null);
+    const error = await resetPassword(data.email);
+    if (error) {
+      setAuthError(error);
+      return;
+    }
     setSent(true);
   };
 
@@ -55,6 +63,12 @@ export default function SifremiUnuttumPage() {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {authError && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {authError}
+                </div>
+              )}
               <Input
                 id="email"
                 label="E-posta"

@@ -1,5 +1,67 @@
 export type UserRole = "admin" | "pm" | "member" | "approver" | "viewer";
 
+// ─── Workflow Requests ─────────────────────────────────────────────────────────
+
+export type RequestType =
+  | "project_idea"
+  | "change_request"
+  | "budget_approval"
+  | "resource_request"
+  | "deadline_extension"
+  | "risk_report"
+  | "general";
+
+export type RequestStatus = "pending" | "in_review" | "approved" | "rejected";
+
+export interface WorkflowStepHistoryEntry {
+  stepId: string;
+  actorId: string;
+  action: "approved" | "rejected";
+  note?: string;
+  timestamp: string;
+}
+
+export interface WorkflowRequest {
+  id: string;
+  type: RequestType;
+  title: string;
+  description: string;
+  projectId?: string;
+  requestedBy: string;
+  status: RequestStatus;
+  priority: Priority;
+  dueDate?: string;
+  reviewNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  // Workflow
+  templateId?: string;
+  currentStepIndex?: number;
+  stepHistory?: WorkflowStepHistoryEntry[];
+  // Project idea
+  estimatedBudget?: number;
+  convertedProjectId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowStep {
+  id: string;
+  label: string;
+  approverRole: UserRole;
+  description?: string;
+  order: number;
+}
+
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  steps: WorkflowStep[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Org Settings ─────────────────────────────────────────────────────────────
 
 export interface OrgSettings {
@@ -53,6 +115,18 @@ export interface User {
   phone?: string;
   language: "tr" | "en";
   rememberMe?: boolean;
+  orgId: string;
+}
+
+export interface OrgInvitation {
+  id: string;
+  orgId: string;
+  email: string;
+  token: string;
+  invitedBy: string;
+  orgName: string;
+  expiresAt: string;
+  accepted: boolean;
 }
 
 export type Priority = "low" | "medium" | "high" | "critical";

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, Clock, MoreHorizontal, X,
   Briefcase, Users, DollarSign, FileText, BarChart3, ShieldCheck,
-  Bell, Settings, User, LogOut,
+  Bell, Settings, User, LogOut, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -27,7 +27,8 @@ const MORE_ITEMS = [
   { href: "/butce",        icon: DollarSign, label: "Bütçe"         },
   { href: "/dosyalar",     icon: FileText,   label: "Dosyalar"      },
   { href: "/raporlar",     icon: BarChart3,  label: "Raporlar"      },
-  { href: "/yetkilendirme",icon: ShieldCheck,label: "Yetkilendirme" },
+  { href: "/yetkilendirme",icon: ShieldCheck,  label: "Yetkilendirme" },
+  { href: "/talepler",     icon: ClipboardList, label: "Talepler"      },
   { href: "/bildirimler",  icon: Bell,       label: "Bildirimler"   },
   { href: "/ayarlar",      icon: Settings,   label: "Ayarlar"       },
   { href: "/profil",       icon: User,       label: "Profil"        },
@@ -36,12 +37,12 @@ const MORE_ITEMS = [
 export default function MobileNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const { user, logout } = useAuthStore();
+  const { user, signOut } = useAuthStore();
   const router = useRouter();
 
   const handleLogout = () => {
     setOpen(false);
-    logout();
+    signOut();
     router.push("/giris");
   };
 

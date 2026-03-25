@@ -1,6 +1,16 @@
 import { create } from "zustand";
 import type { TeamMember, UserRole } from "@/types";
-import { dbLoadAll, dbUpsert, dbDelete } from "@/lib/db";
+import { useAuthStore } from "@/store/useAuthStore";
+import {
+  loadTeamMembers,
+  createMember,
+  updateMember,
+  removeMember,
+  changeMemberRole,
+  assignMemberToProject,
+  unassignMemberFromProject,
+  resetMembers,
+} from "@/services/teamService";
 
 interface TeamState {
   members: TeamMember[];
@@ -14,66 +24,73 @@ interface TeamState {
   reset: (members: TeamMember[]) => void;
 }
 
-export const useTeamStore = create<TeamState>()((set) => ({
+export const useTeamStore = create<TeamState>()((set, get) => ({
   members: [],
 
   load: async () => {
-    const members = await dbLoadAll<TeamMember>("team_members");
+    const members = await loadTeamMembers();
     set({ members });
   },
 
   reset: (members) => {
     set({ members });
-    members.forEach((m) => dbUpsert("team_members", m.id, m));
+    resetMembers(members);
   },
 
   addMember: (member) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ members: [...s.members, member] }));
-    dbUpsert("team_members", member.id, member);
+    createMember(member, orgId);
   },
 
-  updateMember: (id, data) =>
+  updateMember: (id, patch) =>
     set((s) => {
-      const members = s.members.map((m) => (m.id === id ? { ...m, ...data } : m));
-      const updated = members.find((m) => m.id === id);
-      if (updated) dbUpsert("team_members", id, updated);
-      return { members };
+      updateMember(id, patch, s.members).then((updated) => {
+        if (updated) set((s2) => ({ members: s2.members.map((m) => (m.id === id ? updated : m)) }));
+      });
+      return { members: s.members.map((m) => (m.id === id ? { ...m, ...patch } : m)) };
     }),
 
   removeMember: (id) => {
     set((s) => ({ members: s.members.filter((m) => m.id !== id) }));
-    dbDelete("team_members", id);
+    removeMember(id);
   },
 
   changeRole: (id, role) =>
     set((s) => {
-      const members = s.members.map((m) => (m.id === id ? { ...m, role } : m));
-      const updated = members.find((m) => m.id === id);
-      if (updated) dbUpsert("team_members", id, updated);
-      return { members };
+      changeMemberRole(id, role, s.members).then((updated) => {
+        if (updated) set((s2) => ({ members: s2.members.map((m) => (m.id === id ? updated : m)) }));
+      });
+      return { members: s.members.map((m) => (m.id === id ? { ...m, role } : m)) };
     }),
 
   assignProject: (memberId, projectId) =>
     set((s) => {
-      const members = s.members.map((m) =>
-        m.id === memberId && !m.projectIds.includes(projectId)
-          ? { ...m, projectIds: [...m.projectIds, projectId] }
-          : m
-      );
-      const updated = members.find((m) => m.id === memberId);
-      if (updated) dbUpsert("team_members", memberId, updated);
-      return { members };
+      assignMemberToProject(memberId, projectId, s.members).then((updated) => {
+        if (updated)
+          set((s2) => ({ members: s2.members.map((m) => (m.id === memberId ? updated : m)) }));
+      });
+      return {
+        members: s.members.map((m) =>
+          m.id === memberId && !m.projectIds.includes(projectId)
+            ? { ...m, projectIds: [...m.projectIds, projectId] }
+            : m
+        ),
+      };
     }),
 
   unassignProject: (memberId, projectId) =>
     set((s) => {
-      const members = s.members.map((m) =>
-        m.id === memberId
-          ? { ...m, projectIds: m.projectIds.filter((p) => p !== projectId) }
-          : m
-      );
-      const updated = members.find((m) => m.id === memberId);
-      if (updated) dbUpsert("team_members", memberId, updated);
-      return { members };
+      unassignMemberFromProject(memberId, projectId, s.members).then((updated) => {
+        if (updated)
+          set((s2) => ({ members: s2.members.map((m) => (m.id === memberId ? updated : m)) }));
+      });
+      return {
+        members: s.members.map((m) =>
+          m.id === memberId
+            ? { ...m, projectIds: m.projectIds.filter((p) => p !== projectId) }
+            : m
+        ),
+      };
     }),
 }));

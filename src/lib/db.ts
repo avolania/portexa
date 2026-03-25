@@ -9,8 +9,9 @@ export async function dbLoadAll<T>(table: string): Promise<T[]> {
   return (data ?? []).map((row) => row.data as T);
 }
 
-export async function dbUpsert(table: string, id: string, data: unknown): Promise<void> {
-  const { error } = await supabase.from(table).upsert({ id, data });
+export async function dbUpsert(table: string, id: string, data: unknown, orgId?: string): Promise<void> {
+  const row = orgId ? { id, data, org_id: orgId } : { id, data };
+  const { error } = await supabase.from(table).upsert(row);
   if (error) console.error(`[db] upsert ${table}:`, error.message);
 }
 
@@ -19,18 +20,24 @@ export async function dbDelete(table: string, id: string): Promise<void> {
   if (error) console.error(`[db] delete ${table}:`, error.message);
 }
 
-// ─── Auth profiles (keyed by email) ──────────────────────────────────────────
+// ─── Auth profiles (keyed by userId) ─────────────────────────────────────────
 
 export async function dbLoadProfiles(): Promise<Record<string, User>> {
-  const { data, error } = await supabase.from("auth_profiles").select("email, data");
+  const { data, error } = await supabase.from("auth_profiles").select("id, data");
   if (error) { console.error("[db] load auth_profiles:", error.message); return {}; }
   const result: Record<string, User> = {};
-  for (const row of data ?? []) result[row.email] = row.data as User;
+  for (const row of data ?? []) result[row.id] = row.data as User;
   return result;
 }
 
-export async function dbUpsertProfile(email: string, data: unknown): Promise<void> {
-  const { error } = await supabase.from("auth_profiles").upsert({ email, data });
+export async function dbLoadProfile(userId: string): Promise<User | null> {
+  const { data, error } = await supabase.from("auth_profiles").select("data").eq("id", userId).single();
+  if (error || !data) return null;
+  return data.data as User;
+}
+
+export async function dbUpsertProfile(userId: string, data: unknown): Promise<void> {
+  const { error } = await supabase.from("auth_profiles").upsert({ id: userId, data });
   if (error) console.error("[db] upsert auth_profiles:", error.message);
 }
 

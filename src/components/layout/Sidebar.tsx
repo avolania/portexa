@@ -7,7 +7,7 @@ import {
   LayoutDashboard, FolderKanban, Briefcase, CheckSquare,
   Users, Clock, DollarSign, FileText, BarChart3,
   Bell, MessageSquare, Settings, User, ChevronLeft,
-  ChevronRight, ShieldCheck,
+  ChevronRight, ShieldCheck, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -26,6 +26,7 @@ const navItems = [
   { href: "/dosyalar", icon: FileText, label: "Dosyalar" },
   { href: "/raporlar", icon: BarChart3, label: "Raporlar" },
   { href: "/yetkilendirme", icon: ShieldCheck, label: "Yetkilendirme" },
+  { href: "/talepler", icon: ClipboardList, label: "Talepler" },
 ];
 
 const bottomItems = [
