@@ -8,7 +8,12 @@ import { Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const schema = z
   .object({
@@ -50,8 +55,9 @@ export default function SifreSifirlaPage() {
       setAuthError(error.message);
       return;
     }
+    await supabase.auth.signOut();
     setDone(true);
-    setTimeout(() => router.push("/dashboard"), 2000);
+    setTimeout(() => router.push("/giris"), 2000);
   };
 
   if (done) {
