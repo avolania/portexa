@@ -8,7 +8,7 @@ import {
   Users, Clock, DollarSign, FileText, BarChart3,
   Bell, MessageSquare, Settings, User, ChevronLeft,
   ChevronRight, ShieldCheck, ClipboardList, HeadphonesIcon,
-  AlertCircle, GitPullRequest, LifeBuoy, Ticket,
+  AlertCircle, GitPullRequest, LifeBuoy, Ticket, SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -53,7 +53,8 @@ const navSections = [
       { href: "/itsm/portal",            icon: LifeBuoy,       label: "Destek Portalı"       },
       { href: "/itsm/incidents",         icon: AlertCircle,    label: "Incident'lar"          },
       { href: "/itsm/service-requests",  icon: ClipboardList,  label: "Servis Talepleri"      },
-      { href: "/itsm/change-requests",   icon: GitPullRequest, label: "Değişiklik Talepleri"  },
+      { href: "/itsm/change-requests",   icon: GitPullRequest,    label: "Değişiklik Talepleri"  },
+      { href: "/itsm/settings",           icon: SlidersHorizontal, label: "ITSM Ayarları"          },
     ],
   },
   {

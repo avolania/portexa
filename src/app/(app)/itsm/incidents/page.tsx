@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Plus, Search, ChevronRight, AlertCircle, Clock, XCircle, Paperclip, X as XIcon } from "lucide-react";
 import { useIncidentStore } from "@/store/useIncidentStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useITSMConfigStore } from "@/store/useITSMConfigStore";
 import { IncidentState, Priority, Impact, Urgency } from "@/lib/itsm/types/enums";
 import { ITSM_PRIORITY_MAP, INCIDENT_STATE_MAP } from "@/lib/itsm/ui-maps";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,11 @@ import type { CreateIncidentDto } from "@/lib/itsm/types/incident.types";
 function NewIncidentModal({ onClose }: { onClose: () => void }) {
   const { create, addAttachment } = useIncidentStore();
   const { user } = useAuthStore();
+  const { config, load: loadConfig } = useITSMConfigStore();
+  const incidentCategories = config.categories.incidentCategories;
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => { loadConfig(); }, [loadConfig]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [form, setForm] = useState({
     shortDescription: "",
@@ -87,7 +92,12 @@ function NewIncidentModal({ onClose }: { onClose: () => void }) {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
-              <input className="input w-full" placeholder="Network, App..." value={form.category} onChange={(e) => f("category", e.target.value)} />
+              <select className="input w-full" value={form.category} onChange={(e) => f("category", e.target.value)}>
+                <option value="">— Seçin —</option>
+                {incidentCategories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Etki</label>

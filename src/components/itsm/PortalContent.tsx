@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Monitor, Code2, Wifi, Lock, HelpCircle,
@@ -16,6 +16,7 @@ import {
 import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useITSMConfigStore } from "@/store/useITSMConfigStore";
 import { Impact, Urgency, SapModule, SapCategory } from "@/lib/itsm/types/enums";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +66,33 @@ const SR_TYPES = [
   { id: "account",   icon: UserCog,    label: "Hesap Yönetimi",     desc: "Yeni hesap, güncelleme, silme" },
   { id: "other",     icon: MoreHorizontal, label: "Diğer",          desc: "Başka bir hizmet talebi" },
 ];
+
+// ─── Dinamik ikon eşleştirme ─────────────────────────────────────────────────────
+
+function getCategoryIcon(name: string): React.ElementType {
+  const n = name.toLowerCase();
+  if (n.includes('donanım') || n.includes('hardware'))          return Monitor;
+  if (n.includes('yazılım') || n.includes('software'))          return Code2;
+  if (n.includes('ağ') || n.includes('network') || n.includes('bağlantı')) return Wifi;
+  if (n.includes('erişim') || n.includes('access') || n.includes('yetki')) return Lock;
+  if (n.includes('sap'))                                        return Settings2;
+  if (n.includes('güvenlik') || n.includes('security'))        return Lock;
+  return HelpCircle;
+}
+
+function getSRTypeIcon(name: string): React.ElementType {
+  const n = name.toLowerCase();
+  if (n.includes('yazılım') || n.includes('software'))         return Code2;
+  if (n.includes('donanım') || n.includes('hardware'))         return Package;
+  if (n.includes('erişim') || n.includes('access') || n.includes('yetki')) return Key;
+  if (n.includes('hesap') || n.includes('account'))            return UserCog;
+  if (n.includes('sap'))                                        return Settings2;
+  return MoreHorizontal;
+}
+
+function isSapRelated(name: string) {
+  return name.toLowerCase().includes('sap');
+}
 
 // ─── Kart bileşeni ──────────────────────────────────────────────────────────────
 
@@ -259,6 +287,13 @@ function SectionLabel({ num, title, subtitle }: { num: number; title: string; su
 function IncidentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (num: string) => void }) {
   const { create, addAttachment } = useIncidentStore();
   const { user } = useAuthStore();
+  const { config, load: loadConfig } = useITSMConfigStore();
+
+  useEffect(() => { loadConfig(); }, [loadConfig]);
+
+  const incidentCategoryCards = config.categories.incidentCategories.map((name) => ({
+    id: name, icon: getCategoryIcon(name), label: name, desc: '',
+  }));
   const [saving, setSaving] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const pendingFilesRef = useRef<File[]>([]);
@@ -326,7 +361,7 @@ function IncidentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (n
       <div className="py-5 space-y-3">
         <SectionLabel num={2} title="Kategori" subtitle="En uygun olanı seçin" />
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {INCIDENT_CATEGORIES.map((c) => (
+          {incidentCategoryCards.map((c) => (
             <SelectCard
               key={c.id}
               icon={c.icon}
@@ -335,13 +370,13 @@ function IncidentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (n
               selected={category === c.id}
               onClick={() => {
                 setCategory(c.id);
-                if (c.id !== "software") { setSapCategory(""); setSapModule(""); }
+                if (!isSapRelated(c.id)) { setSapCategory(""); setSapModule(""); }
               }}
             />
           ))}
         </div>
 
-        {category === "software" && (
+        {isSapRelated(category) && (
           <div className="border border-indigo-100 bg-indigo-50/40 rounded-2xl p-4">
             <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-3">SAP Alt Kategorisi</p>
             <SapSelector
@@ -461,6 +496,13 @@ function IncidentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (n
 function ServiceRequestForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (num: string) => void }) {
   const { create, addAttachment } = useServiceRequestStore();
   const { user } = useAuthStore();
+  const { config, load: loadConfig } = useITSMConfigStore();
+
+  useEffect(() => { loadConfig(); }, [loadConfig]);
+
+  const srTypeCards = config.categories.serviceRequestTypes.map((name) => ({
+    id: name, icon: getSRTypeIcon(name), label: name, desc: '',
+  }));
   const [step, setStep]                 = useState(1);
   const [saving, setSaving]             = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -546,7 +588,7 @@ function ServiceRequestForm({ onBack, onSuccess }: { onBack: () => void; onSucce
             <p className="text-sm text-gray-500 mt-1">Talebinizle en ilgili kategoriyi seçin</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {SR_TYPES.map((t) => (
+            {srTypeCards.map((t) => (
               <SelectCard
                 key={t.id}
                 icon={t.icon}
@@ -555,13 +597,13 @@ function ServiceRequestForm({ onBack, onSuccess }: { onBack: () => void; onSucce
                 selected={requestType === t.id}
                 onClick={() => {
                   setRequestType(t.id);
-                  if (t.id !== "software") { setSapCategory(""); setSapModule(""); }
+                  if (!isSapRelated(t.id)) { setSapCategory(""); setSapModule(""); }
                 }}
               />
             ))}
           </div>
 
-          {requestType === "software" && (
+          {isSapRelated(requestType) && (
             <div className="border border-indigo-100 bg-indigo-50/50 rounded-2xl p-4 space-y-1">
               <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wider mb-3">SAP Alt Kategorisi</p>
               <SapSelector
@@ -730,7 +772,7 @@ function ServiceRequestForm({ onBack, onSuccess }: { onBack: () => void; onSucce
           {/* Özet */}
           <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600">
             <span className="font-medium text-gray-700">Talep türü: </span>
-            {SR_TYPES.find((t) => t.id === requestType)?.label}
+            {requestType}
             {forSomeoneElse && forWhom && (
               <> · <span className="font-medium text-gray-700">Kişi: </span>{forWhom}</>
             )}

@@ -103,13 +103,29 @@ create policy "itsm_change_requests_org" on itsm_change_requests for all
   using  (itsm_change_requests.org_id = get_my_org_id())
   with check (itsm_change_requests.org_id = get_my_org_id());
 
--- ── 6. DOĞRULAMA ─────────────────────────────────────────────
+-- ── 6. ITSM CONFIG TABLOSU ───────────────────────────────────
+
+create table if not exists itsm_config (
+  id     text primary key,   -- org_id ile aynı
+  org_id text not null default '',
+  data   jsonb not null default '{}'
+);
+
+alter table itsm_config enable row level security;
+
+drop policy if exists "itsm_config_org" on itsm_config;
+
+create policy "itsm_config_org" on itsm_config for all
+  using  (itsm_config.org_id = get_my_org_id())
+  with check (itsm_config.org_id = get_my_org_id());
+
+-- ── 7. DOĞRULAMA ─────────────────────────────────────────────
 -- Aşağıdaki sorgu tablolar ve politikaların doğru oluşturulduğunu gösterir:
 --
 -- select tablename, rowsecurity
 -- from pg_tables
--- where tablename in ('itsm_incidents','itsm_service_requests','itsm_change_requests');
+-- where tablename in ('itsm_incidents','itsm_service_requests','itsm_change_requests','itsm_config');
 --
 -- select tablename, policyname
 -- from pg_policies
--- where tablename in ('itsm_incidents','itsm_service_requests','itsm_change_requests');
+-- where tablename in ('itsm_incidents','itsm_service_requests','itsm_change_requests','itsm_config');
