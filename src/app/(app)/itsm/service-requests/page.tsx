@@ -79,7 +79,7 @@ function NewSRModal({ onClose }: { onClose: () => void }) {
             <label className="block text-sm font-medium text-gray-700 mb-1">Detaylı Açıklama</label>
             <textarea className="input w-full min-h-[80px] resize-none" placeholder="Talep detayları..." value={form.description} onChange={(e) => f("description", e.target.value)} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Talep Tipi</label>
               <input className="input w-full" placeholder="Yazılım, Donanım..." value={form.requestType} onChange={(e) => f("requestType", e.target.value)} />
@@ -197,7 +197,7 @@ export default function ServiceRequestsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Servis Talep Yönetimi</h1>
         </div>
         <button onClick={() => setShowNew(true)} className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Yeni Talep
+          <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Yeni Talep</span>
         </button>
       </div>
 
@@ -230,16 +230,17 @@ export default function ServiceRequestsPage() {
             <p className="text-sm">Hiç servis talebi bulunamadı.</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28">Numara</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28 hidden sm:table-cell">Numara</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Başlık</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28">Öncelik</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28 hidden sm:table-cell">Öncelik</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-32">Durum</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-32">Onay</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-36">SLA</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-32">Oluşturulma</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-32 hidden md:table-cell">Onay</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-36 hidden md:table-cell">SLA</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-32 hidden lg:table-cell">Oluşturulma</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -252,14 +253,17 @@ export default function ServiceRequestsPage() {
                 const isTerminal   = [ServiceRequestState.FULFILLED, ServiceRequestState.CLOSED, ServiceRequestState.REJECTED, ServiceRequestState.CANCELLED].includes(sr.state);
                 return (
                   <tr key={sr.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{sr.number}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500 hidden sm:table-cell">{sr.number}</td>
                     <td className="px-4 py-3">
                       <Link href={`/itsm/service-requests/${sr.id}`} className="font-medium text-gray-900 hover:text-indigo-600 line-clamp-1">
                         {sr.shortDescription}
                       </Link>
-                      {sr.requestType && <div className="text-xs text-gray-400 mt-0.5">{sr.requestType}</div>}
+                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                        <span className="sm:hidden font-mono">{sr.number}</span>
+                        {sr.requestType && <span>{sr.requestType}</span>}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden sm:table-cell">
                       <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium", priorityInfo.badge)}>
                         <span className={cn("w-1.5 h-1.5 rounded-full", priorityInfo.dot)} />
                         {priorityInfo.label}
@@ -268,12 +272,12 @@ export default function ServiceRequestsPage() {
                     <td className="px-4 py-3">
                       <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", stateInfo.badge)}>{stateInfo.label}</span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden md:table-cell">
                       {sr.approvalRequired
                         ? <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", approvalInfo.badge)}>{approvalInfo.label}</span>
                         : <span className="text-xs text-gray-400">—</span>}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden md:table-cell">
                       {isTerminal ? (
                         <span className="text-xs text-gray-400">—</span>
                       ) : sr.sla.slaBreached || remainMs < 0 ? (
@@ -284,7 +288,7 @@ export default function ServiceRequestsPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400">
+                    <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell">
                       {formatDistanceToNow(new Date(sr.createdAt), { addSuffix: true, locale: tr })}
                     </td>
                   </tr>
@@ -292,6 +296,7 @@ export default function ServiceRequestsPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

@@ -4,9 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, FolderKanban, CheckSquare, Clock, MoreHorizontal, X,
+  LayoutDashboard, FolderKanban, CheckSquare, Clock, MoreHorizontal,
   Briefcase, Users, DollarSign, FileText, BarChart3, ShieldCheck,
   Bell, Settings, User, LogOut, ClipboardList,
+  HeadphonesIcon, AlertCircle, GitPullRequest, LifeBuoy, Ticket, SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -22,16 +23,23 @@ const PRIMARY = [
 ];
 
 const MORE_ITEMS = [
-  { href: "/portfolyo",    icon: Briefcase,  label: "Portföy"       },
-  { href: "/ekip",         icon: Users,      label: "Ekip"          },
-  { href: "/butce",        icon: DollarSign, label: "Bütçe"         },
-  { href: "/dosyalar",     icon: FileText,   label: "Dosyalar"      },
-  { href: "/raporlar",     icon: BarChart3,  label: "Raporlar"      },
-  { href: "/yetkilendirme",icon: ShieldCheck,  label: "Yetkilendirme" },
-  { href: "/talepler",     icon: ClipboardList, label: "Talepler"      },
-  { href: "/bildirimler",  icon: Bell,       label: "Bildirimler"   },
-  { href: "/ayarlar",      icon: Settings,   label: "Ayarlar"       },
-  { href: "/profil",       icon: User,       label: "Profil"        },
+  { href: "/portfolyo",               icon: Briefcase,          label: "Portföy"         },
+  { href: "/ekip",                    icon: Users,              label: "Ekip"            },
+  { href: "/butce",                   icon: DollarSign,         label: "Bütçe"           },
+  { href: "/dosyalar",                icon: FileText,           label: "Dosyalar"        },
+  { href: "/raporlar",                icon: BarChart3,          label: "Raporlar"        },
+  { href: "/talepler",                icon: ClipboardList,      label: "Talepler"        },
+  { href: "/itsm",                    icon: HeadphonesIcon,     label: "ITSM"            },
+  { href: "/itsm/portal",             icon: LifeBuoy,           label: "Destek Portalı"  },
+  { href: "/itsm/incidents",          icon: AlertCircle,        label: "Incident'lar"    },
+  { href: "/itsm/service-requests",   icon: ClipboardList,      label: "Servis Talepleri"},
+  { href: "/itsm/change-requests",    icon: GitPullRequest,     label: "Değişiklikler"   },
+  { href: "/itsm/my-tickets",         icon: Ticket,             label: "Taleplerim"      },
+  { href: "/itsm/settings",           icon: SlidersHorizontal,  label: "ITSM Ayarları"   },
+  { href: "/yetkilendirme",           icon: ShieldCheck,        label: "Yetkilendirme"   },
+  { href: "/bildirimler",             icon: Bell,               label: "Bildirimler"     },
+  { href: "/ayarlar",                 icon: Settings,           label: "Ayarlar"         },
+  { href: "/profil",                  icon: User,               label: "Profil"          },
 ];
 
 export default function MobileNav() {

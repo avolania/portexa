@@ -89,7 +89,7 @@ function NewIncidentModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => f("description", e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
               <select className="input w-full" value={form.category} onChange={(e) => f("category", e.target.value)}>
@@ -198,7 +198,7 @@ export default function IncidentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Incident Yönetimi</h1>
         </div>
         <button onClick={() => setShowNew(true)} className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Yeni Incident
+          <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Yeni Incident</span>
         </button>
       </div>
 
@@ -243,15 +243,16 @@ export default function IncidentsPage() {
             <p className="text-sm">Hiç incident bulunamadı.</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[520px]">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28">Numara</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28 hidden sm:table-cell">Numara</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Başlık</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28">Öncelik</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28 hidden sm:table-cell">Öncelik</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28">Durum</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-36">SLA</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-32">Oluşturulma</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-36 hidden md:table-cell">SLA</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-32 hidden lg:table-cell">Oluşturulma</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -263,14 +264,17 @@ export default function IncidentsPage() {
                 const remainH      = Math.floor(remainMs / 3_600_000);
                 return (
                   <tr key={inc.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{inc.number}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500 hidden sm:table-cell">{inc.number}</td>
                     <td className="px-4 py-3">
                       <Link href={`/itsm/incidents/${inc.id}`} className="font-medium text-gray-900 hover:text-indigo-600 line-clamp-1">
                         {inc.shortDescription}
                       </Link>
-                      {inc.category && <div className="text-xs text-gray-400 mt-0.5">{inc.category}</div>}
+                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                        <span className="sm:hidden font-mono">{inc.number}</span>
+                        {inc.category && <span>{inc.category}</span>}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden sm:table-cell">
                       <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium", priorityInfo.badge)}>
                         <span className={cn("w-1.5 h-1.5 rounded-full", priorityInfo.dot)} />
                         {priorityInfo.label}
@@ -281,7 +285,7 @@ export default function IncidentsPage() {
                         {stateInfo.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden md:table-cell">
                       {inc.state === IncidentState.CLOSED || inc.state === IncidentState.RESOLVED ? (
                         <span className="text-xs text-gray-400">—</span>
                       ) : isBreached || remainMs < 0 ? (
@@ -294,7 +298,7 @@ export default function IncidentsPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400">
+                    <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell">
                       {formatDistanceToNow(new Date(inc.createdAt), { addSuffix: true, locale: tr })}
                     </td>
                   </tr>
@@ -302,6 +306,7 @@ export default function IncidentsPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

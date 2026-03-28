@@ -126,7 +126,7 @@ function NewCRModal({ onClose }: { onClose: () => void }) {
               <input className="input w-full" placeholder="Ağ, Sunucu..." value={form.category} onChange={(e) => f("category", e.target.value)} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">SAP Kategorisi</label>
               <select className="input w-full" value={form.sapCategory} onChange={(e) => f("sapCategory", e.target.value)}>
@@ -142,7 +142,7 @@ function NewCRModal({ onClose }: { onClose: () => void }) {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Planlanan Başlangıç *</label>
               <input type="datetime-local" className="input w-full" value={form.plannedStartDate} onChange={(e) => f("plannedStartDate", e.target.value)} required />
@@ -243,7 +243,7 @@ export default function ChangeRequestsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Değişiklik Yönetimi</h1>
         </div>
         <button onClick={() => setShowNew(true)} className="btn-primary flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Yeni Değişiklik
+          <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Yeni Değişiklik</span>
         </button>
       </div>
 
@@ -276,15 +276,16 @@ export default function ChangeRequestsPage() {
             <p className="text-sm">Hiç değişiklik talebi bulunamadı.</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28">Numara</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28 hidden sm:table-cell">Numara</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Başlık</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-24">Tip</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-24">Risk</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-24 hidden sm:table-cell">Tip</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-24 hidden md:table-cell">Risk</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-32">Durum</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-36">Planlanan Başlangıç</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-36 hidden md:table-cell">Planlanan Başlangıç</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -294,23 +295,26 @@ export default function ChangeRequestsPage() {
                 const riskInfo  = CHANGE_RISK_MAP[cr.risk];
                 return (
                   <tr key={cr.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{cr.number}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500 hidden sm:table-cell">{cr.number}</td>
                     <td className="px-4 py-3">
                       <Link href={`/itsm/change-requests/${cr.id}`} className="font-medium text-gray-900 hover:text-indigo-600 line-clamp-1">
                         {cr.shortDescription}
                       </Link>
-                      {cr.category && <div className="text-xs text-gray-400 mt-0.5">{cr.category}</div>}
+                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                        <span className="sm:hidden font-mono">{cr.number}</span>
+                        {cr.category && <span>{cr.category}</span>}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden sm:table-cell">
                       <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", typeInfo.badge)}>{typeInfo.label}</span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden md:table-cell">
                       <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", riskInfo.badge)}>{riskInfo.label}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", stateInfo.badge)}>{stateInfo.label}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
+                    <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3 text-gray-400" />
                         {format(new Date(cr.plannedStartDate), "dd MMM yyyy", { locale: tr })}
@@ -321,6 +325,7 @@ export default function ChangeRequestsPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
