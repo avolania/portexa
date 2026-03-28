@@ -4,11 +4,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, FolderKanban, Briefcase, CheckSquare,
-  Users, Clock, DollarSign, FileText, BarChart3,
-  Bell, MessageSquare, Settings, User, ChevronLeft,
-  ChevronRight, ShieldCheck, ClipboardList, HeadphonesIcon,
-  AlertCircle, GitPullRequest, LifeBuoy, Ticket, SlidersHorizontal,
+  LayoutDashboard, FolderKanban, CheckSquare,
+  Users, BarChart3, Settings, User, ChevronLeft,
+  ChevronRight, ShieldCheck, HeadphonesIcon,
+  AlertCircle, GitPullRequest, LifeBuoy, Ticket,
+  SlidersHorizontal, ClipboardList, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -16,60 +16,74 @@ import { ROLE_META } from "@/lib/permissions";
 import Avatar from "@/components/ui/Avatar";
 import { useState } from "react";
 
-// ─── End-user nav (sadece portal + taleplerim) ────────────────────────────────
+// ─── End-user nav ─────────────────────────────────────────────────────────────
 
 const endUserNav = [
-  { href: "/itsm/portal",      icon: LifeBuoy, label: "Destek Portalı" },
-  { href: "/itsm/my-tickets",  icon: Ticket,   label: "Taleplerim"     },
+  { href: "/itsm/portal",     icon: LifeBuoy, label: "Destek Portalı" },
+  { href: "/itsm/my-tickets", icon: Ticket,   label: "Taleplerim"     },
 ];
 
-// ─── Nav sections ─────────────────────────────────────────────────────────────
+// ─── Nav config ───────────────────────────────────────────────────────────────
 
-const navSections = [
+const standaloneItems = [
+  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+];
+
+interface NavItem {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  adminOnly?: boolean;
+}
+
+interface NavSection {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  defaultOpen: boolean;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
   {
-    label: "Genel",
-    items: [
-      { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    ],
-  },
-  {
+    id: "ppm",
     label: "Proje Yönetimi",
+    icon: FolderKanban,
+    defaultOpen: true,
     items: [
-      { href: "/projeler",     icon: FolderKanban, label: "Projeler"    },
-      { href: "/portfolyo",    icon: Briefcase,    label: "Portföy"     },
-      { href: "/gorevler",     icon: CheckSquare,  label: "Görevler"    },
-      { href: "/ekip",         icon: Users,        label: "Ekip"        },
-      { href: "/aktiviteler",  icon: Clock,        label: "Aktiviteler" },
-      { href: "/butce",        icon: DollarSign,   label: "Bütçe"       },
-      { href: "/dosyalar",     icon: FileText,     label: "Dosyalar"    },
-      { href: "/raporlar",     icon: BarChart3,    label: "Raporlar"    },
-      { href: "/talepler",     icon: ClipboardList, label: "Talepler"   },
+      { href: "/projeler",  icon: FolderKanban, label: "Projeler" },
+      { href: "/gorevler",  icon: CheckSquare,  label: "Görevler" },
+      { href: "/ekip",      icon: Users,        label: "Ekip"     },
+      { href: "/raporlar",  icon: BarChart3,    label: "Raporlar" },
     ],
   },
   {
+    id: "itsm",
     label: "ITSM",
+    icon: HeadphonesIcon,
+    defaultOpen: true,
     items: [
-      { href: "/itsm",                   icon: HeadphonesIcon, label: "ITSM Dashboard"       },
-      { href: "/itsm/portal",            icon: LifeBuoy,       label: "Destek Portalı"       },
-      { href: "/itsm/incidents",         icon: AlertCircle,    label: "Incident'lar"          },
-      { href: "/itsm/service-requests",  icon: ClipboardList,  label: "Servis Talepleri"      },
-      { href: "/itsm/change-requests",   icon: GitPullRequest,    label: "Değişiklik Talepleri"  },
-      { href: "/itsm/settings",           icon: SlidersHorizontal, label: "ITSM Ayarları"          },
+      { href: "/itsm/portal",           icon: LifeBuoy,       label: "Destek Portalı"      },
+      { href: "/itsm/incidents",        icon: AlertCircle,    label: "Incident'lar"         },
+      { href: "/itsm/service-requests", icon: ClipboardList,  label: "Servis Talepleri"     },
+      { href: "/itsm/change-requests",  icon: GitPullRequest, label: "Değişiklikler"        },
     ],
   },
   {
+    id: "sistem",
     label: "Sistem",
+    icon: ShieldCheck,
+    defaultOpen: false,
     items: [
-      { href: "/yetkilendirme", icon: ShieldCheck, label: "Yetkilendirme" },
+      { href: "/yetkilendirme", icon: ShieldCheck,       label: "Yetkilendirme"  },
+      { href: "/itsm/settings", icon: SlidersHorizontal, label: "ITSM Ayarları", adminOnly: true },
     ],
   },
 ];
 
 const bottomItems = [
-  { href: "/bildirimler", icon: Bell,          label: "Bildirimler" },
-  { href: "/mesajlar",    icon: MessageSquare, label: "Mesajlar"    },
-  { href: "/ayarlar",     icon: Settings,      label: "Ayarlar"     },
-  { href: "/profil",      icon: User,          label: "Profil"      },
+  { href: "/ayarlar", icon: Settings, label: "Ayarlar" },
+  { href: "/profil",  icon: User,     label: "Profil"  },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -78,6 +92,15 @@ export default function Sidebar() {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const [collapsed, setCollapsed] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(
+    Object.fromEntries(navSections.map((s) => [s.id, s.defaultOpen]))
+  );
+
+  const toggleSection = (id: string) => {
+    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const isAdmin = user?.role === "admin" || user?.role === "service_desk_manager";
 
   return (
     <aside
@@ -94,8 +117,8 @@ export default function Sidebar() {
         {!collapsed && <span className="text-base font-bold text-[#1a2d5a] truncate">Portexa</span>}
       </div>
 
-      {/* Nav sections */}
-      <nav className="flex-1 py-3 px-3 overflow-y-auto space-y-4">
+      {/* Nav */}
+      <nav className="flex-1 py-3 px-3 overflow-y-auto space-y-1">
         {user?.role === "end_user" ? (
           <div className="space-y-0.5">
             {endUserNav.map((item) => {
@@ -115,34 +138,85 @@ export default function Sidebar() {
             })}
           </div>
         ) : (
-          navSections.map((section) => (
-            <div key={section.label}>
-              {!collapsed && (
-                <div className="px-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                  {section.label}
-                </div>
-              )}
-              <div className="space-y-0.5">
-                {section.items.map((item) => {
-                  const Icon = item.icon;
-                  const active = item.href === "/itsm"
-                    ? pathname === "/itsm"
-                    : pathname.startsWith(item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn("sidebar-item", active && "active", collapsed && "justify-center px-2")}
-                      title={collapsed ? item.label : undefined}
+          <>
+            {/* Standalone — Dashboard */}
+            {standaloneItems.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn("sidebar-item", active && "active", collapsed && "justify-center px-2")}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  {!collapsed && <span>{item.label}</span>}
+                </Link>
+              );
+            })}
+
+            {/* Collapsible sections */}
+            {navSections.map((section) => {
+              const isOpen = collapsed || (openSections[section.id] ?? section.defaultOpen);
+              const SectionIcon = section.icon;
+              const sectionActive = section.items.some((i) => pathname.startsWith(i.href));
+              const visibleItems = section.items.filter(
+                (i) => !i.adminOnly || isAdmin
+              );
+
+              return (
+                <div key={section.id} className="pt-2">
+                  {/* Section header */}
+                  {collapsed ? (
+                    <div className="border-t border-gray-100 mb-1" />
+                  ) : (
+                    <button
+                      onClick={() => toggleSection(section.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-2 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                        sectionActive ? "text-indigo-500" : "text-gray-400 hover:text-gray-500"
+                      )}
                     >
-                      <Icon className="w-5 h-5 flex-shrink-0" />
-                      {!collapsed && <span>{item.label}</span>}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))
+                      <SectionIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="flex-1 text-left">{section.label}</span>
+                      <ChevronDown
+                        className={cn(
+                          "w-3.5 h-3.5 transition-transform duration-200",
+                          !isOpen && "-rotate-90"
+                        )}
+                      />
+                    </button>
+                  )}
+
+                  {/* Section items */}
+                  {isOpen && (
+                    <div className="space-y-0.5 mt-0.5">
+                      {visibleItems.map((item) => {
+                        const Icon = item.icon;
+                        const active = pathname.startsWith(item.href);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={cn(
+                              "sidebar-item",
+                              active && "active",
+                              collapsed ? "justify-center px-2" : "pl-5"
+                            )}
+                            title={collapsed ? item.label : undefined}
+                          >
+                            <Icon className="w-4 h-4 flex-shrink-0" />
+                            {!collapsed && <span>{item.label}</span>}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </>
         )}
       </nav>
 
