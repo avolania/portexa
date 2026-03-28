@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import {
   Shield, ShieldCheck, Search, Check,
   Users, AlertTriangle, Save, RotateCcw, X,
-  UserPlus, Pencil,
+  UserPlus, Pencil, Trash2,
 } from "lucide-react";
 import { useTeamStore } from "@/store/useTeamStore";
 import { useProjectStore } from "@/store/useProjectStore";
@@ -26,6 +26,57 @@ interface AuthUser {
   source: "registered" | "team";
   projectIds: string[];
   status: "active" | "pending" | "inactive";
+}
+
+// ─── Silme onay dialogu ───────────────────────────────────────────────────────
+
+function DeleteConfirmDialog({
+  user,
+  onClose,
+  onConfirm,
+}: {
+  user: AuthUser;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+            <Trash2 className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Kullanıcıyı Sil</h2>
+            <p className="text-sm text-gray-500">Bu işlem geri alınamaz.</p>
+          </div>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3 mb-5">
+          <div className="flex items-center gap-2">
+            <Avatar name={user.name} size="sm" />
+            <div>
+              <div className="text-sm font-medium text-gray-900">{user.name}</div>
+              <div className="text-xs text-gray-400">{user.email}</div>
+            </div>
+          </div>
+        </div>
+        <p className="text-sm text-gray-600 mb-5">
+          Bu kullanıcıyı sistemden silmek istediğinizden emin misiniz? Kullanıcının ekip üyeliği ve proje atamaları kaldırılacak.
+        </p>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 font-medium">
+            İptal
+          </button>
+          <button
+            onClick={() => { onConfirm(); onClose(); }}
+            className="flex-1 py-2.5 text-sm bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors"
+          >
+            Evet, Sil
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Kullanıcı düzenleme modal ────────────────────────────────────────────────
@@ -297,7 +348,7 @@ function RoleStatCard({ role, count, total }: { role: UserRole; count: number; t
 
 export default function YetkilendirmePage() {
   const authStore = useAuthStore();
-  const { members, addMember } = useTeamStore();
+  const { members, addMember, removeMember } = useTeamStore();
   const { projects } = useProjectStore();
   const canEdit = usePermission("team.manage");
 
@@ -306,6 +357,7 @@ export default function YetkilendirmePage() {
   const [saved, setSaved] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<AuthUser | null>(null);
+  const [deleteUser, setDeleteUser] = useState<AuthUser | null>(null);
 
   // Birleşik kullanıcı listesi: profiles (kayıtlı) + teamStore (manuel eklenen)
   const allUsers = useMemo<AuthUser[]>(() => {
@@ -404,6 +456,18 @@ export default function YetkilendirmePage() {
         [email]: { id, name, email, role, language: "tr" as const, title, orgId: useAuthStore.getState().user?.orgId ?? "" },
       },
     }));
+  };
+
+  const handleDeleteUser = (user: AuthUser) => {
+    // Team store'dan sil
+    const member = members.find((m) => m.id === user.id || m.email === user.email);
+    if (member) removeMember(member.id);
+    // Auth profiles'dan sil
+    useAuthStore.setState((state) => {
+      const updated = { ...state.profiles };
+      delete updated[user.email];
+      return { profiles: updated };
+    });
   };
 
   if (!canEdit) {
@@ -589,16 +653,27 @@ export default function YetkilendirmePage() {
                       </div>
                     </td>
 
-                    {/* Düzenle */}
+                    {/* Düzenle / Sil */}
                     <td className="px-4 py-3">
                       {canEdit && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setEditUser(u); }}
-                          className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors whitespace-nowrap px-2.5 py-1.5 rounded-lg hover:bg-indigo-50"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                          Düzenle
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditUser(u); }}
+                            className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors whitespace-nowrap px-2.5 py-1.5 rounded-lg hover:bg-indigo-50"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Düzenle
+                          </button>
+                          {u.id !== authStore.user?.id && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDeleteUser(u); }}
+                              className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-600 transition-colors whitespace-nowrap px-2.5 py-1.5 rounded-lg hover:bg-red-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Sil
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -652,6 +727,13 @@ export default function YetkilendirmePage() {
       )}
       {showAdd && (
         <AddUserModal onClose={() => setShowAdd(false)} onAdd={handleAddUser} />
+      )}
+      {deleteUser && (
+        <DeleteConfirmDialog
+          user={deleteUser}
+          onClose={() => setDeleteUser(null)}
+          onConfirm={() => handleDeleteUser(deleteUser)}
+        />
       )}
     </div>
   );

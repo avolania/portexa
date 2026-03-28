@@ -11,7 +11,7 @@ export async function dbLoadAll<T>(table: string): Promise<T[]> {
 
 export async function dbUpsert(table: string, id: string, data: unknown, orgId?: string): Promise<void> {
   const row = orgId ? { id, data, org_id: orgId } : { id, data };
-  const { error } = await supabase.from(table).upsert(row);
+  const { error } = await supabase.from(table).upsert([row], { defaultToNull: false });
   if (error) console.error(`[db] upsert ${table}:`, error.message);
 }
 
@@ -37,7 +37,7 @@ export async function dbLoadProfile(userId: string): Promise<User | null> {
 }
 
 export async function dbUpsertProfile(userId: string, data: unknown): Promise<void> {
-  const { error } = await supabase.from("auth_profiles").upsert({ id: userId, data });
+  const { error } = await supabase.from("auth_profiles").upsert([{ id: userId, data }], { defaultToNull: false });
   if (error) console.error("[db] upsert auth_profiles:", error.message);
 }
 

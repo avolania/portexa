@@ -3,6 +3,7 @@ import type { Permission, UserRole } from "@/types";
 // ─── Rol → Yetki haritası ─────────────────────────────────────────────────────
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  end_user: [],
   viewer: [
     "project.view",
   ],
@@ -46,6 +47,7 @@ export const ROLE_META: Record<UserRole, { label: string; description: string; c
   member:   { label: "Proje Üyesi",        description: "Atandığı görevleri görüntüleme ve güncelleme",      color: "text-emerald-700", bg: "bg-emerald-100" },
   approver: { label: "Onaycı",             description: "Sadece onay ve görüntüleme yetkisi",                color: "text-amber-700",   bg: "bg-amber-100"   },
   viewer:   { label: "Görüntüleyici",      description: "Sadece ana sayfa görüntüleme — admin onayı bekler", color: "text-gray-600",    bg: "bg-gray-100"    },
+  end_user: { label: "Son Kullanıcı",      description: "Sadece Destek Portalı — olay ve servis talebi",    color: "text-sky-700",     bg: "bg-sky-100"     },
 };
 
 // ─── Yetki kontrolü ───────────────────────────────────────────────────────────

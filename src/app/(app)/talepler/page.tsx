@@ -27,6 +27,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   member:   "Üye",
   approver: "Onaylayıcı",
   viewer:   "İzleyici",
+  end_user: "Son Kullanıcı",
 };
 
 // ─── New Request Modal ────────────────────────────────────────────────────────

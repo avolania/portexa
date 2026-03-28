@@ -1,22 +1,31 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
 import MobileNav from "@/components/layout/MobileNav";
 import ChatBot from "@/components/ChatBot";
 import { useAuthStore } from "@/store/useAuthStore";
 
+const END_USER_ALLOWED = ["/itsm/portal", "/itsm/my-tickets"];
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading, signOut } = useAuthStore();
+  const { isAuthenticated, loading, signOut, user } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       router.push("/giris");
+      return;
     }
-  }, [isAuthenticated, loading, router]);
+    // end_user sadece portal ve taleplerim sayfalarına erişebilir
+    if (!loading && isAuthenticated && user?.role === "end_user") {
+      const allowed = END_USER_ALLOWED.some((p) => pathname.startsWith(p));
+      if (!allowed) router.replace("/itsm/portal");
+    }
+  }, [isAuthenticated, loading, user, pathname, router]);
 
   if (loading) {
     return (

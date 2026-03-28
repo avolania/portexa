@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "pm" | "member" | "approver" | "viewer";
+export type UserRole = "admin" | "pm" | "member" | "approver" | "viewer" | "end_user";
 
 // ─── Workflow Requests ─────────────────────────────────────────────────────────
 
