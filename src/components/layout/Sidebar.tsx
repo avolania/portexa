@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, FolderKanban, CheckSquare,
+  LayoutDashboard, FolderKanban, CheckSquare, Briefcase,
   Users, BarChart3, Settings, User, ChevronLeft,
   ChevronRight, ShieldCheck, HeadphonesIcon,
   AlertCircle, GitPullRequest, LifeBuoy, Ticket,
@@ -52,6 +52,7 @@ const navSections: NavSection[] = [
     defaultOpen: true,
     items: [
       { href: "/projeler",  icon: FolderKanban, label: "Projeler" },
+      { href: "/portfolyo", icon: Briefcase,    label: "Portföy"  },
       { href: "/gorevler",  icon: CheckSquare,  label: "Görevler" },
       { href: "/ekip",      icon: Users,        label: "Ekip"     },
       { href: "/raporlar",  icon: BarChart3,    label: "Raporlar" },
