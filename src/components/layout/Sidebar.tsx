@@ -100,7 +100,7 @@ export default function Sidebar() {
     setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const isAdmin = user?.role === "admin" || user?.role === "service_desk_manager";
+  const isAdmin = user?.role === "admin";
 
   return (
     <aside
