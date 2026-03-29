@@ -46,6 +46,8 @@ async function buildAndSaveProfile(
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
+let _signingOut = false;
+
 export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   isAuthenticated: false,
@@ -71,7 +73,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
 
     supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
+      if (event === "SIGNED_IN" && session?.user && !_signingOut) {
         const existing = await dbLoadProfile(session.user.id);
         if (existing) {
           set({ user: existing, isAuthenticated: true, loading: false });
@@ -84,6 +86,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           set({ user: profile, isAuthenticated: true, loading: false });
         }
       } else if (event === "SIGNED_OUT") {
+        _signingOut = false;
         set({ user: null, isAuthenticated: false, loading: false, profiles: {} });
       }
     });
@@ -146,7 +149,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signOut: async () => {
+    _signingOut = true;
     await supabase.auth.signOut();
+    if (typeof window !== "undefined") sessionStorage.clear();
     set({ user: null, isAuthenticated: false, profiles: {} });
   },
 
