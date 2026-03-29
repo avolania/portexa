@@ -35,21 +35,19 @@ function loadAllStores() {
 
 export default function StoreHydration() {
   useEffect(() => {
-    // Auth listener başlat
     useAuthStore.getState().initAuth();
 
-    // isAuthenticated true olduğunda store'ları yükle
-    // (Supabase v2'de session onAuthStateChange ile async gelir)
-    if (useAuthStore.getState().isAuthenticated) {
-      loadAllStores();
-      return;
-    }
+    // Her isAuthenticated: false → true geçişinde store'ları yükle
+    // (ilk login, logout+re-login hepsini kapsar)
+    let prevAuthenticated = useAuthStore.getState().isAuthenticated;
+
+    if (prevAuthenticated) loadAllStores();
 
     const unsub = useAuthStore.subscribe((state) => {
-      if (state.isAuthenticated) {
+      if (state.isAuthenticated && !prevAuthenticated) {
         loadAllStores();
-        unsub();
       }
+      prevAuthenticated = state.isAuthenticated;
     });
 
     return () => unsub();
