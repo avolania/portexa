@@ -54,6 +54,10 @@ export default function KayitPage() {
   return (
     <div className="w-full max-w-lg">
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+        <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex gap-2">
+          <span className="shrink-0 mt-0.5">⚠️</span>
+          <span>Bu form <strong>yeni bir kuruluş hesabı</strong> oluşturur. Mevcut bir kuruluşa katılmak için yöneticinizden davet linki isteyin.</span>
+        </div>
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Hesap oluşturun</h1>
           <p className="text-gray-500 text-sm">Ücretsiz başlayın. Kredi kartı gerekmez.</p>

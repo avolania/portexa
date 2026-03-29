@@ -22,11 +22,14 @@ export async function dbDelete(table: string, id: string): Promise<void> {
 
 // ─── Auth profiles (keyed by userId) ─────────────────────────────────────────
 
-export async function dbLoadProfiles(): Promise<Record<string, User>> {
+export async function dbLoadProfiles(orgId?: string): Promise<Record<string, User>> {
   const { data, error } = await supabase.from("auth_profiles").select("id, data");
   if (error) { console.error("[db] load auth_profiles:", error.message); return {}; }
   const result: Record<string, User> = {};
-  for (const row of data ?? []) result[row.id] = row.data as User;
+  for (const row of data ?? []) {
+    const user = row.data as User;
+    if (!orgId || user.orgId === orgId) result[row.id] = user;
+  }
   return result;
 }
 

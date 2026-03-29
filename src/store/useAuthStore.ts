@@ -160,7 +160,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   loadProfiles: async () => {
-    const profiles = await dbLoadProfiles();
+    const orgId = get().user?.orgId;
+    const profiles = await dbLoadProfiles(orgId);
     set({ profiles });
   },
 
