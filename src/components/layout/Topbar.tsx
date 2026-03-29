@@ -15,8 +15,8 @@ export default function Topbar() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const handleLogout = () => {
-    signOut();
+  const handleLogout = async () => {
+    await signOut();
     router.push("/giris");
   };
 

@@ -73,9 +73,9 @@ export default function MobileNav() {
   const { user, signOut } = useAuthStore();
   const router = useRouter();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setOpen(false);
-    signOut();
+    await signOut();
     router.push("/giris");
   };
 
