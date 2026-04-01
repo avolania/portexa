@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   const inviteUrl = `${origin}/davet?token=${token}`;
 
   const { error: emailError } = await resend.emails.send({
-    from: "Portexa <noreply@portexa.app>",
+    from: "Pixanto <noreply@pixanto.app>",
     to: email,
     subject: `${orgName} sizi Portexa'ya davet etti`,
     html: `
