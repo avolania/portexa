@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
   });
 
   if (emailError) {
-    return NextResponse.json({ error: "E-posta gönderilemedi." }, { status: 500 });
+    console.error("[invite] Resend error:", emailError);
+    return NextResponse.json({ error: `E-posta gönderilemedi: ${emailError.message}` }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });
