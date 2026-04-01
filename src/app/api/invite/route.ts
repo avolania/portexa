@@ -73,6 +73,8 @@ export async function POST(req: NextRequest) {
 
   if (emailError) {
     console.error("[invite] Resend error:", emailError);
+    // Mail gönderilemedi — DB kaydını geri al
+    await supabaseAdmin.from("org_invitations").delete().eq("token", token);
     return NextResponse.json({ error: `E-posta gönderilemedi: ${emailError.message}` }, { status: 500 });
   }
 
