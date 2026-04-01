@@ -173,7 +173,7 @@ export default function ChatBot() {
               P
             </div>
             <div>
-              <p className="text-sm font-semibold">Portexa Asistanı</p>
+              <p className="text-sm font-semibold">Pixanto Asistanı</p>
               <p className="text-xs text-indigo-200">Proje yönetim desteği</p>
             </div>
             <button

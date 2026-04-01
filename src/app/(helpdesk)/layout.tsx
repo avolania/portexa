@@ -75,10 +75,10 @@ export default function HelpdeskLayout({ children }: { children: React.ReactNode
           {/* Logo + brand */}
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#1a2d5a] flex items-center justify-center overflow-hidden flex-shrink-0">
-              <Image src="/logo.png" alt="Portexa" width={32} height={32} unoptimized className="object-cover w-full h-full" />
+              <Image src="/logo.png" alt="Pixanto" width={32} height={32} unoptimized className="object-cover w-full h-full" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-[#1a2d5a] text-sm">Portexa</span>
+              <span className="font-bold text-[#1a2d5a] text-sm">Pixanto</span>
               <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">Helpdesk</span>
             </div>
           </div>
@@ -153,7 +153,7 @@ export default function HelpdeskLayout({ children }: { children: React.ReactNode
 
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white py-3 text-center text-xs text-gray-400">
-        Portexa Helpdesk · Tüm hakları saklıdır
+        Pixanto Helpdesk · Tüm hakları saklıdır
       </footer>
     </div>
   );

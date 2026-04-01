@@ -33,11 +33,11 @@ export default function HelpdeskGirisPage() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8 gap-3">
           <div className="w-14 h-14 rounded-2xl bg-[#1a2d5a] flex items-center justify-center overflow-hidden shadow-lg">
-            <Image src="/logo.png" alt="Portexa" width={56} height={56} unoptimized className="object-cover w-full h-full" />
+            <Image src="/logo.png" alt="Pixanto" width={56} height={56} unoptimized className="object-cover w-full h-full" />
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <span className="text-xl font-bold text-[#1a2d5a]">Portexa</span>
+              <span className="text-xl font-bold text-[#1a2d5a]">Pixanto</span>
               <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">Helpdesk</span>
             </div>
             <p className="text-sm text-gray-500">Destek talebiniz için giriş yapın</p>

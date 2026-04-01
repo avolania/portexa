@@ -54,10 +54,10 @@ export async function POST(req: NextRequest) {
   const { error: emailError } = await resend.emails.send({
     from: "Pixanto <noreply@pixanto.app>",
     to: email,
-    subject: `${orgName} sizi Portexa'ya davet etti`,
+    subject: `${orgName} sizi Pixanto'ya davet etti`,
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #4f46e5;">Portexa'ya Davet</h2>
+        <h2 style="color: #4f46e5;">Pixanto'ya Davet</h2>
         <p><strong>${orgName}</strong> organizasyonuna katılmak için davet aldınız.</p>
         <p>Aşağıdaki butona tıklayarak hesabınızı oluşturabilir ve takıma katılabilirsiniz.</p>
         <a href="${inviteUrl}"

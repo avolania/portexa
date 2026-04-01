@@ -10,8 +10,8 @@ export default function Footer() {
           {/* Brand */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <Image src="/logo.png" alt="Portexa" width={36} height={36} unoptimized className="object-contain" />
-              <span className="text-white font-bold text-lg">Portexa</span>
+              <Image src="/logo.png" alt="Pixanto" width={36} height={36} unoptimized className="object-contain" />
+              <span className="text-white font-bold text-lg">Pixanto</span>
             </div>
             <p className="text-sm text-gray-500 leading-relaxed mb-6">
               Projelerinizi ve portföyünüzü tek bir güçlü platformda yönetin.
@@ -65,7 +65,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-gray-600">© 2026 Portexa. Tüm hakları saklıdır.</p>
+          <p className="text-sm text-gray-600">© 2026 Pixanto. Tüm hakları saklıdır.</p>
           <div className="flex items-center gap-4 text-sm">
             <button className="flex items-center gap-1.5 hover:text-white transition-colors">
               🇹🇷 Türkçe

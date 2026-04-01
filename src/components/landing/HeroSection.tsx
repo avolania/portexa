@@ -77,7 +77,7 @@ export default function HeroSection() {
                 <div className="w-3 h-3 rounded-full bg-green-400" />
               </div>
               <div className="flex-1 bg-white rounded-md px-3 py-1 text-xs text-gray-400 mx-4 border border-gray-200">
-                app.portexa.com/dashboard
+                app.pixanto.app/dashboard
               </div>
             </div>
             {/* Fake dashboard preview */}

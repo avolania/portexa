@@ -114,9 +114,9 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-3 py-4 border-b border-gray-100">
         <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-[#1a2d5a] flex items-center justify-center overflow-hidden">
-          <Image src="/logo.png" alt="Portexa" width={36} height={36} unoptimized className="object-cover w-full h-full" />
+          <Image src="/logo.png" alt="Pixanto" width={36} height={36} unoptimized className="object-cover w-full h-full" />
         </div>
-        {!collapsed && <span className="text-base font-bold text-[#1a2d5a] truncate">Portexa</span>}
+        {!collapsed && <span className="text-base font-bold text-[#1a2d5a] truncate">Pixanto</span>}
       </div>
 
       {/* Nav */}

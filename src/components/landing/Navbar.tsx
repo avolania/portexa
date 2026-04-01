@@ -16,9 +16,9 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-[#1a2d5a] flex items-center justify-center overflow-hidden">
-              <Image src="/logo.png" alt="Portexa" width={36} height={36} unoptimized className="object-cover w-full h-full" />
+              <Image src="/logo.png" alt="Pixanto" width={36} height={36} unoptimized className="object-cover w-full h-full" />
             </div>
-            <span className="text-lg font-bold text-[#1a2d5a]">Portexa</span>
+            <span className="text-lg font-bold text-[#1a2d5a]">Pixanto</span>
           </Link>
 
           {/* Desktop Nav */}

@@ -103,7 +103,7 @@ function GenelTab({ form, setForm }: { form: OrgSettings; setForm: (f: OrgSettin
       <div className="bg-white border border-gray-200 rounded-xl px-5 py-4">
         <SectionTitle icon={Building2} title="Organizasyon" desc="Temel organizasyon bilgileri" />
         <Field label="Organizasyon Adı" desc="Uygulama genelinde görünen isim">
-          <TextInput value={form.orgName} onChange={(v) => set({ orgName: v })} placeholder="Portexa" />
+          <TextInput value={form.orgName} onChange={(v) => set({ orgName: v })} placeholder="Pixanto" />
         </Field>
         <Field label="Para Birimi" desc="Bütçe ve maliyet raporlarında kullanılır">
           <SelectInput

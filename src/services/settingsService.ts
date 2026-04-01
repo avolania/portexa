@@ -3,7 +3,7 @@ import { dbUpsert } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
 
 export const SETTINGS_DEFAULTS: OrgSettings = {
-  orgName: "Portexa",
+  orgName: "Pixanto",
   timezone: "Europe/Istanbul",
   dateFormat: "DD/MM/YYYY",
   currency: "TRY",

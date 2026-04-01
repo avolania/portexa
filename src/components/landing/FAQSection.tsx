@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 const faqs = [
   {
-    q: "Portexa hangi ekip büyüklüklerine uygun?",
+    q: "Pixanto hangi ekip büyüklüklerine uygun?",
     a: "Bireysel freelancerlardan 500+ kişilik kurumsal ekiplere kadar her ölçeğe uygundur. Rol sistemi ve yetki yapısı ihtiyacınıza göre esnek şekilde yapılandırılabilir.",
   },
   {

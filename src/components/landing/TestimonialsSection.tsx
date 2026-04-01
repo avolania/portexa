@@ -8,7 +8,7 @@ const testimonials = [
     color: "bg-indigo-500",
     rating: 5,
     comment:
-      "Portexa ile ekibimizin verimliliği %40 arttı. Kanban ve Gantt görünümleri birlikte kullanmak gerçekten muhteşem. AI risk tahminleri sayesinde gecikmelerin önüne geçtik.",
+      "Pixanto ile ekibimizin verimliliği %40 arttı. Kanban ve Gantt görünümleri birlikte kullanmak gerçekten muhteşem. AI risk tahminleri sayesinde gecikmelerin önüne geçtik.",
   },
   {
     name: "Ayşe Kara",

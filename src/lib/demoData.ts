@@ -3,7 +3,7 @@ import type { Project, Task, Notification, GovernanceItem } from "@/types";
 export const DEMO_USER = {
   id: "demo",
   name: "Ahmet Yılmaz",
-  email: "demo@portexa.com",
+  email: "demo@pixanto.app",
   role: "admin" as const,
   language: "tr" as const,
   title: "Proje Müdürü",

@@ -6,7 +6,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 export async function POST(req: NextRequest) {
   const { messages, context } = await req.json();
 
-  const system = `Sen Portexa adlı bir proje yönetim platformunun asistanısın. Kullanıcının görev ve projelerini takip etmesine, raporlar oluşturmasına, ekip üyelerini yönetmesine yardımcı olursun. Kısa, net ve yardımsever cevaplar ver. Türkçe konuş.
+  const system = `Sen Pixanto adlı bir proje yönetim platformunun asistanısın. Kullanıcının görev ve projelerini takip etmesine, raporlar oluşturmasına, ekip üyelerini yönetmesine yardımcı olursun. Kısa, net ve yardımsever cevaplar ver. Türkçe konuş.
 
 Mevcut bağlam:
 ${context}`;

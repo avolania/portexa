@@ -25,9 +25,9 @@ export default function Topbar() {
       {/* Mobil logo */}
       <div className="flex md:hidden items-center gap-2 flex-1">
         <div className="w-7 h-7 rounded-lg bg-[#1a2d5a] flex items-center justify-center overflow-hidden flex-shrink-0">
-          <Image src="/logo.png" alt="Portexa" width={28} height={28} unoptimized className="object-cover w-full h-full" />
+          <Image src="/logo.png" alt="Pixanto" width={28} height={28} unoptimized className="object-cover w-full h-full" />
         </div>
-        <span className="text-sm font-bold text-[#1a2d5a]">Portexa</span>
+        <span className="text-sm font-bold text-[#1a2d5a]">Pixanto</span>
       </div>
 
       {/* Search — masaüstünde göster */}
