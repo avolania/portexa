@@ -84,6 +84,7 @@ export interface CreateChangeRequestDto {
   assignedToId?: string;
   assignmentGroupId?: string;
   relatedIncidentIds?: string[];
+  sourceIncidentNumber?: string;
   attachments?: Attachment[];
 }
 
@@ -129,18 +130,10 @@ export interface LinkIncidentDto {
 }
 
 export const CR_STATE_TRANSITIONS: Record<ChangeRequestState, ChangeRequestState[]> = {
-  [ChangeRequestState.NEW]: [
-    ChangeRequestState.ASSESS,
-    ChangeRequestState.CANCELLED,
-  ],
-  [ChangeRequestState.ASSESS]: [
-    ChangeRequestState.AUTHORIZE,
-    ChangeRequestState.CANCELLED,
-  ],
-  [ChangeRequestState.AUTHORIZE]: [
-    ChangeRequestState.SCHEDULED,
-    ChangeRequestState.ASSESS,
-    ChangeRequestState.CANCELLED,
+  // ── Yeni akış ──────────────────────────────────────────────────────────────
+  [ChangeRequestState.PENDING_APPROVAL]: [
+    ChangeRequestState.SCHEDULED,   // workflow tamamlandı → otomatik
+    ChangeRequestState.CANCELLED,   // workflow reddedildi → otomatik veya manuel
   ],
   [ChangeRequestState.SCHEDULED]: [
     ChangeRequestState.IMPLEMENT,
@@ -154,6 +147,22 @@ export const CR_STATE_TRANSITIONS: Record<ChangeRequestState, ChangeRequestState
   ],
   [ChangeRequestState.CLOSED]: [],
   [ChangeRequestState.CANCELLED]: [],
+  // ── Eski kayıtlar için legacy geçişler ─────────────────────────────────────
+  [ChangeRequestState.NEW]: [
+    ChangeRequestState.PENDING_APPROVAL,
+    ChangeRequestState.ASSESS,
+    ChangeRequestState.CANCELLED,
+  ],
+  [ChangeRequestState.ASSESS]: [
+    ChangeRequestState.PENDING_APPROVAL,
+    ChangeRequestState.AUTHORIZE,
+    ChangeRequestState.CANCELLED,
+  ],
+  [ChangeRequestState.AUTHORIZE]: [
+    ChangeRequestState.SCHEDULED,
+    ChangeRequestState.ASSESS,
+    ChangeRequestState.CANCELLED,
+  ],
 };
 
 export function isValidCRTransition(

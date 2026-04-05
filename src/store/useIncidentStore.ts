@@ -122,7 +122,9 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
 
   addAttachment: async (id, file) => {
     const user = useAuthStore.getState().user;
-    if (!user) return;
+    if (!user) throw new Error("Kullanıcı oturumu bulunamadı.");
+    const incident = get().incidents.find((i) => i.id === id);
+    if (!incident) throw new Error(`Incident bulunamadı: ${id}`);
     const updated = await addIncidentAttachment(id, file, user.name, get().incidents, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },

@@ -757,8 +757,8 @@ function StepEditor({
           {step.approverType === 'user' && (
             <select
               className="input w-full text-sm"
-              value={step.userId ?? ''}
-              onChange={(e) => set({ userId: e.target.value })}
+              value={step.fixedUserId ?? step.userId ?? ''}
+              onChange={(e) => set({ userId: e.target.value, fixedUserId: e.target.value })}
             >
               <option value="">— Seçin —</option>
               {Object.values(profiles).map((u) => (
@@ -780,21 +780,38 @@ function StepEditor({
           )}
         </div>
 
-        {/* mode (only for group/role) */}
+        {/* fixed user override (for role/group steps) */}
         {(step.approverType === 'group' || step.approverType === 'role') && (
-          <div className="col-span-12 flex items-center gap-3 mt-1">
-            <span className="text-xs text-gray-500">Onay şartı:</span>
-            {(['any', 'all'] as ApprovalStepMode[]).map((m) => (
-              <label key={m} className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio" name={`mode-${step.id}`} value={m}
-                  checked={step.approvalMode === m}
-                  onChange={() => set({ approvalMode: m })}
-                  className="text-indigo-600"
-                />
-                <span className="text-xs text-gray-700">{APPROVAL_MODE_LABELS[m]}</span>
-              </label>
-            ))}
+          <div className="col-span-12 grid grid-cols-2 gap-3 mt-1">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Sabit Kullanıcı (öncelikli, opsiyonel)</label>
+              <select
+                className="input w-full text-sm"
+                value={step.fixedUserId ?? ''}
+                onChange={(e) => set({ fixedUserId: e.target.value || undefined })}
+              >
+                <option value="">— Rol/Gruba göre çöz —</option>
+                {Object.values(profiles).map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Onay şartı</label>
+              <div className="flex items-center gap-3 mt-2">
+                {(['any', 'all'] as ApprovalStepMode[]).map((m) => (
+                  <label key={m} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio" name={`mode-${step.id}`} value={m}
+                      checked={step.approvalMode === m}
+                      onChange={() => set({ approvalMode: m })}
+                      className="text-indigo-600"
+                    />
+                    <span className="text-xs text-gray-700">{APPROVAL_MODE_LABELS[m]}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

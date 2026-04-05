@@ -23,11 +23,10 @@ export default function Topbar() {
   return (
     <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-4 sticky top-0 z-30">
       {/* Mobil logo */}
-      <div className="flex md:hidden items-center gap-2 flex-1">
-        <div className="w-7 h-7 rounded-lg bg-[#1a2d5a] flex items-center justify-center overflow-hidden flex-shrink-0">
-          <Image src="/logo.png" alt="Pixanto" width={28} height={28} unoptimized className="object-cover w-full h-full" />
-        </div>
-        <span className="text-sm font-bold text-[#1a2d5a]">Pixanto</span>
+      <div className="flex md:hidden items-center flex-1">
+        <a href="/dashboard">
+          <Image src="/logo.png" alt="Pixanto" width={100} height={32} unoptimized className="h-7 w-auto object-contain" />
+        </a>
       </div>
 
       {/* Search — masaüstünde göster */}

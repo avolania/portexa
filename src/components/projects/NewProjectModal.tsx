@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { useProjectStore } from "@/store/useProjectStore";
 import { cn } from "@/lib/utils";
+import { CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
 import type { Project, Priority, ProjectType } from "@/types";
 
 const schema = z.object({
@@ -62,6 +63,7 @@ interface Props {
 export default function NewProjectModal({ onClose }: Props) {
   const addProject = useProjectStore((s) => s.addProject);
   const [projectType, setProjectType] = useState<ProjectType>("agile");
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [step, setStep] = useState<1 | 2>(1);
 
   const {
@@ -88,6 +90,7 @@ export default function NewProjectModal({ onClose }: Props) {
       progress: 0,
       budget: data.budget ? Number(data.budget) : undefined,
       budgetUsed: 0,
+      currency,
       managerId: "1",
       members: ["1"],
       tags: data.tags ? data.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
@@ -99,9 +102,9 @@ export default function NewProjectModal({ onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-0">
           <div>
@@ -271,13 +274,26 @@ export default function NewProjectModal({ onClose }: Props) {
                     <option value="critical">Kritik</option>
                   </select>
                 </div>
-                <Input
-                  id="budget"
-                  label="Bütçe (₺)"
-                  type="number"
-                  placeholder="100000"
-                  {...register("budget")}
-                />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-gray-700">Bütçe</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                    >
+                      {CURRENCIES.map((c) => (
+                        <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="100000"
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      {...register("budget")}
+                    />
+                  </div>
+                </div>
               </div>
 
               <Input

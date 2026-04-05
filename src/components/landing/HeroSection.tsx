@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Play, CheckCircle } from "lucide-react";
 import Button from "@/components/ui/Button";
 
@@ -66,70 +67,18 @@ export default function HeroSection() {
           </div>
         </div>
 
-        {/* App mockup */}
+        {/* App banner */}
         <div className="mt-16 relative">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
-            {/* Browser bar */}
-            <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 flex items-center gap-2">
-              <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-red-400" />
-                <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                <div className="w-3 h-3 rounded-full bg-green-400" />
-              </div>
-              <div className="flex-1 bg-white rounded-md px-3 py-1 text-xs text-gray-400 mx-4 border border-gray-200">
-                app.pixanto.app/dashboard
-              </div>
-            </div>
-            {/* Fake dashboard preview */}
-            <div className="p-6 bg-gray-50 min-h-64">
-              <div className="grid grid-cols-4 gap-4 mb-6">
-                {[
-                  { label: "Aktif Proje", value: "12", color: "bg-indigo-500" },
-                  { label: "Açık Görev", value: "48", color: "bg-amber-500" },
-                  { label: "Bu Hafta Tamamlanan", value: "23", color: "bg-emerald-500" },
-                  { label: "Yaklaşan Deadline", value: "5", color: "bg-red-500" },
-                ].map((card) => (
-                  <div key={card.label} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-                    <div className={`w-8 h-1 ${card.color} rounded-full mb-3`} />
-                    <div className="text-2xl font-bold text-gray-900">{card.value}</div>
-                    <div className="text-xs text-gray-500 mt-1">{card.label}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                  <div className="text-sm font-semibold text-gray-700 mb-3">Bana Atanan Görevler</div>
-                  {[
-                    { title: "Ana sayfa tasarımını tamamla", badge: "Devam Ediyor", color: "bg-blue-100 text-blue-700" },
-                    { title: "Ödeme entegrasyonu", badge: "Yapılacak", color: "bg-gray-100 text-gray-600" },
-                    { title: "API dokümantasyonu", badge: "İncelemede", color: "bg-amber-100 text-amber-700" },
-                  ].map((task) => (
-                    <div key={task.title} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                      <span className="text-sm text-gray-700">{task.title}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${task.color}`}>{task.badge}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                  <div className="text-sm font-semibold text-gray-700 mb-3">Proje Durumları</div>
-                  <div className="space-y-2">
-                    {[
-                      { label: "Aktif", pct: 50, color: "bg-emerald-500" },
-                      { label: "Riskli", pct: 25, color: "bg-red-500" },
-                      { label: "Beklemede", pct: 25, color: "bg-gray-300" },
-                    ].map((s) => (
-                      <div key={s.label} className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${s.color}`} />
-                        <span className="text-xs text-gray-600">{s.label}</span>
-                        <div className="flex-1 bg-gray-100 rounded-full h-1.5 ml-auto w-16">
-                          <div className={`h-full ${s.color} rounded-full`} style={{ width: `${s.pct}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <Image
+              src="/banner.png"
+              alt="Pixanto platform görünümü"
+              width={1200}
+              height={675}
+              unoptimized
+              className="w-full h-auto"
+              priority
+            />
           </div>
 
           {/* Shadow glow */}

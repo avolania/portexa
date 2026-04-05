@@ -5,7 +5,9 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight, Clock, XCircle, AlertTriangle, ArrowRight, Paperclip, FileText, Image, FileArchive, File, X as XIcon } from "lucide-react";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
+import { useWorkflowInstanceStore } from "@/store/useWorkflowInstanceStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import WorkflowProgress from "@/components/itsm/WorkflowProgress";
 import { ServiceRequestClosureCode } from "@/lib/itsm/types/service-request.types";
 import { ServiceRequestState } from "@/lib/itsm/types/enums";
 import { ITSM_PRIORITY_MAP, SR_STATE_MAP, APPROVAL_STATE_MAP } from "@/lib/itsm/ui-maps";
@@ -14,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { format, formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import type { Attachment } from "@/types";
+import TicketTimeline from "@/components/itsm/TicketTimeline";
 
 type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments";
 
@@ -226,7 +229,8 @@ function TicketAttachments({
 
 export default function ServiceRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { serviceRequests, addWorkNote, addComment, addAttachment, removeAttachment } = useServiceRequestStore();
+  const { serviceRequests, addWorkNote, addComment, addAttachment, removeAttachment, approve, reject } = useServiceRequestStore();
+  const { load: loadInstances } = useWorkflowInstanceStore();
   const sr = serviceRequests.find((s) => s.id === id);
 
   const [tab, setTab]             = useState<Tab>("details");
@@ -439,39 +443,20 @@ export default function ServiceRequestDetailPage() {
           )}
 
           {/* Tab: Timeline */}
-          {tab === "timeline" && (
-            <div className="card">
-              {sr.timeline.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">Zaman çizelgesi boş.</p>
-              ) : (
-                <ol className="relative border-l border-gray-200 ml-3 space-y-6 py-2">
-                  {[...sr.timeline].reverse().map((event) => (
-                    <li key={event.id} className="ml-6">
-                      <span className="absolute -left-2 w-4 h-4 bg-indigo-100 rounded-full border-2 border-indigo-400 flex items-center justify-center" />
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <span className="text-sm font-medium text-gray-800">{event.actorName}</span>
-                          <span className="text-sm text-gray-500"> · {event.type.replace(/_/g, " ")}</span>
-                          {event.previousValue && event.newValue && (
-                            <span className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                              {event.previousValue} <ArrowRight className="w-3 h-3" /> {event.newValue}
-                            </span>
-                          )}
-                          {event.note && <p className="text-xs text-gray-500 mt-0.5">{event.note}</p>}
-                        </div>
-                        <span className="text-xs text-gray-400 flex-shrink-0">{format(new Date(event.timestamp), "dd MMM HH:mm", { locale: tr })}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          )}
+          {tab === "timeline" && <TicketTimeline timeline={sr.timeline} />}
         </div>
 
         {/* Right 1/3 */}
         <div className="space-y-4">
           <SRActionPanel srId={sr.id} state={sr.state} approvalRequired={sr.approvalRequired} />
+          {sr.approvalRequired && (
+            <WorkflowProgress
+              ticketType="service_request"
+              ticketId={sr.id}
+              onApproved={() => approve(sr.id, {})}
+              onRejected={(comment) => reject(sr.id, { comments: comment ?? "" })}
+            />
+          )}
           {!isTerminal && <SLASRWidget sla={sr.sla} />}
           <div className="card space-y-3">
             <h3 className="text-sm font-semibold text-gray-900">Bilgiler</h3>

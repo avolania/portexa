@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ChevronRight, AlertTriangle, Calendar, ArrowRight, Paperclip, FileText, Image, FileArchive, File, X as XIcon } from "lucide-react";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
+import { useWorkflowInstanceStore } from "@/store/useWorkflowInstanceStore";
+import WorkflowProgress from "@/components/itsm/WorkflowProgress";
 import { ChangeRequestState, ChangeCloseCode } from "@/lib/itsm/types/enums";
 import { ITSM_PRIORITY_MAP, CR_STATE_MAP, CHANGE_TYPE_MAP, CHANGE_RISK_MAP, APPROVAL_STATE_MAP } from "@/lib/itsm/ui-maps";
 import { isValidCRTransition } from "@/lib/itsm/types/change-request.types";
@@ -12,19 +14,18 @@ import { cn } from "@/lib/utils";
 import { format, formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import type { Attachment } from "@/types";
+import TicketTimeline from "@/components/itsm/TicketTimeline";
 
 type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments";
 
 // ─── State machine steps ──────────────────────────────────────────────────────
 
 const CR_STEPS: { state: ChangeRequestState; label: string }[] = [
-  { state: ChangeRequestState.NEW,       label: "Yeni"           },
-  { state: ChangeRequestState.ASSESS,    label: "Değerlendirme"  },
-  { state: ChangeRequestState.AUTHORIZE, label: "Yetkilendirme"  },
-  { state: ChangeRequestState.SCHEDULED, label: "Planlandı"      },
-  { state: ChangeRequestState.IMPLEMENT, label: "Uygulama"       },
-  { state: ChangeRequestState.REVIEW,    label: "İnceleme"       },
-  { state: ChangeRequestState.CLOSED,    label: "Kapandı"        },
+  { state: ChangeRequestState.PENDING_APPROVAL, label: "Onay"      },
+  { state: ChangeRequestState.SCHEDULED,        label: "Planlandı" },
+  { state: ChangeRequestState.IMPLEMENT,        label: "Uygulama"  },
+  { state: ChangeRequestState.REVIEW,           label: "İnceleme"  },
+  { state: ChangeRequestState.CLOSED,           label: "Kapandı"   },
 ];
 
 function CRProgress({ state }: { state: ChangeRequestState }) {
@@ -34,7 +35,14 @@ function CRProgress({ state }: { state: ChangeRequestState }) {
       <p className="text-sm text-gray-500 text-center py-2">Bu değişiklik talebi iptal edildi.</p>
     </div>
   );
-  const activeIdx = CR_STEPS.findIndex((s) => s.state === state);
+  // Legacy states (NEW, ASSESS, AUTHORIZE) → göster ama PENDING_APPROVAL olarak konumlandır
+  const effectiveState =
+    state === ChangeRequestState.NEW ||
+    state === ChangeRequestState.ASSESS ||
+    state === ChangeRequestState.AUTHORIZE
+      ? ChangeRequestState.PENDING_APPROVAL
+      : state;
+  const activeIdx = CR_STEPS.findIndex((s) => s.state === effectiveState);
   return (
     <div className="card">
       <div className="flex items-center gap-1 overflow-x-auto pb-1">
@@ -70,13 +78,12 @@ function CRProgress({ state }: { state: ChangeRequestState }) {
 // ─── Action Panel ─────────────────────────────────────────────────────────────
 
 function CRActionPanel({ crId, state }: { crId: string; state: ChangeRequestState }) {
-  const { transition, approve, reject, close } = useChangeRequestStore();
-  const [showClose, setShowClose]       = useState(false);
-  const [showReject, setShowReject]     = useState(false);
-  const [closeCode, setCloseCode]       = useState(ChangeCloseCode.SUCCESSFUL);
-  const [closeNotes, setCloseNotes]     = useState("");
-  const [rejectComment, setRejectComment] = useState("");
-  const [saving, setSaving]             = useState(false);
+  const { transition, close } = useChangeRequestStore();
+  const [showClose, setShowClose] = useState(false);
+  const [closeCode, setCloseCode] = useState(ChangeCloseCode.SUCCESSFUL);
+  const [closeNotes, setCloseNotes] = useState("");
+  const [saving, setSaving]       = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const terminal = [ChangeRequestState.CLOSED, ChangeRequestState.CANCELLED].includes(state);
   if (terminal) return null;
@@ -84,45 +91,33 @@ function CRActionPanel({ crId, state }: { crId: string; state: ChangeRequestStat
   const can = (to: ChangeRequestState) => isValidCRTransition(state, to);
 
   const doTransition = async (to: ChangeRequestState) => {
+    setActionError(null);
     setSaving(true);
-    await transition(crId, to);
-    setSaving(false);
-  };
-
-  const doApprove = async () => {
-    setSaving(true);
-    await approve(crId, {});
-    setSaving(false);
-  };
-
-  const doReject = async () => {
-    if (!rejectComment.trim()) return;
-    setSaving(true);
-    await reject(crId, { comments: rejectComment });
-    setSaving(false);
-    setShowReject(false);
+    try { await transition(crId, to); }
+    catch (e) { setActionError(e instanceof Error ? e.message : "İşlem başarısız oldu."); }
+    finally { setSaving(false); }
   };
 
   const doClose = async () => {
     if (!closeNotes.trim()) return;
+    setActionError(null);
     setSaving(true);
-    await close(crId, { closeCode, closureNotes: closeNotes });
-    setSaving(false);
-    setShowClose(false);
+    try {
+      await close(crId, { closeCode, closureNotes: closeNotes });
+      setShowClose(false);
+    }
+    catch (e) { setActionError(e instanceof Error ? e.message : "Kapatma başarısız oldu."); }
+    finally { setSaving(false); }
   };
 
-  // Determine next logical state
+  // Determine next logical state — PENDING_APPROVAL workflow tarafından yönetilir
   const NEXT_STATE: Partial<Record<ChangeRequestState, ChangeRequestState>> = {
-    [ChangeRequestState.NEW]:       ChangeRequestState.ASSESS,
-    [ChangeRequestState.ASSESS]:    ChangeRequestState.AUTHORIZE,
     [ChangeRequestState.SCHEDULED]: ChangeRequestState.IMPLEMENT,
     [ChangeRequestState.IMPLEMENT]: ChangeRequestState.REVIEW,
   };
   const nextState = NEXT_STATE[state];
 
   const NEXT_LABEL: Partial<Record<ChangeRequestState, string>> = {
-    [ChangeRequestState.NEW]:       "Değerlendirmeye Al",
-    [ChangeRequestState.ASSESS]:    "Yetkilendirmeye Gönder",
     [ChangeRequestState.SCHEDULED]: "Uygulamaya Başla",
     [ChangeRequestState.IMPLEMENT]: "İncelemeye Al",
   };
@@ -131,18 +126,19 @@ function CRActionPanel({ crId, state }: { crId: string; state: ChangeRequestStat
     <div className="card space-y-2">
       <h3 className="text-sm font-semibold text-gray-900 mb-3">İşlemler</h3>
 
+      {actionError && (
+        <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{actionError}</div>
+      )}
+
+      {/* PENDING_APPROVAL: workflow bileşeni halleder, buton yok */}
+      {state === ChangeRequestState.PENDING_APPROVAL && (
+        <p className="text-xs text-gray-500 text-center py-1">Onay akışı devam ediyor.</p>
+      )}
+
       {nextState && can(nextState) && (
         <button onClick={() => doTransition(nextState)} disabled={saving} className="btn-primary w-full text-sm">
           {NEXT_LABEL[state]}
         </button>
-      )}
-
-      {/* AUTHORIZE state: approve/reject */}
-      {state === ChangeRequestState.AUTHORIZE && (
-        <>
-          <button onClick={doApprove} disabled={saving} className="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors">Onayla</button>
-          <button onClick={() => setShowReject(true)} className="btn-secondary w-full text-sm">Reddet (Değerlendirmeye Geri Gönder)</button>
-        </>
       )}
 
       {/* REVIEW state: close */}
@@ -150,22 +146,9 @@ function CRActionPanel({ crId, state }: { crId: string; state: ChangeRequestStat
         <button onClick={() => setShowClose(true)} className="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors">Kapat</button>
       )}
 
-      {/* Cancel always available (except terminal states) */}
-      {can(ChangeRequestState.CANCELLED) && (
+      {/* Cancel: SCHEDULED ve sonrasında manuel iptal */}
+      {can(ChangeRequestState.CANCELLED) && state !== ChangeRequestState.PENDING_APPROVAL && (
         <button onClick={() => doTransition(ChangeRequestState.CANCELLED)} disabled={saving} className="btn-secondary w-full text-sm text-red-600 hover:text-red-700">İptal Et</button>
-      )}
-
-      {showReject && (
-        <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Red Gerekçesi *</label>
-            <textarea className="input w-full text-sm min-h-[60px] resize-none" value={rejectComment} onChange={(e) => setRejectComment(e.target.value)} placeholder="Neden reddedildi?" />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={doReject} disabled={saving || !rejectComment.trim()} className="w-full px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">Reddet</button>
-            <button onClick={() => setShowReject(false)} className="btn-secondary text-sm">İptal</button>
-          </div>
-        </div>
       )}
 
       {showClose && (
@@ -281,7 +264,8 @@ function TicketAttachments({
 
 export default function ChangeRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { changeRequests, addWorkNote, addComment, addAttachment, removeAttachment } = useChangeRequestStore();
+  const { changeRequests, addWorkNote, addComment, addAttachment, removeAttachment, transition } = useChangeRequestStore();
+  const { instances } = useWorkflowInstanceStore();
   const cr = changeRequests.find((c) => c.id === id);
 
   const [tab, setTab]             = useState<Tab>("details");
@@ -511,39 +495,18 @@ export default function ChangeRequestDetailPage() {
           )}
 
           {/* Tab: Timeline */}
-          {tab === "timeline" && (
-            <div className="card">
-              {cr.timeline.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">Zaman çizelgesi boş.</p>
-              ) : (
-                <ol className="relative border-l border-gray-200 ml-3 space-y-6 py-2">
-                  {[...cr.timeline].reverse().map((event) => (
-                    <li key={event.id} className="ml-6">
-                      <span className="absolute -left-2 w-4 h-4 bg-indigo-100 rounded-full border-2 border-indigo-400" />
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <span className="text-sm font-medium text-gray-800">{event.actorName}</span>
-                          <span className="text-sm text-gray-500"> · {event.type.replace(/_/g, " ")}</span>
-                          {event.previousValue && event.newValue && (
-                            <span className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                              {event.previousValue} <ArrowRight className="w-3 h-3" /> {event.newValue}
-                            </span>
-                          )}
-                          {event.note && <p className="text-xs text-gray-500 mt-0.5">{event.note}</p>}
-                        </div>
-                        <span className="text-xs text-gray-400 flex-shrink-0">{format(new Date(event.timestamp), "dd MMM HH:mm", { locale: tr })}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          )}
+          {tab === "timeline" && <TicketTimeline timeline={cr.timeline} />}
         </div>
 
         {/* Right 1/3 */}
         <div className="space-y-4">
           <CRActionPanel crId={cr.id} state={cr.state} />
+          <WorkflowProgress
+            ticketType="change_request"
+            ticketId={cr.id}
+            onApproved={() => transition(cr.id, ChangeRequestState.SCHEDULED)}
+            onRejected={() => transition(cr.id, ChangeRequestState.CANCELLED)}
+          />
           <div className="card space-y-3">
             <h3 className="text-sm font-semibold text-gray-900">Bilgiler</h3>
             {[
@@ -562,10 +525,10 @@ export default function ChangeRequestDetailPage() {
           <div className="card space-y-3">
             <h3 className="text-sm font-semibold text-gray-900">Tarihler</h3>
             {[
-              { label: "Planlanan Başlangıç", value: format(new Date(cr.plannedStartDate), "dd MMM yyyy HH:mm", { locale: tr }) },
-              { label: "Planlanan Bitiş",     value: format(new Date(cr.plannedEndDate),   "dd MMM yyyy HH:mm", { locale: tr }) },
-              { label: "Gerçek Başlangıç",    value: cr.actualStartDate ? format(new Date(cr.actualStartDate), "dd MMM yyyy HH:mm", { locale: tr }) : "—" },
-              { label: "Gerçek Bitiş",        value: cr.actualEndDate   ? format(new Date(cr.actualEndDate),   "dd MMM yyyy HH:mm", { locale: tr }) : "—" },
+              { label: "Planlanan Başlangıç", value: format(new Date(cr.plannedStartDate), "dd MMM yyyy", { locale: tr }) },
+              { label: "Planlanan Bitiş",     value: format(new Date(cr.plannedEndDate),   "dd MMM yyyy", { locale: tr }) },
+              { label: "Gerçek Başlangıç",    value: cr.actualStartDate ? format(new Date(cr.actualStartDate), "dd MMM yyyy", { locale: tr }) : "—" },
+              { label: "Gerçek Bitiş",        value: cr.actualEndDate   ? format(new Date(cr.actualEndDate),   "dd MMM yyyy", { locale: tr }) : "—" },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-start justify-between gap-2 text-sm">
                 <span className="text-gray-500 flex-shrink-0 flex items-center gap-1"><Calendar className="w-3 h-3" />{label}</span>

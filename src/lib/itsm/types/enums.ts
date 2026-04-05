@@ -71,9 +71,10 @@ export enum ChangeType {
 }
 
 export enum ChangeRequestState {
-  NEW = 'New',
-  ASSESS = 'Assess',
-  AUTHORIZE = 'Authorize',
+  NEW = 'New',                          // legacy — eski kayıtlar için
+  ASSESS = 'Assess',                    // legacy
+  AUTHORIZE = 'Authorize',              // legacy
+  PENDING_APPROVAL = 'Pending Approval', // yeni CR'lar buradan başlar
   SCHEDULED = 'Scheduled',
   IMPLEMENT = 'Implement',
   REVIEW = 'Review',
@@ -111,6 +112,7 @@ export enum TicketEventType {
   REOPENED = 'reopened',
   RELATED_CR_LINKED = 'related_cr_linked',
   RELATED_INCIDENT_LINKED = 'related_incident_linked',
+  CONVERTED_FROM_INCIDENT = 'converted_from_incident',
 }
 
 export enum NotificationType {

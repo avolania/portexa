@@ -7,7 +7,7 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, Clock, MoreHorizontal,
   Briefcase, Users, BarChart3, Settings, User, LogOut,
   ShieldCheck, AlertCircle, GitPullRequest,
-  LifeBuoy, Ticket, SlidersHorizontal, ClipboardList,
+  LifeBuoy, Ticket, SlidersHorizontal, ClipboardList, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -35,9 +35,10 @@ const DRAWER_SECTIONS = [
   {
     label: "Proje Yönetimi",
     items: [
-      { href: "/portfolyo", icon: Briefcase,     label: "Portföy"  },
-      { href: "/ekip",      icon: Users,          label: "Ekip"     },
-      { href: "/raporlar",  icon: BarChart3,      label: "Raporlar" },
+      { href: "/portfolyo", icon: Briefcase,  label: "Portföy"  },
+      { href: "/ekip",      icon: Users,      label: "Ekip"     },
+      { href: "/butce",     icon: Wallet,     label: "Bütçe"    },
+      { href: "/raporlar",  icon: BarChart3,  label: "Raporlar" },
     ],
   },
   {

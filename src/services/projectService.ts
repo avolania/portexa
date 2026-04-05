@@ -1,5 +1,6 @@
 import type { Project, Task, TaskStatus } from "@/types";
 import { dbLoadAll, dbUpsert, dbDelete } from "@/lib/db";
+import { useAuthStore } from "@/store/useAuthStore";
 
 // ─── Load ──────────────────────────────────────────────────────────────────────
 
@@ -24,8 +25,9 @@ export async function updateProject(
 ): Promise<Project | null> {
   const existing = current.find((p) => p.id === id);
   if (!existing) return null;
+  const orgId = useAuthStore.getState().user?.orgId;
   const updated: Project = { ...existing, ...patch, updatedAt: new Date().toISOString() };
-  await dbUpsert("projects", id, updated);
+  await dbUpsert("projects", id, updated, orgId);
   return updated;
 }
 
@@ -50,8 +52,9 @@ export async function updateTask(
 ): Promise<Task | null> {
   const existing = current.find((t) => t.id === id);
   if (!existing) return null;
+  const orgId = useAuthStore.getState().user?.orgId;
   const updated: Task = { ...existing, ...patch, updatedAt: new Date().toISOString() };
-  await dbUpsert("tasks", id, updated);
+  await dbUpsert("tasks", id, updated, orgId);
   return updated;
 }
 

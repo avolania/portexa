@@ -48,8 +48,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Davet oluşturulamadı." }, { status: 500 });
   }
 
-  const origin = req.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const inviteUrl = `${origin}/davet?token=${token}`;
+  const appUrl = (
+    process.env.NEXT_PUBLIC_APP_URL ??
+    req.headers.get("origin") ??
+    req.nextUrl.origin
+  ).replace(/\s+/g, "");
+  const inviteUrl = `${appUrl}/davet?token=${token}`;
 
   const { error: emailError } = await resend.emails.send({
     from: "Pixanto <noreply@pixanto.app>",
@@ -67,6 +71,7 @@ export async function POST(req: NextRequest) {
           Daveti Kabul Et
         </a>
         <p style="color: #6b7280; font-size: 12px;">Bu bağlantı 7 gün geçerlidir.</p>
+        <p style="color: #9ca3af; font-size: 11px; word-break: break-all;">Buton çalışmazsa bu linki kopyalayın: ${inviteUrl}</p>
       </div>
     `,
   });

@@ -8,7 +8,7 @@ import KanbanBoard from "@/components/kanban/KanbanBoard";
 import WaterfallBoard from "@/components/kanban/WaterfallBoard";
 import GovernancePanel from "@/components/governance/GovernancePanel";
 import NewTaskModal from "@/components/tasks/NewTaskModal";
-import { ArrowLeft, Calendar, Users, DollarSign, Settings, Zap, GitMerge, Download, LayoutList, Shield, Plus, Database, UserPlus, Trash2, Search, X, ClipboardList, CheckCircle2, Circle, Clock, Save } from "lucide-react";
+import { ArrowLeft, Calendar, Users, DollarSign, Settings, Zap, GitMerge, Download, LayoutList, Shield, Plus, Database, UserPlus, Trash2, Search, X, ClipboardList, CheckCircle2, Circle, Clock, Save, Wallet, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { exportProjectPlan } from "@/lib/exportExcel";
 import { useTeamStore } from "@/store/useTeamStore";
@@ -18,6 +18,7 @@ import Avatar from "@/components/ui/Avatar";
 import * as XLSX from "xlsx";
 import type { Project, Task, TeamMember, User, PhasePlanEntry, ProjectPhase } from "@/types";
 import { DEFAULT_PHASES } from "@/components/kanban/WaterfallBoard";
+import { CURRENCIES, formatCurrency as formatCurrencyLib } from "@/lib/currencies";
 
 export default function ProjeDetayPage() {
   const params = useParams();
@@ -25,8 +26,9 @@ export default function ProjeDetayPage() {
   const { members: teamMembers, assignProject, unassignProject } = useTeamStore();
   const profiles = useAuthStore((s) => s.profiles);
   const project = projects.find((p) => p.id === params.id);
-  const [activeTab, setActiveTab] = useState<"tasks" | "governance" | "team" | "plan" | "data">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "governance" | "team" | "plan" | "budget" | "data">("tasks");
   const [showNewTask, setShowNewTask] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   if (!project) {
     return (
@@ -59,18 +61,33 @@ export default function ProjeDetayPage() {
     return prof?.name ?? "—";
   };
 
+  const withSave = async (fn: () => Promise<void>) => {
+    setSaveState("saving");
+    try {
+      await fn();
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 2000);
+    } catch {
+      setSaveState("error");
+      setTimeout(() => setSaveState("idle"), 3000);
+    }
+  };
+
   const handleAddMember = (memberId: string) => {
     if (project.members.includes(memberId)) return;
-    updateProject(project.id, { members: [...project.members, memberId] });
-    // teamStore'da da güncelle
-    const tm = teamMembers.find((m) => m.id === memberId);
-    if (tm) assignProject(memberId, project.id);
+    withSave(async () => {
+      await updateProject(project.id, { members: [...project.members, memberId] });
+      const tm = teamMembers.find((m) => m.id === memberId);
+      if (tm) assignProject(memberId, project.id);
+    });
   };
 
   const handleRemoveMember = (memberId: string) => {
-    updateProject(project.id, { members: project.members.filter((id) => id !== memberId) });
-    const tm = teamMembers.find((m) => m.id === memberId);
-    if (tm) unassignProject(memberId, project.id);
+    withSave(async () => {
+      await updateProject(project.id, { members: project.members.filter((id) => id !== memberId) });
+      const tm = teamMembers.find((m) => m.id === memberId);
+      if (tm) unassignProject(memberId, project.id);
+    });
   };
 
   return (
@@ -99,6 +116,21 @@ export default function ProjeDetayPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {saveState === "saving" && (
+            <span className="flex items-center gap-1.5 text-sm text-gray-500 animate-pulse">
+              <Save className="w-4 h-4" /> Kaydediliyor...
+            </span>
+          )}
+          {saveState === "saved" && (
+            <span className="flex items-center gap-1.5 text-sm text-emerald-600">
+              <CheckCircle2 className="w-4 h-4" /> Kaydedildi
+            </span>
+          )}
+          {saveState === "error" && (
+            <span className="flex items-center gap-1.5 text-sm text-red-600">
+              Kaydedilemedi — tekrar deneyin
+            </span>
+          )}
           <button
             onClick={handleExport}
             className="flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors font-medium"
@@ -195,6 +227,7 @@ export default function ProjeDetayPage() {
             { id: "governance", label: "Yönetişim",     icon: Shield },
             { id: "team",       label: "Ekip",          icon: Users },
             ...(!isAgile ? [{ id: "plan" as const, label: "Plan", icon: ClipboardList }] : []),
+            { id: "budget",     label: "Bütçe",         icon: Wallet },
             { id: "data",       label: "Veri Yönetimi", icon: Database },
           ] as const).map(({ id, label, icon: Icon }) => (
             <button
@@ -245,7 +278,11 @@ export default function ProjeDetayPage() {
       )}
 
       {activeTab === "plan" && (
-        <PlanTab project={project} onUpdate={(phasePlan) => updateProject(project.id, { phasePlan })} />
+        <PlanTab project={project} onUpdate={(phasePlan) => withSave(() => updateProject(project.id, { phasePlan }))} />
+      )}
+
+      {activeTab === "budget" && (
+        <BudgetTab project={project} onUpdate={(patch) => withSave(() => updateProject(project.id, patch))} />
       )}
 
       {activeTab === "data" && <DataTab project={project} />}
@@ -419,7 +456,7 @@ function PlanTab({
   onUpdate,
 }: {
   project: Project;
-  onUpdate: (phasePlan: Partial<Record<string, PhasePlanEntry>>) => void;
+  onUpdate: (phasePlan: Partial<Record<string, PhasePlanEntry>>) => Promise<void>;
 }) {
   const { getProjectTasks, updateProject } = useProjectStore();
   const allTasks = getProjectTasks(project.id);
@@ -683,6 +720,295 @@ function PlanTab({
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Budget Tab ──────────────────────────────────────────────────────────────
+
+const EXPENSE_CATEGORIES = ["İşgücü", "Yazılım", "Donanım", "Hizmet", "Diğer"];
+
+interface Expense {
+  id: string;
+  category: string;
+  description: string;
+  amount: number;
+  date: string;
+}
+
+function BudgetTab({
+  project,
+  onUpdate,
+}: {
+  project: Project;
+  onUpdate: (patch: Partial<Project>) => Promise<void>;
+}) {
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editBudget, setEditBudget] = useState(false);
+  const [budgetForm, setBudgetForm] = useState({
+    budget: String(project.budget ?? ""),
+    budgetUsed: String(project.budgetUsed ?? ""),
+    currency: project.currency ?? "TRY",
+  });
+  const [form, setForm] = useState({
+    description: "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10),
+  });
+
+  const budget = project.budget ?? 0;
+  const budgetUsed = project.budgetUsed ?? 0;
+  const remaining = budget - budgetUsed;
+  const pct = budget > 0 ? Math.round((budgetUsed / budget) * 100) : 0;
+
+  const fmt = (n: number) => formatCurrencyLib(n, project.currency);
+
+  const handleSaveBudget = async () => {
+    await onUpdate({
+      budget: Number(budgetForm.budget) || undefined,
+      budgetUsed: Number(budgetForm.budgetUsed) || undefined,
+      currency: budgetForm.currency,
+    });
+    setEditBudget(false);
+  };
+
+  const handleAddExpense = () => {
+    if (!form.description.trim() || !form.amount) return;
+    const amount = Number(form.amount);
+    const newExpense: Expense = { id: crypto.randomUUID(), category: form.category, description: form.description.trim(), amount, date: form.date };
+    setExpenses((prev) => [newExpense, ...prev]);
+    // budgetUsed'ı otomatik artır
+    onUpdate({ budgetUsed: budgetUsed + amount });
+    setForm({ description: "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10) });
+    setShowAdd(false);
+  };
+
+  const handleDeleteExpense = (expense: Expense) => {
+    setExpenses((prev) => prev.filter((e) => e.id !== expense.id));
+    onUpdate({ budgetUsed: Math.max(0, budgetUsed - expense.amount) });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Özet kartlar */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 text-gray-500 mb-3">
+            <Wallet className="w-4 h-4" />
+            <span className="text-xs font-semibold uppercase tracking-wide">Toplam Bütçe</span>
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{budget > 0 ? fmt(budget) : "—"}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 text-gray-500 mb-3">
+            <TrendingUp className="w-4 h-4" />
+            <span className="text-xs font-semibold uppercase tracking-wide">Harcanan</span>
+          </div>
+          <div className={`text-2xl font-bold ${pct > 90 ? "text-red-600" : pct > 75 ? "text-amber-600" : "text-gray-900"}`}>
+            {budgetUsed > 0 ? fmt(budgetUsed) : "—"}
+          </div>
+          {budget > 0 && (
+            <div className="mt-2">
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>{pct}% kullanıldı</span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full ${pct > 90 ? "bg-red-500" : pct > 75 ? "bg-amber-500" : "bg-emerald-500"}`}
+                  style={{ width: `${Math.min(pct, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 text-gray-500 mb-3">
+            <TrendingDown className="w-4 h-4" />
+            <span className="text-xs font-semibold uppercase tracking-wide">Kalan</span>
+          </div>
+          <div className={`text-2xl font-bold ${remaining < 0 ? "text-red-600" : "text-emerald-600"}`}>
+            {budget > 0 ? fmt(remaining) : "—"}
+          </div>
+          {remaining < 0 && (
+            <div className="flex items-center gap-1 text-xs text-red-600 mt-1">
+              <AlertTriangle className="w-3 h-3" /> Bütçe aşıldı
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bütçe düzenleme */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">Bütçe Bilgileri</h3>
+          <button
+            onClick={() => { setEditBudget(!editBudget); setBudgetForm({ budget: String(project.budget ?? ""), budgetUsed: String(project.budgetUsed ?? ""), currency: project.currency ?? "TRY" }); }}
+            className="text-xs text-indigo-600 hover:underline"
+          >
+            {editBudget ? "İptal" : "Düzenle"}
+          </button>
+        </div>
+        {editBudget ? (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Para Birimi</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                value={budgetForm.currency}
+                onChange={(e) => setBudgetForm((s) => ({ ...s, currency: e.target.value }))}
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Toplam Bütçe</label>
+              <input
+                type="number"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={budgetForm.budget}
+                onChange={(e) => setBudgetForm((s) => ({ ...s, budget: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Harcanan</label>
+              <input
+                type="number"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={budgetForm.budgetUsed}
+                onChange={(e) => setBudgetForm((s) => ({ ...s, budgetUsed: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div className="col-span-2 flex justify-end">
+              <button onClick={handleSaveBudget} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+                <Save className="w-4 h-4" /> Kaydet
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-gray-400 text-xs">Para Birimi</span>
+              <div className="font-semibold text-gray-900 mt-0.5">{project.currency ?? "TRY"}</div>
+            </div>
+            <div>
+              <span className="text-gray-400 text-xs">Toplam Bütçe</span>
+              <div className="font-semibold text-gray-900 mt-0.5">{budget > 0 ? fmt(budget) : "Tanımlanmamış"}</div>
+            </div>
+            <div>
+              <span className="text-gray-400 text-xs">Harcanan</span>
+              <div className="font-semibold text-gray-900 mt-0.5">{budgetUsed > 0 ? fmt(budgetUsed) : "—"}</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Giderler */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900">Gider Kayıtları</h3>
+          <button
+            onClick={() => setShowAdd(!showAdd)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Gider Ekle
+          </button>
+        </div>
+
+        {/* Add form */}
+        {showAdd && (
+          <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Açıklama</label>
+              <input
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.description} onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+                placeholder="Gider açıklaması..."
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Kategori</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.category} onChange={(e) => setForm((s) => ({ ...s, category: e.target.value }))}
+              >
+                {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Tutar (₺)</label>
+              <input
+                type="number"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.amount} onChange={(e) => setForm((s) => ({ ...s, amount: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Tarih</label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.date} onChange={(e) => setForm((s) => ({ ...s, date: e.target.value }))}
+              />
+            </div>
+            <div className="col-span-2 md:col-span-4 flex justify-end gap-2">
+              <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">İptal</button>
+              <button onClick={handleAddExpense} disabled={!form.description.trim() || !form.amount}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors">
+                Ekle
+              </button>
+            </div>
+          </div>
+        )}
+
+        {expenses.length === 0 ? (
+          <div className="text-center py-12 text-gray-400">
+            <DollarSign className="w-10 h-10 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">Henüz gider kaydı yok.</p>
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Açıklama</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Kategori</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tarih</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tutar</th>
+                <th className="px-5 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {expenses.map((e) => (
+                <tr key={e.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-5 py-3 text-sm text-gray-900">{e.description}</td>
+                  <td className="px-5 py-3">
+                    <span className="text-xs font-medium px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full">{e.category}</span>
+                  </td>
+                  <td className="px-5 py-3 text-sm text-gray-500">{new Date(e.date).toLocaleDateString("tr-TR")}</td>
+                  <td className="px-5 py-3 text-sm font-semibold text-gray-900 text-right">{fmt(e.amount)}</td>
+                  <td className="px-5 py-3">
+                    <button onClick={() => handleDeleteExpense(e)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-gray-200 bg-gray-50">
+                <td colSpan={3} className="px-5 py-3 text-sm font-semibold text-gray-700">Toplam</td>
+                <td className="px-5 py-3 text-sm font-bold text-gray-900 text-right">
+                  {fmt(expenses.reduce((s, e) => s + e.amount, 0))}
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        )}
       </div>
     </div>
   );

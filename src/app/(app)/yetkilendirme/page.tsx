@@ -1,18 +1,20 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Shield, ShieldCheck, Search, Check,
   Users, AlertTriangle, Save, RotateCcw, X,
-  UserPlus, Pencil, Trash2,
+  UserPlus, Pencil, Trash2, Building2, Globe, ChevronDown, ChevronUp, Link2,
 } from "lucide-react";
 import { useTeamStore } from "@/store/useTeamStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useOrgStore } from "@/store/useOrgStore";
 import { ROLE_META, ROLE_PERMISSIONS } from "@/lib/permissions";
 import { usePermission } from "@/hooks/usePermission";
 import Avatar from "@/components/ui/Avatar";
-import type { UserRole, Permission } from "@/types";
+import type { UserRole, Permission, Organization } from "@/types";
+import { dbLoadAllOrgs } from "@/lib/db";
 
 // ─── Birleşik kullanıcı tipi ──────────────────────────────────────────────────
 
@@ -26,6 +28,7 @@ interface AuthUser {
   source: "registered" | "team";
   projectIds: string[];
   status: "active" | "pending" | "inactive";
+  orgId?: string;
 }
 
 // ─── Silme onay dialogu ───────────────────────────────────────────────────────
@@ -40,8 +43,8 @@ function DeleteConfirmDialog({
   onConfirm: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
             <Trash2 className="w-5 h-5 text-red-600" />
@@ -120,7 +123,7 @@ function UserEditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50" onClick={onClose}>
       <div
         className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -278,8 +281,8 @@ function AddUserModal({ onClose, onAdd }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-bold text-gray-900">Kullanıcı Ekle</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
@@ -346,11 +349,52 @@ function RoleStatCard({ role, count, total }: { role: UserRole; count: number; t
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const PLAN_META: Record<string, { label: string; color: string; bg: string }> = {
+  free:       { label: "Ücretsiz", color: "text-gray-600",   bg: "bg-gray-100" },
+  starter:    { label: "Starter",  color: "text-blue-700",   bg: "bg-blue-100" },
+  pro:        { label: "Pro",      color: "text-indigo-700", bg: "bg-indigo-100" },
+  enterprise: { label: "Kurumsal", color: "text-amber-700",  bg: "bg-amber-100" },
+};
+
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  active:    { label: "Aktif",    color: "text-emerald-600" },
+  trial:     { label: "Deneme",   color: "text-amber-600" },
+  suspended: { label: "Askıda",   color: "text-red-600" },
+};
+
 export default function YetkilendirmePage() {
   const authStore = useAuthStore();
   const { members, addMember, removeMember } = useTeamStore();
   const { projects } = useProjectStore();
+  const { org, update: updateOrg } = useOrgStore();
   const canEdit = usePermission("team.manage");
+  const currentUser = authStore.user;
+  const isSystemAdmin = currentUser?.role === "system_admin";
+
+  const [allOrgs, setAllOrgs] = useState<Organization[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [extraProfiles, setExtraProfiles] = useState<Record<string, import("@/types").User>>({});
+
+  // Sayfa açıldığında profilleri taze yükle (davet kabul eden yeni kullanıcıları görmek için)
+  useEffect(() => {
+    authStore.loadProfiles();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!isSystemAdmin) return;
+    dbLoadAllOrgs().then((orgs) => {
+      setAllOrgs(orgs);
+    }).catch(() => {});
+  }, [isSystemAdmin]);
+
+  // system_admin seçili org değişince o org'un profillerini yükle
+  useEffect(() => {
+    if (!isSystemAdmin || !selectedOrgId) return;
+    import("@/lib/db").then(({ dbLoadProfiles }) => {
+      dbLoadProfiles(selectedOrgId).then(setExtraProfiles).catch(() => {});
+    });
+  }, [isSystemAdmin, selectedOrgId]);
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all");
@@ -358,12 +402,31 @@ export default function YetkilendirmePage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<AuthUser | null>(null);
   const [deleteUser, setDeleteUser] = useState<AuthUser | null>(null);
+  const [showOrgEdit, setShowOrgEdit] = useState(false);
+  const [orgForm, setOrgForm] = useState({ name: "", industry: "", website: "", address: "" });
+  const [orgSaved, setOrgSaved] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
+  const [assignEmail, setAssignEmail] = useState("");
+  const [assignRole, setAssignRole] = useState<UserRole>("member");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignError, setAssignError] = useState("");
+  const [assignSuccess, setAssignSuccess] = useState("");
+
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState("");
+
+  // Hangi profil kaynağını kullanacağız: system_admin + seçili org → extraProfiles, aksi → kendi profiles
+  const activeProfiles = isSystemAdmin && selectedOrgId ? extraProfiles : authStore.profiles;
 
   // Birleşik kullanıcı listesi: profiles (kayıtlı) + teamStore (manuel eklenen)
   const allUsers = useMemo<AuthUser[]>(() => {
     const map = new Map<string, AuthUser>();
 
-    Object.values(authStore.profiles).forEach((p) => {
+    Object.values(activeProfiles).forEach((p) => {
+      if (!p.id || !p.email) return; // sahte / eksik kayıtları atla
       const member = members.find((m) => m.email === p.email);
       map.set(p.email, {
         id: p.id,
@@ -375,27 +438,31 @@ export default function YetkilendirmePage() {
         source: "registered",
         projectIds: member?.projectIds ?? [],
         status: "active",
+        orgId: p.orgId,
       });
     });
 
-    members.forEach((m) => {
-      if (!map.has(m.email)) {
-        map.set(m.email, {
-          id: m.id,
-          name: m.name,
-          email: m.email,
-          role: m.role,
-          title: m.title,
-          department: m.department,
-          source: "team",
-          projectIds: m.projectIds,
-          status: m.status,
-        });
-      }
-    });
+    // teamStore üyeleri sadece kendi org'umuzda göster
+    if (!isSystemAdmin || !selectedOrgId) {
+      members.forEach((m) => {
+        if (!map.has(m.email)) {
+          map.set(m.email, {
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            role: m.role,
+            title: m.title,
+            department: m.department,
+            source: "team",
+            projectIds: m.projectIds,
+            status: m.status,
+          });
+        }
+      });
+    }
 
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "tr"));
-  }, [authStore.profiles, members]);
+  }, [activeProfiles, members, isSystemAdmin, selectedOrgId]);
 
   // Arama + rol filtresi
   const filtered = useMemo(() => {
@@ -418,18 +485,31 @@ export default function YetkilendirmePage() {
     const user = allUsers.find((u) => u.id === userId);
     if (!user) return;
 
-    const authState = useAuthStore.getState();
     const teamState = useTeamStore.getState();
 
-    if (authState.profiles[user.email]) {
-      authState.updateProfile(user.email, updates);
-    } else {
-      useAuthStore.setState((state) => ({
-        profiles: {
-          ...state.profiles,
-          [user.email]: { ...state.profiles[user.email], ...updates },
-        },
-      }));
+    // Profili bul: UUID veya email ile eşleştir (key türü farklı olabilir)
+    const sourceProfiles = isSystemAdmin && selectedOrgId ? extraProfiles : useAuthStore.getState().profiles;
+    const profileEntry = Object.values(sourceProfiles).find(
+      (p) => p.id === userId || p.email === user.email
+    );
+
+    if (profileEntry) {
+      const updated = { ...profileEntry, ...updates };
+      // Doğrudan DB'ye UUID ile yaz
+      import("@/lib/db").then(({ dbUpsertProfile }) => dbUpsertProfile(profileEntry.id, updated));
+      // Local state güncelle
+      if (isSystemAdmin && selectedOrgId) {
+        setExtraProfiles((prev) => ({ ...prev, [user.email]: updated }));
+      } else {
+        useAuthStore.setState((state) => ({
+          profiles: Object.fromEntries(
+            Object.entries(state.profiles).map(([k, v]) =>
+              v.id === profileEntry.id ? [k, updated] : [k, v]
+            )
+          ),
+          user: state.user?.id === profileEntry.id ? { ...state.user, ...updates } : state.user,
+        }));
+      }
     }
 
     const member = teamState.members.find((m) => m.id === userId || m.email === user.email);
@@ -470,6 +550,52 @@ export default function YetkilendirmePage() {
     });
   };
 
+  const handleAssignToOrg = async () => {
+    const email = assignEmail.trim().toLowerCase();
+    if (!email) { setAssignError("E-posta adresi gerekli."); return; }
+    const orgId = authStore.user?.orgId;
+    if (!orgId) return;
+    setAssignLoading(true);
+    setAssignError("");
+    setAssignSuccess("");
+    try {
+      const { dbAssignUserToOrg } = await import("@/lib/db");
+      const result = await dbAssignUserToOrg(email, orgId);
+      if (!result.ok) { setAssignError(result.error ?? "Atama başarısız."); return; }
+      // Profilleri yeniden yükle
+      await authStore.loadProfiles();
+      setAssignSuccess(`${email} başarıyla organizasyona atandı.`);
+      setAssignEmail("");
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const handleInvite = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email) { setInviteError("E-posta adresi gerekli."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setInviteError("Geçerli bir e-posta girin."); return; }
+    const orgId = authStore.user?.orgId;
+    const orgName = org?.name ?? "Organizasyon";
+    if (!orgId) return;
+    setInviteLoading(true);
+    setInviteError("");
+    setInviteSuccess("");
+    try {
+      const res = await fetch("/api/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, orgId, orgName, invitedBy: authStore.user?.name ?? "Admin" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { setInviteError(body.error ?? "Davet gönderilemedi."); return; }
+      setInviteSuccess(`${email} adresine davet gönderildi.`);
+      setInviteEmail("");
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
   if (!canEdit) {
     return (
       <div className="max-w-lg mx-auto mt-20 text-center">
@@ -482,23 +608,232 @@ export default function YetkilendirmePage() {
     );
   }
 
+  const handleOrgSave = async () => {
+    const orgId = useAuthStore.getState().user?.orgId;
+    if (!orgId) return;
+    const { dbUpsertOrg } = await import("@/lib/db");
+    const { useOrgStore: _orgStore } = await import("@/store/useOrgStore");
+    const now = new Date().toISOString();
+    const updated = {
+      id: orgId,
+      name: orgForm.name.trim() || org?.name || "Organizasyon",
+      industry: orgForm.industry || org?.industry,
+      size: org?.size,
+      plan: org?.plan ?? "free" as const,
+      status: org?.status ?? "trial" as const,
+      website: orgForm.website.trim() || org?.website,
+      address: orgForm.address.trim() || org?.address,
+      createdAt: org?.createdAt ?? now,
+    };
+    await dbUpsertOrg(orgId, updated);
+    _orgStore.setState({ org: updated });
+    setShowOrgEdit(false);
+    setOrgSaved(true);
+    setTimeout(() => setOrgSaved(false), 2500);
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+
+      {/* ── Organizasyon Profili ── */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        {/* Başlık */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">
+                {org ? org.name : "Organizasyon Tanımlanmamış"}
+              </h2>
+              {org && (
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${PLAN_META[org.plan]?.bg} ${PLAN_META[org.plan]?.color}`}>
+                    {PLAN_META[org.plan]?.label}
+                  </span>
+                  <span className={`text-xs font-medium ${STATUS_META[org.status]?.color}`}>
+                    · {STATUS_META[org.status]?.label}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setOrgForm({
+                name: org?.name ?? "",
+                industry: org?.industry ?? "",
+                website: org?.website ?? "",
+                address: org?.address ?? "",
+              });
+              setShowOrgEdit((v) => !v);
+            }}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-indigo-50"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            {org ? "Düzenle" : "Tanımla"}
+            {showOrgEdit ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {/* Org kayıt yok uyarısı */}
+        {!org && !showOrgEdit && (
+          <div className="px-6 py-5 flex items-center gap-3 bg-amber-50">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">Organizasyon bilgileri henüz girilmemiş.</p>
+              <p className="text-xs text-amber-600 mt-0.5">Yukarıdaki "Tanımla" butonuna tıklayarak organizasyonunuzu kayıt edin.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Org meta — var ve düzenleme kapalıysa */}
+        {org && !showOrgEdit && (
+          <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Sektör</p>
+              <p className="font-medium text-gray-700">{org.industry || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Çalışan</p>
+              <p className="font-medium text-gray-700">{org.size || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Web Sitesi</p>
+              {org.website
+                ? <a href={org.website} target="_blank" rel="noreferrer" className="font-medium text-indigo-600 hover:underline flex items-center gap-1"><Globe className="w-3 h-3" />{org.website.replace(/^https?:\/\//, "")}</a>
+                : <p className="font-medium text-gray-700">—</p>
+              }
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Kayıt Tarihi</p>
+              <p className="font-medium text-gray-700">{org.createdAt ? new Date(org.createdAt).toLocaleDateString("tr-TR") : "—"}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Form: hem oluşturma hem düzenleme */}
+        {showOrgEdit && (
+          <div className="px-6 py-5 space-y-4">
+            {!org && (
+              <p className="text-sm text-gray-500 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+                Organizasyon bilgilerini girerek sistemdeki tüm kullanıcılar için kurumsal profili oluşturun.
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Organizasyon Adı *</label>
+                <input
+                  value={orgForm.name}
+                  onChange={(e) => setOrgForm((s) => ({ ...s, name: e.target.value }))}
+                  placeholder="Şirket Adı A.Ş."
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Sektör</label>
+                <select
+                  value={orgForm.industry}
+                  onChange={(e) => setOrgForm((s) => ({ ...s, industry: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                >
+                  <option value="">— Seçin —</option>
+                  {["Yazılım / IT","Finans ve Bankacılık","Üretim / Endüstri","Sağlık","Eğitim","Perakende / E-ticaret","İnşaat / Gayrimenkul","Medya / Reklam","Lojistik / Ulaşım","Enerji","Danışmanlık","Diğer"].map((i) => (
+                    <option key={i} value={i}>{i}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Web Sitesi</label>
+                <input
+                  value={orgForm.website}
+                  onChange={(e) => setOrgForm((s) => ({ ...s, website: e.target.value }))}
+                  placeholder="https://sirket.com"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Adres</label>
+                <input
+                  value={orgForm.address}
+                  onChange={(e) => setOrgForm((s) => ({ ...s, address: e.target.value }))}
+                  placeholder="İstanbul, Türkiye"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowOrgEdit(false)}
+                className="px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleOrgSave}
+                disabled={!orgForm.name.trim()}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-40"
+              >
+                <Save className="w-4 h-4" />
+                {org ? "Güncelle" : "Organizasyonu Kaydet"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* system_admin org seçici */}
+      {isSystemAdmin && allOrgs.length > 0 && (
+        <div className="flex items-center gap-3 p-3 bg-rose-50 border border-rose-200 rounded-xl">
+          <Building2 className="w-4 h-4 text-rose-500 shrink-0" />
+          <span className="text-sm font-medium text-rose-700 shrink-0">Organizasyon:</span>
+          <select
+            className="flex-1 px-3 py-1.5 border border-rose-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-rose-400"
+            value={selectedOrgId ?? ""}
+            onChange={(e) => setSelectedOrgId(e.target.value || null)}
+          >
+            <option value="">Kendi organizasyonum ({org?.name ?? "—"})</option>
+            {allOrgs.map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            {(() => {
+              const displayOrg = selectedOrgId ? allOrgs.find((o) => o.id === selectedOrgId) : org;
+              return displayOrg && <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full">{displayOrg.name}</span>;
+            })()}
+          </div>
           <h1 className="text-2xl font-bold text-gray-900">Yetkilendirme</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {allUsers.length} kullanıcı · Rolleri ve erişim yetkilerini yönetin.
+            {allUsers.length} kullanıcı · Organizasyon bazlı rol ve erişim yönetimi
           </p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          {saved && (
+          {(saved || orgSaved) && (
             <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium px-4 py-2 rounded-xl">
               <Check className="w-4 h-4" /> Kaydedildi
             </div>
           )}
+          <button
+            onClick={() => { setAssignEmail(""); setAssignError(""); setAssignSuccess(""); setShowAssign(true); }}
+            className="flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-700 bg-indigo-50 rounded-xl text-sm font-semibold hover:bg-indigo-100 transition-colors"
+          >
+            <Link2 className="w-4 h-4" /> Organizasyona Ata
+          </button>
+          <button
+            onClick={() => { setInviteEmail(""); setInviteError(""); setInviteSuccess(""); setShowInvite(true); }}
+            className="flex items-center gap-2 px-4 py-2 border border-emerald-300 text-emerald-700 bg-emerald-50 rounded-xl text-sm font-semibold hover:bg-emerald-100 transition-colors"
+          >
+            <UserPlus className="w-4 h-4" /> Davet Gönder
+          </button>
           <button
             onClick={() => setShowAdd(true)}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
@@ -583,7 +918,7 @@ export default function YetkilendirmePage() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {["Kullanıcı", "Unvan / Dep.", "Rol", "Projeler", "Kaynak", "Durum", ""].map((h) => (
+                {["Kullanıcı", "Unvan / Dep.", "Rol", "Projeler", "Org Üyeliği", "Durum", ""].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                     {h}
                   </th>
@@ -632,11 +967,19 @@ export default function YetkilendirmePage() {
                       )}
                     </td>
 
-                    {/* Kaynak */}
+                    {/* Org Üyeliği */}
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${u.source === "registered" ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-500"}`}>
-                        {u.source === "registered" ? "Kayıtlı" : "Manuel"}
-                      </span>
+                      {(() => {
+                        const userOrg = u.orgId ? allOrgs.find((o) => o.id === u.orgId) : null;
+                        return userOrg ? (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span className="text-xs text-emerald-700 font-medium truncate max-w-[120px]">{userOrg.name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        );
+                      })()}
                     </td>
 
                     {/* Durum */}
@@ -734,6 +1077,161 @@ export default function YetkilendirmePage() {
           onClose={() => setDeleteUser(null)}
           onConfirm={() => handleDeleteUser(deleteUser)}
         />
+      )}
+
+      {/* Organizasyona Ata Modal */}
+      {showAssign && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50" onClick={() => setShowAssign(false)}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <Link2 className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Organizasyona Ata</h2>
+                  {org && <p className="text-xs text-gray-400">{org.name}</p>}
+                </div>
+              </div>
+              <button onClick={() => setShowAssign(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-500">
+                Sistemde kayıtlı bir kullanıcının e-postasını girin. Kullanıcı bu organizasyona atanacak.
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">E-posta Adresi</label>
+                <input
+                  type="email"
+                  value={assignEmail}
+                  onChange={(e) => { setAssignEmail(e.target.value); setAssignError(""); setAssignSuccess(""); }}
+                  onKeyDown={(e) => e.key === "Enter" && handleAssignToOrg()}
+                  placeholder="kullanici@sirket.com"
+                  autoFocus
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
+                <select
+                  value={assignRole}
+                  onChange={(e) => setAssignRole(e.target.value as UserRole)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                >
+                  {(Object.keys(ROLE_META) as UserRole[]).map((r) => (
+                    <option key={r} value={r}>{ROLE_META[r].label} — {ROLE_META[r].description}</option>
+                  ))}
+                </select>
+              </div>
+
+              {assignError && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2.5">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  {assignError}
+                </div>
+              )}
+              {assignSuccess && (
+                <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2.5">
+                  <Check className="w-4 h-4 flex-shrink-0" />
+                  {assignSuccess}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+              <button onClick={() => setShowAssign(false)} className="flex-1 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100">
+                {assignSuccess ? "Kapat" : "İptal"}
+              </button>
+              {!assignSuccess && (
+                <button
+                  onClick={handleAssignToOrg}
+                  disabled={assignLoading || !assignEmail.trim()}
+                  className="flex-1 py-2.5 text-sm bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-40 flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Link2 className="w-4 h-4" />
+                  {assignLoading ? "Atanıyor..." : "Organizasyona Ata"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Davet Gönder Modal */}
+      {showInvite && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50" onClick={() => setShowInvite(false)}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                  <UserPlus className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900">Davet Gönder</h2>
+                  {org && <p className="text-xs text-gray-400">{org.name}</p>}
+                </div>
+              </div>
+              <button onClick={() => setShowInvite(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-500">
+                E-posta adresine davet linki gönderilecek. Kullanıcı linke tıklayarak hesap oluşturup hemen giriş yapabilecek.
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">E-posta Adresi</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => { setInviteEmail(e.target.value); setInviteError(""); setInviteSuccess(""); }}
+                  onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+                  placeholder="kullanici@sirket.com"
+                  autoFocus
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                />
+              </div>
+
+              {inviteError && (
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                  {inviteError}
+                </div>
+              )}
+              {inviteSuccess && (
+                <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 flex items-center gap-2">
+                  <Check className="w-4 h-4 flex-shrink-0" />
+                  {inviteSuccess}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowInvite(false)}
+                  className="flex-1 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 font-medium"
+                >
+                  {inviteSuccess ? "Kapat" : "İptal"}
+                </button>
+                {!inviteSuccess && (
+                  <button
+                    onClick={handleInvite}
+                    disabled={inviteLoading || !inviteEmail.trim()}
+                    className="flex-1 py-2.5 text-sm bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 disabled:opacity-40 flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    {inviteLoading ? "Gönderiliyor..." : "Davet Gönder"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

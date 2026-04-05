@@ -14,11 +14,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-[#1a2d5a] flex items-center justify-center overflow-hidden">
-              <Image src="/logo.png" alt="Pixanto" width={36} height={36} unoptimized className="object-cover w-full h-full" />
-            </div>
-            <span className="text-lg font-bold text-[#1a2d5a]">Pixanto</span>
+          <Link href="/" className="flex items-center">
+            <Image src="/logo.png" alt="Pixanto" width={400} height={100} unoptimized className="h-11 w-auto object-contain" />
           </Link>
 
           {/* Desktop Nav */}

@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { useAuthStore } from './useAuthStore';
+import { useITSMConfigStore } from './useITSMConfigStore';
+import { useWorkflowInstanceStore } from './useWorkflowInstanceStore';
+import { triggerWorkflow } from '@/services/workflowEngine';
 import {
   loadServiceRequests,
   createServiceRequest,
@@ -71,7 +74,32 @@ export const useServiceRequestStore = create<ServiceRequestState>()((set, get) =
     const user = useAuthStore.getState().user;
     if (!user) return;
     const updated = await submitServiceRequest(id, get().serviceRequests, user.id, user.name);
-    if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
+    if (!updated) return;
+    set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
+
+    // Onay gerekiyorsa ve bir workflow tanımlanmışsa engine'i tetikle
+    if (updated.approvalRequired) {
+      const configStore = useITSMConfigStore.getState();
+      if (!configStore.config.approvalWorkflows.length && !configStore.loading) {
+        await configStore.load();
+      }
+      const { config } = useITSMConfigStore.getState();
+      const workflowId = config.srApprovalConfig.workflowId;
+      const definition = workflowId
+        ? config.approvalWorkflows.find((w) => w.id === workflowId)
+        : undefined;
+      if (definition) {
+        const instance = await triggerWorkflow(
+          definition,
+          'service_request',
+          id,
+          user.orgId,
+          config,
+          updated.requestedById,
+        );
+        useWorkflowInstanceStore.getState().addInstance(instance);
+      }
+    }
   },
 
   approve: async (id, dto) => {

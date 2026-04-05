@@ -5,12 +5,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 flex flex-col">
       {/* Auth Navbar */}
-      <nav className="px-6 py-4">
-        <Link href="/" className="inline-flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-[#1a2d5a] flex items-center justify-center overflow-hidden">
-            <Image src="/logo.png" alt="Pixanto" width={36} height={36} unoptimized className="object-cover w-full h-full" />
-          </div>
-          <span className="text-lg font-bold text-[#1a2d5a]">Pixanto</span>
+      <nav className="px-8 py-5 border-b border-gray-100/80">
+        <Link href="/" className="inline-flex items-center">
+          <Image src="/logo.png" alt="Pixanto" width={400} height={100} unoptimized className="h-14 w-auto object-contain mix-blend-multiply" />
         </Link>
       </nav>
 

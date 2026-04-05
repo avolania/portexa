@@ -84,6 +84,7 @@ export interface CreateServiceRequestDto {
   approvalRequired?: boolean;
   assignedToId?: string;
   assignmentGroupId?: string;
+  sourceIncidentNumber?: string;
   attachments?: Attachment[];
 }
 

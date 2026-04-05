@@ -97,6 +97,12 @@ export async function createServiceRequest(
     sla,
     timeline:      [
       { id: uuid(), type: TicketEventType.CREATED, actorId, actorName, timestamp: now },
+      ...(dto.sourceIncidentNumber ? [{
+        id: uuid(), type: TicketEventType.CONVERTED_FROM_INCIDENT,
+        actorId, actorName, timestamp: now,
+        note: `${dto.sourceIncidentNumber} numaralı incident'tan dönüştürüldü`,
+        newValue: dto.sourceIncidentNumber,
+      }] : []),
     ],
     createdAt: now,
     updatedAt: now,

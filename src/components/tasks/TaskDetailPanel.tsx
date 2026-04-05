@@ -76,9 +76,14 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
     tags: "",
     issueType: "task" as IssueType,
     subtasks: [] as Subtask[],
+    comments: [] as { id: string; content: string; authorId: string; createdAt: string }[],
+    attachments: [] as Attachment[],
   });
   const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [newSubtask, setNewSubtask] = useState("");
+  const [newComment, setNewComment] = useState("");
 
   // Task açılınca formu senkronize et
   useEffect(() => {
@@ -98,6 +103,8 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
         tags: task.tags.join(", "),
         issueType: task.issueType ?? "task",
         subtasks: task.subtasks,
+        comments: task.comments,
+        attachments: task.attachments,
       });
       setIsDirty(false);
     }
@@ -112,25 +119,34 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
     setIsDirty(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.title.trim()) return;
-    updateTask(task.id, {
-      title: form.title.trim(),
-      description: form.description.trim() || undefined,
-      status: form.status,
-      priority: form.priority,
-      assigneeId: form.assigneeId || undefined,
-      startDate: form.startDate || undefined,
-      dueDate: form.dueDate || undefined,
-      estimatedHours: form.estimatedHours ? Number(form.estimatedHours) : undefined,
-      storyPoints: form.storyPoints ? Number(form.storyPoints) : undefined,
-      sprint: form.sprint ? Number(form.sprint) : undefined,
-      phase: !isAgile ? form.phase : undefined,
-      tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
-      issueType: form.issueType,
-      subtasks: form.subtasks,
-    });
-    onClose();
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await updateTask(task.id, {
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        status: form.status,
+        priority: form.priority,
+        assigneeId: form.assigneeId || undefined,
+        startDate: form.startDate || undefined,
+        dueDate: form.dueDate || undefined,
+        estimatedHours: form.estimatedHours ? Number(form.estimatedHours) : undefined,
+        storyPoints: form.storyPoints ? Number(form.storyPoints) : undefined,
+        sprint: form.sprint ? Number(form.sprint) : undefined,
+        phase: !isAgile ? form.phase : undefined,
+        tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+        issueType: form.issueType,
+        subtasks: form.subtasks,
+        comments: form.comments,
+        attachments: form.attachments,
+      });
+      onClose();
+    } catch (err) {
+      setSaveError("Kaydetme başarısız. Lütfen tekrar deneyin.");
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -143,6 +159,21 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
     );
     setForm((f) => ({ ...f, subtasks: updated }));
     setIsDirty(true);
+  };
+
+  const currentUser = useAuthStore.getState().user;
+
+  const handleAddComment = () => {
+    if (!newComment.trim() || !currentUser) return;
+    const comment = {
+      id: crypto.randomUUID(),
+      content: newComment.trim(),
+      authorId: currentUser.id,
+      createdAt: new Date().toISOString(),
+    };
+    setForm((f) => ({ ...f, comments: [...f.comments, comment] }));
+    setIsDirty(true);
+    setNewComment("");
   };
 
   const handleAddSubtask = () => {
@@ -159,7 +190,7 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-40 flex">
       <div className="flex-1 bg-black/20" onClick={onClose} />
-      <div className="w-full max-w-lg bg-white shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
+      <div className="w-full sm:max-w-lg bg-white shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
@@ -375,19 +406,25 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
 
           {/* Attachments */}
           <AttachmentSection
-            attachments={task.attachments}
-            onAdd={(att: Attachment) => updateTask(task.id, { attachments: [...task.attachments, att] })}
-            onRemove={(id) => updateTask(task.id, { attachments: task.attachments.filter((a) => a.id !== id) })}
+            attachments={form.attachments}
+            onAdd={(att: Attachment) => {
+              setForm((f) => ({ ...f, attachments: [...f.attachments, att] }));
+              setIsDirty(true);
+            }}
+            onRemove={(id) => {
+              setForm((f) => ({ ...f, attachments: f.attachments.filter((a) => a.id !== id) }));
+              setIsDirty(true);
+            }}
           />
 
           {/* Comments */}
           <div>
             <p className={labelCls}><MessageSquare className="w-3.5 h-3.5 inline mr-1" />Yorumlar</p>
-            {task.comments.length === 0 ? (
+            {form.comments.length === 0 ? (
               <p className="text-sm text-gray-400">Henüz yorum yapılmamış.</p>
             ) : (
               <div className="space-y-3">
-                {task.comments.map((comment) => {
+                {form.comments.map((comment) => {
                   const name = resolveName(comment.authorId) ?? comment.authorId;
                   return (
                     <div key={comment.id} className="flex gap-3">
@@ -405,9 +442,16 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
               <input
                 type="text"
                 placeholder="Yorum ekle..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
                 className={`flex-1 ${inputCls}`}
               />
-              <button className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors">
+              <button
+                onClick={handleAddComment}
+                disabled={!newComment.trim()}
+                className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
                 Gönder
               </button>
             </div>
@@ -415,7 +459,11 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
         </div>
 
         {/* Footer — Kaydet / İptal */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex gap-3">
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex flex-col gap-2">
+          {saveError && (
+            <p className="text-xs text-red-600 text-center">{saveError}</p>
+          )}
+          <div className="flex gap-3">
           <button
             onClick={handleCancel}
             disabled={!isDirty}
@@ -426,12 +474,13 @@ export default function TaskDetailPanel({ taskId, onClose }: Props) {
           </button>
           <button
             onClick={handleSave}
-            disabled={!isDirty || !form.title.trim()}
+            disabled={!isDirty || !form.title.trim() || isSaving}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <Save className="w-4 h-4" />
-            Kaydet
+            {isSaving ? "Kaydediliyor..." : "Kaydet"}
           </button>
+          </div>
         </div>
       </div>
     </div>

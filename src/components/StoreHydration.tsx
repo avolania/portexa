@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useTeamStore } from "@/store/useTeamStore";
@@ -15,9 +15,13 @@ import { useWorkflowStore } from "@/store/useWorkflowStore";
 import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
+import { useOrgStore } from "@/store/useOrgStore";
+import { useWorkflowInstanceStore } from "@/store/useWorkflowInstanceStore";
+import { useITSMConfigStore } from "@/store/useITSMConfigStore";
 
 function loadAllStores() {
   useAuthStore.getState().loadProfiles();
+  useOrgStore.getState().load();
   useProjectStore.getState().load();
   useTeamStore.getState().load();
   useGovernanceStore.getState().load();
@@ -31,14 +35,20 @@ function loadAllStores() {
   useIncidentStore.getState().load();
   useServiceRequestStore.getState().load();
   useChangeRequestStore.getState().load();
+  useITSMConfigStore.getState().load();
+  useWorkflowInstanceStore.getState().load();
 }
 
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 dakika
+const IDLE_EVENTS = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click"];
+
 export default function StoreHydration() {
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     useAuthStore.getState().initAuth();
 
     // Her isAuthenticated: false → true geçişinde store'ları yükle
-    // (ilk login, logout+re-login hepsini kapsar)
     let prevAuthenticated = useAuthStore.getState().isAuthenticated;
 
     if (prevAuthenticated) loadAllStores();
@@ -50,7 +60,25 @@ export default function StoreHydration() {
       prevAuthenticated = state.isAuthenticated;
     });
 
-    return () => unsub();
+    // ── Otomatik çıkış (30 dk hareketsizlik) ──────────────────────────────────
+    const resetTimer = () => {
+      if (!useAuthStore.getState().isAuthenticated) return;
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => {
+        if (useAuthStore.getState().isAuthenticated) {
+          useAuthStore.getState().signOut();
+        }
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    resetTimer();
+    IDLE_EVENTS.forEach((e) => window.addEventListener(e, resetTimer, { passive: true }));
+
+    return () => {
+      unsub();
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      IDLE_EVENTS.forEach((e) => window.removeEventListener(e, resetTimer));
+    };
   }, []);
 
   return null;

@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { useAuthStore } from './useAuthStore';
+import { useITSMConfigStore } from './useITSMConfigStore';
+import { useWorkflowInstanceStore } from './useWorkflowInstanceStore';
+import { triggerWorkflow } from '@/services/workflowEngine';
 import {
   loadChangeRequests,
   createChangeRequest,
@@ -61,60 +64,91 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
     if (!user) return null;
     const cr = await createChangeRequest(dto, user.orgId, user.id, user.name);
     set((s) => ({ changeRequests: [...s.changeRequests, cr] }));
+
+    // Yaratılınca otomatik workflow tetikle
+    try {
+      const configStore = useITSMConfigStore.getState();
+      if (!configStore.config.approvalWorkflows.length && !configStore.loading) {
+        await configStore.load();
+      }
+      const { config } = useITSMConfigStore.getState();
+      const workflowId = config.crApprovalWorkflows[cr.type] ?? null;
+      const definition = workflowId
+        ? config.approvalWorkflows.find((w) => w.id === workflowId)
+        : undefined;
+      if (definition) {
+        const instance = await triggerWorkflow(
+          definition,
+          'change_request',
+          cr.id,
+          user.orgId,
+          config,
+          cr.requestedById,
+        );
+        useWorkflowInstanceStore.getState().addInstance(instance);
+      }
+    } catch (err) {
+      console.error('[workflow] CR create workflow trigger failed:', err);
+    }
+
     return cr;
   },
 
   update: async (id, dto) => {
-    const updated = await updateChangeRequest(id, dto, get().changeRequests);
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const updated = await updateChangeRequest(id, dto, get().changeRequests, user.orgId);
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 
   transition: async (id: string, toState: CRState, note?: string) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await changeRequestStateTransition(id, toState, get().changeRequests, user.id, user.name, note);
-    if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
+    const updated = await changeRequestStateTransition(id, toState, get().changeRequests, user.id, user.name, user.orgId, note);
+    if (!updated) return;
+    set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
+
   },
 
   approve: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await approveChangeRequest(id, dto, get().changeRequests, user.id, user.name);
+    const updated = await approveChangeRequest(id, dto, get().changeRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 
   reject: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await rejectChangeRequest(id, dto, get().changeRequests, user.id, user.name);
+    const updated = await rejectChangeRequest(id, dto, get().changeRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 
   close: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await closeChangeRequest(id, dto, get().changeRequests, user.id, user.name);
+    const updated = await closeChangeRequest(id, dto, get().changeRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 
   addWorkNote: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addCRWorkNote(id, dto, get().changeRequests, user.id, user.name);
+    const updated = await addCRWorkNote(id, dto, get().changeRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 
   addComment: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addCRComment(id, dto, get().changeRequests, user.id, user.name);
+    const updated = await addCRComment(id, dto, get().changeRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 
   linkIncident: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await linkIncidentToCR(id, dto, get().changeRequests, user.id, user.name);
+    const updated = await linkIncidentToCR(id, dto, get().changeRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 
@@ -126,7 +160,9 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
   },
 
   removeAttachment: async (id, attachmentId) => {
-    const updated = await removeChangeRequestAttachment(id, attachmentId, get().changeRequests);
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const updated = await removeChangeRequestAttachment(id, attachmentId, get().changeRequests, user.orgId);
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 

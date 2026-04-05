@@ -73,6 +73,7 @@ export interface CreateIncidentDto {
   description: string;
   assignedToId?: string;
   assignmentGroupId?: string;
+  assignmentGroupName?: string;
   attachments?: Attachment[];
 }
 

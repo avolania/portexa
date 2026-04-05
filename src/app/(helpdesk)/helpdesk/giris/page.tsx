@@ -1,96 +1,116 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Mail, Lock, AlertCircle } from "lucide-react";
+import { useState } from "react";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
 import { useAuthStore } from "@/store/useAuthStore";
-import { LifeBuoy } from "lucide-react";
+
+const schema = z.object({
+  email: z.string().email("Geçerli bir e-posta adresi girin"),
+  password: z.string().min(6, "Şifre en az 6 karakter olmalıdır"),
+});
+
+type FormData = z.infer<typeof schema>;
 
 export default function HelpdeskGirisPage() {
   const { signIn } = useAuthStore();
   const router = useRouter();
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    const err = await signIn(email.trim(), password);
-    setLoading(false);
-    if (err) {
-      setError("E-posta veya şifre hatalı.");
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  const onSubmit = async (data: FormData) => {
+    setAuthError(null);
+    const error = await signIn(data.email, data.password);
+    if (error) {
+      setAuthError("E-posta veya şifre hatalı.");
     } else {
       router.replace("/helpdesk/portal");
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8 gap-3">
-          <div className="w-14 h-14 rounded-2xl bg-[#1a2d5a] flex items-center justify-center overflow-hidden shadow-lg">
-            <Image src="/logo.png" alt="Pixanto" width={56} height={56} unoptimized className="object-cover w-full h-full" />
+    <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 shadow-xl rounded-2xl overflow-hidden border border-gray-100">
+      {/* Sol: Form */}
+      <div className="bg-white p-8 lg:p-10 flex flex-col justify-center">
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xl font-bold text-[#1a2d5a]">Pixanto</span>
+            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">Helpdesk</span>
           </div>
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <span className="text-xl font-bold text-[#1a2d5a]">Pixanto</span>
-              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">Helpdesk</span>
-            </div>
-            <p className="text-sm text-gray-500">Destek talebiniz için giriş yapın</p>
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Hoş geldiniz</h1>
+          <p className="text-gray-500 text-sm">
+            Destek talebiniz için hesabınıza giriş yapın.
+          </p>
         </div>
 
-        {/* Form */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">E-posta</label>
-              <input
-                type="email"
-                className="input w-full"
-                placeholder="ornek@sirket.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-              />
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {authError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {authError}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Şifre</label>
-              <input
-                type="password"
-                className="input w-full"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
+          )}
 
-            {error && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                {error}
-              </p>
-            )}
+          <Input
+            id="email"
+            label="E-posta"
+            type="email"
+            placeholder="ornek@sirket.com"
+            icon={<Mail className="w-4 h-4" />}
+            error={errors.email?.message}
+            {...register("email")}
+          />
 
+          <div>
+            <Input
+              id="password"
+              label="Şifre"
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              icon={<Lock className="w-4 h-4" />}
+              error={errors.password?.message}
+              {...register("password")}
+            />
             <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full justify-center disabled:opacity-50"
-            >
-              {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
-            </button>
-          </form>
-        </div>
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+              onClick={() => setShowPassword(!showPassword)}
+            />
+          </div>
 
-        <div className="flex items-center justify-center gap-2 mt-5 text-xs text-gray-400">
-          <LifeBuoy className="w-3.5 h-3.5" />
-          <span>Destek için IT ekibinizle iletişime geçin</span>
-        </div>
+          <Button type="submit" className="w-full" loading={isSubmitting}>
+            Giriş Yap
+          </Button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-gray-500">
+          Hesabınız yok mu?{" "}
+          <Link href="/giris" className="text-indigo-600 font-medium hover:underline">
+            Ana giriş sayfasına gidin
+          </Link>
+        </p>
+      </div>
+
+      {/* Sağ: Banner */}
+      <div className="hidden lg:flex items-center justify-center bg-white">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/helpdesk.banner.png"
+          alt="Pixanto"
+          className="w-full h-full object-contain"
+        />
       </div>
     </div>
   );

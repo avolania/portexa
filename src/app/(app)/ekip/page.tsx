@@ -165,7 +165,7 @@ function AddMemberModal({
   existingEmails,
 }: {
   onClose: () => void;
-  onAdd: (m: TeamMember) => void;
+  onAdd: (m: TeamMember) => Promise<void>;
   existingEmails: string[];
 }) {
   const profiles = useAuthStore((s) => s.profiles);
@@ -175,6 +175,7 @@ function AddMemberModal({
   const [selectedRole, setSelectedRole] = useState<UserRole>("member");
   const [form, setForm] = useState({ name: "", email: "", title: "", department: "", role: "member" as UserRole });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   // Kayıtlı kullanıcılar — ekipte olmayanlar
   const available = Object.values(profiles).filter(
@@ -190,42 +191,58 @@ function AddMemberModal({
     );
   });
 
-  const handleAddRegistered = () => {
-    const p = profiles[selected!];
+  const handleAddRegistered = async () => {
+    const p = Object.values(profiles).find((p) => p.email === selected);
     if (!p) return;
-    onAdd({
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      title: p.title,
-      department: p.department,
-      role: selectedRole,
-      projectIds: [],
-      status: "active",
-      joinedAt: new Date().toISOString(),
-    });
-    onClose();
+    setLoading(true);
+    setError("");
+    try {
+      await onAdd({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        title: p.title,
+        department: p.department,
+        role: selectedRole,
+        projectIds: [],
+        status: "active",
+        joinedAt: new Date().toISOString(),
+      });
+      onClose();
+    } catch {
+      setError("Üye eklenirken hata oluştu. Lütfen tekrar deneyin.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddManual = () => {
+  const handleAddManual = async () => {
     if (!form.name.trim() || !form.email.trim()) { setError("Ad ve e-posta zorunludur."); return; }
-    onAdd({
-      id: crypto.randomUUID(),
-      name: form.name.trim(),
-      email: form.email.trim(),
-      title: form.title.trim() || undefined,
-      department: form.department.trim() || undefined,
-      role: form.role,
-      projectIds: [],
-      status: "pending",
-      joinedAt: new Date().toISOString(),
-    });
-    onClose();
+    setLoading(true);
+    setError("");
+    try {
+      await onAdd({
+        id: crypto.randomUUID(),
+        name: form.name.trim(),
+        email: form.email.trim(),
+        title: form.title.trim() || undefined,
+        department: form.department.trim() || undefined,
+        role: form.role,
+        projectIds: [],
+        status: "pending",
+        joinedAt: new Date().toISOString(),
+      });
+      onClose();
+    } catch {
+      setError("Üye eklenirken hata oluştu. Lütfen tekrar deneyin.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-bold text-gray-900">Üye Ekle</h2>
@@ -364,26 +381,28 @@ function AddMemberModal({
 
         {/* Footer */}
         <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
-          <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100">
+          <button onClick={onClose} disabled={loading} className="flex-1 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100 disabled:opacity-50">
             İptal
           </button>
           {tab === "registered" ? (
             <button
               onClick={handleAddRegistered}
-              disabled={!selected}
+              disabled={!selected || loading}
               className="flex-1 py-2.5 text-sm bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              Ekibe Ekle
+              {loading ? "Ekleniyor..." : "Ekibe Ekle"}
             </button>
           ) : (
             <button
               onClick={handleAddManual}
-              className="flex-1 py-2.5 text-sm bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors"
+              disabled={loading}
+              className="flex-1 py-2.5 text-sm bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
-              Ekle
+              {loading ? "Ekleniyor..." : "Ekle"}
             </button>
           )}
         </div>
+        {error && <p className="text-sm text-red-500 text-center pb-3">{error}</p>}
       </div>
     </div>
   );
@@ -422,7 +441,7 @@ function InviteModal({ onClose, orgId, orgName, invitedBy }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-bold text-gray-900">E-posta ile Davet Gönder</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
@@ -690,7 +709,7 @@ export default function EkipPage() {
       {showAdd && (
         <AddMemberModal
           onClose={() => setShowAdd(false)}
-          onAdd={addMember}
+          onAdd={(m) => addMember(m)}
           existingEmails={members.map((m) => m.email)}
         />
       )}

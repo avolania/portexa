@@ -31,6 +31,11 @@ export interface ApprovalWorkflowStep {
   approverType: ApproverStepType;
   /** Sadece approverType === 'user' için */
   userId?: string;
+  /**
+   * Önce bu sabit kullanıcı denenir; atanmamışsa itsmRole veya groupId'ye düşer.
+   * approverType ne olursa olsun geçerlidir.
+   */
+  fixedUserId?: string;
   /** Sadece approverType === 'role' için */
   itsmRole?: ITSMRole;
   /** Sadece approverType === 'group' için */

@@ -295,6 +295,7 @@ function IncidentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (n
     id: name, icon: getCategoryIcon(name), label: name, desc: '',
   }));
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const pendingFilesRef = useRef<File[]>([]);
 
@@ -311,25 +312,31 @@ function IncidentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (n
   const handleSubmit = async () => {
     if (!user || !canSubmit || impactIdx === null || urgencyIdx === null) return;
     setSaving(true);
-    const incident = await create({
-      callerId:         user.id,
-      reportedById:     user.id,
-      category,
-      sapCategory:      sapCategory || undefined,
-      sapModule:        sapModule   || undefined,
-      impact:           IMPACT_OPTIONS[impactIdx].value,
-      urgency:          URGENCY_OPTIONS[urgencyIdx].value,
-      shortDescription: shortDesc,
-      description,
-    });
-    const filesToUpload = pendingFilesRef.current.length > 0 ? pendingFilesRef.current : pendingFiles;
-    if (incident && filesToUpload.length > 0) {
-      for (const file of filesToUpload) {
-        await addAttachment(incident.id, file);
+    setSaveError("");
+    try {
+      const incident = await create({
+        callerId:         user.id,
+        reportedById:     user.id,
+        category,
+        sapCategory:      sapCategory || undefined,
+        sapModule:        sapModule   || undefined,
+        impact:           IMPACT_OPTIONS[impactIdx].value,
+        urgency:          URGENCY_OPTIONS[urgencyIdx].value,
+        shortDescription: shortDesc,
+        description,
+      });
+      const filesToUpload = pendingFilesRef.current.length > 0 ? pendingFilesRef.current : pendingFiles;
+      if (incident && filesToUpload.length > 0) {
+        for (const file of filesToUpload) {
+          await addAttachment(incident.id, file);
+        }
       }
+      if (incident) onSuccess(incident.number);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Kayıt sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    if (incident) onSuccess(incident.number);
   };
 
   return (
@@ -471,7 +478,13 @@ function IncidentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (n
       </div>
 
       {/* Submit */}
-      <div className="pt-5 flex items-center justify-between">
+      <div className="pt-5 space-y-3">
+        {saveError && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <span>⚠️</span> {saveError}
+          </div>
+        )}
+        <div className="flex items-center justify-between">
         <p className="text-xs text-gray-400">
           {!category && "Kategori seçilmedi · "}
           {impactIdx === null && "Etki seçilmedi · "}
@@ -486,6 +499,7 @@ function IncidentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (n
         >
           {saving ? "Kaydediliyor..." : "Olay Bildir"}
         </button>
+        </div>
       </div>
     </div>
   );
@@ -505,6 +519,7 @@ function ServiceRequestForm({ onBack, onSuccess }: { onBack: () => void; onSucce
   }));
   const [step, setStep]                 = useState(1);
   const [saving, setSaving]             = useState(false);
+  const [saveError, setSaveError]       = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const [requestType, setRequestType]   = useState("");
@@ -525,33 +540,39 @@ function ServiceRequestForm({ onBack, onSuccess }: { onBack: () => void; onSucce
   const handleSubmit = async () => {
     if (!user || !canSubmit) return;
     setSaving(true);
-    const desc = [
-      description,
-      forSomeoneElse && forWhom ? `Talep edilen kişi: ${forWhom}` : "",
-      desiredDate ? `İstenen tamamlanma tarihi: ${desiredDate}` : "",
-    ].filter(Boolean).join("\n\n");
+    setSaveError("");
+    try {
+      const desc = [
+        description,
+        forSomeoneElse && forWhom ? `Talep edilen kişi: ${forWhom}` : "",
+        desiredDate ? `İstenen tamamlanma tarihi: ${desiredDate}` : "",
+      ].filter(Boolean).join("\n\n");
 
-    const sr = await create({
-      requestedForId:   user.id,
-      requestedById:    user.id,
-      requestType,
-      category:         requestType,
-      sapCategory:      sapCategory || undefined,
-      sapModule:        sapModule   || undefined,
-      impact,
-      urgency,
-      shortDescription: shortDesc,
-      description:      desc,
-      justification:    justification || undefined,
-      approvalRequired: false,
-    });
-    if (sr && pendingFiles.length > 0) {
-      for (const file of pendingFiles) {
-        await addAttachment(sr.id, file);
+      const sr = await create({
+        requestedForId:   user.id,
+        requestedById:    user.id,
+        requestType,
+        category:         requestType,
+        sapCategory:      sapCategory || undefined,
+        sapModule:        sapModule   || undefined,
+        impact,
+        urgency,
+        shortDescription: shortDesc,
+        description:      desc,
+        justification:    justification || undefined,
+        approvalRequired: false,
+      });
+      if (sr && pendingFiles.length > 0) {
+        for (const file of pendingFiles) {
+          await addAttachment(sr.id, file);
+        }
       }
+      if (sr) onSuccess(sr.number);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Kayıt sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    if (sr) onSuccess(sr.number);
   };
 
   return (
@@ -778,6 +799,11 @@ function ServiceRequestForm({ onBack, onSuccess }: { onBack: () => void; onSucce
             )}
           </div>
 
+          {saveError && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <span>⚠️</span> {saveError}
+            </div>
+          )}
           <div className="flex justify-between pt-2">
             <button onClick={() => setStep(1)} className="btn-secondary flex items-center gap-2">
               <ChevronLeft className="w-4 h-4" /> Geri

@@ -138,3 +138,23 @@
     color: #059669;
   }
 }
+
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; inset: 0; }
+
+  .print\:hidden { display: none !important; }
+
+  /* Tüm içerik görünsün, overflow kesilmesin */
+  .overflow-y-auto { overflow: visible !important; }
+  .overflow-hidden { overflow: visible !important; }
+
+  /* Her bölüm yeni sayfada başlasın */
+  .report-section { page-break-inside: avoid; break-inside: avoid; }
+
+  /* Renkler baskıda da görünsün */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  @page { size: A4 landscape; margin: 10mm; }
+}

@@ -22,6 +22,7 @@ const PRIORITY_META: Record<Priority, { label: string; color: string }> = {
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
+  system_admin: "Sistem Yöneticisi",
   admin:    "Admin",
   pm:       "Proje Yöneticisi",
   member:   "Üye",
@@ -76,7 +77,7 @@ function NewRequestModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white">
           <h2 className="text-base font-semibold text-gray-900">Yeni Talep Oluştur</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">✕</button>
@@ -194,8 +195,8 @@ function StepReviewModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-5 space-y-4">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md shadow-xl p-5 space-y-4">
         <h2 className="text-base font-semibold text-gray-900">
           {action === "approved" ? "✅" : "❌"} {stepLabel}
         </h2>
@@ -255,8 +256,8 @@ function ConvertModal({ request, onClose }: { request: WorkflowRequest; onClose:
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-5 space-y-4">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md shadow-xl p-5 space-y-4">
         <h2 className="text-base font-semibold text-gray-900">🚀 Projeye Dönüştür</h2>
         <p className="text-sm text-gray-500">Bu fikir yeni bir proje olarak oluşturulacak.</p>
         <form onSubmit={handleConvert} className="space-y-3">

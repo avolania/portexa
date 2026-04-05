@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import type { User } from "@/types";
+import type { User, Organization } from "@/types";
 import { supabase } from "@/lib/supabase";
-import { dbLoadProfiles, dbLoadProfile, dbUpsertProfile } from "@/lib/db";
+import { dbLoadProfiles, dbLoadProfile, dbUpsertProfile, dbLoadOrg, dbUpsertOrg } from "@/lib/db";
 
 interface AuthState {
   user: User | null;
@@ -11,7 +11,7 @@ interface AuthState {
 
   initAuth: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<string | null>;
-  signUp: (email: string, password: string, profileData: Partial<Omit<User, "id" | "email">>) => Promise<string | null>;
+  signUp: (email: string, password: string, profileData: Partial<Omit<User, "id" | "email">> & { orgName?: string; orgIndustry?: string; orgSize?: Organization["size"]; orgWebsite?: string }) => Promise<string | null>;
   signUpWithInvitation: (token: string, name: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<string | null>;
@@ -28,6 +28,27 @@ async function buildAndSaveProfile(
   meta: Record<string, unknown>
 ): Promise<User> {
   const orgId = (meta.orgId as string | undefined) ?? crypto.randomUUID();
+
+  // Org kaydını oluştur/güncelle — tablo henüz yoksa sessizce geç
+  try {
+    const existingOrg = await dbLoadOrg(orgId);
+    if (!existingOrg) {
+      const org: Organization = {
+        id: orgId,
+        name: (meta.orgName as string | undefined) ?? (meta.company as string | undefined) ?? "Organizasyon",
+        industry: meta.orgIndustry as string | undefined,
+        size: meta.orgSize as Organization["size"] | undefined,
+        plan: "free",
+        status: "trial",
+        website: meta.orgWebsite as string | undefined,
+        createdAt: new Date().toISOString(),
+      };
+      await dbUpsertOrg(orgId, org);
+    }
+  } catch {
+    // organizations tablosu henüz oluşturulmamışsa auth akışı engellenmez
+  }
+
   const profile: User = {
     id: userId,
     email,
@@ -35,7 +56,7 @@ async function buildAndSaveProfile(
     role: (meta.role as User["role"] | undefined) ?? "admin",
     language: "tr",
     orgId,
-    company: meta.company as string | undefined,
+    company: (meta.company as string | undefined) ?? (meta.orgName as string | undefined),
     title: meta.title as string | undefined,
     department: meta.department as string | undefined,
     phone: meta.phone as string | undefined,
@@ -99,7 +120,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signUp: async (email, password, profileData) => {
-    // Yeni org oluştur — orgId metadata'ya eklenir, email onayı sonrası profil yaratılır
+    // Yeni org oluştur — orgId metadata'ya eklenir, email onayı sonrası profil + org yaratılır
     const orgId = crypto.randomUUID();
     const { error } = await supabase.auth.signUp({
       email,
@@ -107,7 +128,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       options: {
         data: {
           name: profileData.name ?? "Kullanıcı",
-          company: profileData.company,
+          company: profileData.orgName ?? profileData.company,
+          orgName: profileData.orgName ?? profileData.company,
+          orgIndustry: profileData.orgIndustry,
+          orgSize: profileData.orgSize,
+          orgWebsite: profileData.orgWebsite,
           title: profileData.title,
           department: profileData.department,
           phone: profileData.phone,
@@ -121,38 +146,35 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signUpWithInvitation: async (token, name, password) => {
-    // Token'ı validate et ve org bilgisini al
-    const res = await fetch(`/api/invite/validate?token=${encodeURIComponent(token)}`);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return (body.error as string | undefined) ?? "Davet geçersiz veya süresi dolmuş.";
-    }
-    const { email, orgId } = await res.json() as { email: string; orgId: string };
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name, orgId, role: "member" },
-      },
-    });
-    if (error) return error.message;
-
-    // Token'ı kullanıldı olarak işaretle
-    await fetch("/api/invite/accept", {
+    // Sunucu tarafında kullanıcıyı e-posta onayı olmadan oluştur
+    const res = await fetch("/api/invite/accept", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, name, password }),
     });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return (body.error as string | undefined) ?? "Hesap oluşturulamadı.";
+    }
+
+    // Hesap oluşturuldu — direkt giriş yap (e-posta onayı gerekmez)
+    const email = body.email as string;
+    if (email) {
+      await supabase.auth.signInWithPassword({ email, password });
+    }
 
     return null;
   },
 
   signOut: async () => {
     _signingOut = true;
-    await supabase.auth.signOut();
+    await Promise.race([
+      supabase.auth.signOut(),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
+    ]);
     if (typeof window !== "undefined") sessionStorage.clear();
     set({ user: null, isAuthenticated: false, profiles: {} });
+    _signingOut = false;
   },
 
   resetPassword: async (email) => {
@@ -178,15 +200,15 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     dbUpsertProfile(current.id, updated);
   },
 
-  updateProfile: (userId, data) =>
+  updateProfile: (emailKey, data) =>
     set((s) => {
-      const existing = s.profiles[userId];
+      const existing = s.profiles[emailKey];
       if (!existing) return {};
       const updated = { ...existing, ...data };
-      dbUpsertProfile(userId, updated);
+      dbUpsertProfile(existing.id, updated); // UUID kullan, email değil
       return {
-        profiles: { ...s.profiles, [userId]: updated },
-        user: s.user?.id === userId ? { ...s.user, ...data } : s.user,
+        profiles: { ...s.profiles, [emailKey]: updated },
+        user: s.user?.email === emailKey ? { ...s.user, ...data } : s.user,
       };
     }),
 }));

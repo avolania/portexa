@@ -15,7 +15,7 @@ import {
 interface TeamState {
   members: TeamMember[];
   load: () => Promise<void>;
-  addMember: (member: TeamMember) => void;
+  addMember: (member: TeamMember) => Promise<void>;
   updateMember: (id: string, data: Partial<TeamMember>) => void;
   removeMember: (id: string) => void;
   changeRole: (id: string, role: UserRole) => void;
@@ -37,10 +37,16 @@ export const useTeamStore = create<TeamState>()((set, get) => ({
     resetMembers(members);
   },
 
-  addMember: (member) => {
+  addMember: async (member) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ members: [...s.members, member] }));
-    createMember(member, orgId);
+    try {
+      await createMember(member, orgId);
+    } catch (err) {
+      // Geri al
+      set((s) => ({ members: s.members.filter((m) => m.id !== member.id) }));
+      throw err;
+    }
   },
 
   updateMember: (id, patch) =>

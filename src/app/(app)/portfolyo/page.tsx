@@ -174,8 +174,8 @@ function TableView({ projects }: { projects: Project[] }) {
   const allTasks = useProjectStore((s) => s.tasks);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-      <table className="w-full">
+    <div className="bg-white border border-gray-200 rounded-2xl overflow-x-auto">
+      <table className="w-full min-w-[700px]">
         <thead className="bg-gray-50 border-b border-gray-200">
           <tr>
             {["Proje", "Durum", "Öncelik", "İlerleme", "Görevler", "Bütçe", "Bitiş", "Tür"].map((h) => (
@@ -420,9 +420,10 @@ export default function PortfolyoPage() {
         </div>
         <Link
           href="/projeler/yeni"
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
         >
-          <Plus className="w-4 h-4" /> Yeni Proje
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Yeni Proje</span>
         </Link>
       </div>
 
@@ -430,9 +431,9 @@ export default function PortfolyoPage() {
       <SummaryBar projects={projects} />
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3">
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-xs">
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           <input
             value={search}
@@ -443,12 +444,12 @@ export default function PortfolyoPage() {
         </div>
 
         {/* Status filter */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto scrollbar-none">
           {(["all", "active", "at_risk", "on_hold", "completed"] as StatusFilter[]).map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+              className={`flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                 statusFilter === s ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"
               }`}
             >
@@ -463,7 +464,7 @@ export default function PortfolyoPage() {
             <button
               key={t}
               onClick={() => setTypeFilter(t)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+              className={`flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                 typeFilter === t ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"
               }`}
             >
@@ -473,7 +474,7 @@ export default function PortfolyoPage() {
         </div>
 
         {/* View toggle */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg ml-auto">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg sm:ml-auto self-end sm:self-auto">
           <button onClick={() => setView("grid")} title="Kart Görünümü"
             className={`p-1.5 rounded-md transition-all ${view === "grid" ? "bg-white shadow-sm text-indigo-700" : "text-gray-500"}`}>
             <LayoutGrid className="w-4 h-4" />
@@ -504,7 +505,7 @@ export default function PortfolyoPage() {
 
       {/* Views */}
       {view === "grid" && filtered.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((p) => <ProjectCard key={p.id} project={p} />)}
         </div>
       )}

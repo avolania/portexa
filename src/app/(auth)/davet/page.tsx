@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Lock, User, AlertCircle, CheckCircle } from "lucide-react";
+import { Lock, User, AlertCircle } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -32,7 +32,6 @@ function DavetContent() {
   const [inviteInfo, setInviteInfo] = useState<InviteInfo | null>(null);
   const [validateError, setValidateError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
 
   const {
     register,
@@ -65,7 +64,8 @@ function DavetContent() {
       setAuthError(error);
       return;
     }
-    setDone(true);
+    // Hesap oluşturuldu ve giriş yapıldı — dashboard'a yönlendir
+    router.push("/dashboard");
   };
 
   // Hata durumu
@@ -87,24 +87,6 @@ function DavetContent() {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
           <p className="text-gray-500">Davet doğrulanıyor...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Başarılı kayıt
-  if (done) {
-    return (
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
-          <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Hesabınız oluşturuldu!</h1>
-          <p className="text-gray-500 text-sm mb-6">
-            E-posta adresinize bir onay linki gönderdik. Onayladıktan sonra giriş yapabilirsiniz.
-          </p>
-          <Button onClick={() => router.push("/giris")} className="w-full">
-            Giriş Sayfasına Git
-          </Button>
         </div>
       </div>
     );

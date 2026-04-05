@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "pm" | "member" | "approver" | "viewer" | "end_user";
+export type UserRole = "system_admin" | "admin" | "pm" | "member" | "approver" | "viewer" | "end_user";
 
 // ─── Workflow Requests ─────────────────────────────────────────────────────────
 
@@ -118,6 +118,18 @@ export interface User {
   orgId: string;
 }
 
+export interface Organization {
+  id: string;
+  name: string;
+  industry?: string;
+  size?: "1-10" | "11-50" | "51-200" | "201-500" | "500+";
+  plan: "free" | "starter" | "pro" | "enterprise";
+  status: "active" | "trial" | "suspended";
+  website?: string;
+  address?: string;
+  createdAt: string;
+}
+
 export interface OrgInvitation {
   id: string;
   orgId: string;
@@ -178,6 +190,7 @@ export interface Project {
   progress: number;
   budget?: number;
   budgetUsed?: number;
+  currency?: string;
   managerId: string;
   members: string[];
   tags: string[];
@@ -249,7 +262,9 @@ export interface Comment {
 
 export interface Notification {
   id: string;
-  type: "task_assigned" | "task_updated" | "comment" | "deadline" | "budget_alert" | "mention";
+  type: "task_assigned" | "task_updated" | "comment" | "deadline" | "budget_alert" | "mention" | "approval_requested" | "approval_resolved";
+  /** Sadece approval bildirimleri için: hangi kullanıcıya ait */
+  recipientId?: string;
   title: string;
   message: string;
   read: boolean;

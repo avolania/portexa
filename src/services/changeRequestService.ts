@@ -77,7 +77,7 @@ export async function createChangeRequest(
     risk:        dto.risk,
     impact:      dto.impact,
     priority,
-    state:       ChangeRequestState.NEW,
+    state:       ChangeRequestState.PENDING_APPROVAL,
     requestedById:  dto.requestedById,
     changeManagerId: dto.changeManagerId,
     assignedToId:    dto.assignedToId,
@@ -90,7 +90,7 @@ export async function createChangeRequest(
     implementationPlan: dto.implementationPlan,
     backoutPlan:  dto.backoutPlan,
     testPlan:     dto.testPlan,
-    approvalState: ApprovalState.NOT_REQUESTED,
+    approvalState: ApprovalState.REQUESTED,
     approvers:    [],
     workNotes:    [],
     comments:     [],
@@ -98,6 +98,12 @@ export async function createChangeRequest(
     relatedIncidentIds: dto.relatedIncidentIds ?? [],
     timeline:     [
       { id: uuid(), type: TicketEventType.CREATED, actorId, actorName, timestamp: now },
+      ...(dto.sourceIncidentNumber ? [{
+        id: uuid(), type: TicketEventType.CONVERTED_FROM_INCIDENT,
+        actorId, actorName, timestamp: now,
+        note: `${dto.sourceIncidentNumber} numaralı incident'tan dönüştürüldü`,
+        newValue: dto.sourceIncidentNumber,
+      }] : []),
     ],
     createdAt: now,
     updatedAt: now,
@@ -113,12 +119,13 @@ export async function updateChangeRequest(
   id: string,
   dto: UpdateChangeRequestDto,
   current: ChangeRequest[],
+  orgId: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
   const now = new Date().toISOString();
   const updated: ChangeRequest = { ...existing, ...dto, updatedAt: now };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -130,6 +137,7 @@ export async function changeRequestStateTransition(
   current: ChangeRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
   note?: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
@@ -157,7 +165,7 @@ export async function changeRequestStateTransition(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -169,6 +177,7 @@ export async function approveChangeRequest(
   current: ChangeRequest[],
   approverId: string,
   approverName: string,
+  orgId: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
@@ -193,7 +202,7 @@ export async function approveChangeRequest(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -203,6 +212,7 @@ export async function rejectChangeRequest(
   current: ChangeRequest[],
   approverId: string,
   approverName: string,
+  orgId: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
@@ -228,7 +238,7 @@ export async function rejectChangeRequest(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -240,6 +250,7 @@ export async function closeChangeRequest(
   current: ChangeRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
@@ -261,7 +272,7 @@ export async function closeChangeRequest(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -273,6 +284,7 @@ export async function addCRWorkNote(
   current: ChangeRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
@@ -283,7 +295,7 @@ export async function addCRWorkNote(
     timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -293,6 +305,7 @@ export async function addCRComment(
   current: ChangeRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
@@ -303,7 +316,7 @@ export async function addCRComment(
     timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -315,6 +328,7 @@ export async function linkIncidentToCR(
   current: ChangeRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
@@ -330,7 +344,7 @@ export async function linkIncidentToCR(
     }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -373,6 +387,7 @@ export async function removeChangeRequestAttachment(
   id: string,
   attachmentId: string,
   current: ChangeRequest[],
+  orgId: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
@@ -382,7 +397,7 @@ export async function removeChangeRequestAttachment(
     attachments: (existing.attachments ?? []).filter((a) => a.id !== attachmentId),
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 

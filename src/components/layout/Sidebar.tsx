@@ -8,7 +8,8 @@ import {
   Users, BarChart3, Settings, User, ChevronLeft,
   ChevronRight, ShieldCheck, HeadphonesIcon,
   AlertCircle, GitPullRequest, LifeBuoy, Ticket,
-  SlidersHorizontal, ClipboardList, ChevronDown,
+  SlidersHorizontal, ClipboardList, ChevronDown, Wallet,
+  Globe, Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -26,7 +27,7 @@ const endUserNav = [
 // ─── Nav config ───────────────────────────────────────────────────────────────
 
 const standaloneItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/dashboard", icon: LayoutDashboard, label: "Ana Sayfa" },
 ];
 
 interface NavItem {
@@ -49,13 +50,14 @@ const navSections: NavSection[] = [
     id: "ppm",
     label: "Proje Yönetimi",
     icon: FolderKanban,
-    defaultOpen: true,
+    defaultOpen: false,
     items: [
       { href: "/projeler",    icon: FolderKanban, label: "Projeler"    },
       { href: "/portfolyo",   icon: Briefcase,    label: "Portföy"     },
       { href: "/gorevler",    icon: CheckSquare,  label: "Görevler"    },
       { href: "/ekip",        icon: Users,        label: "Ekip"        },
       { href: "/aktiviteler", icon: Clock,        label: "Aktiviteler" },
+      { href: "/butce",       icon: Wallet,       label: "Bütçe"       },
       { href: "/raporlar",    icon: BarChart3,    label: "Raporlar"    },
     ],
   },
@@ -63,12 +65,13 @@ const navSections: NavSection[] = [
     id: "itsm",
     label: "ITSM",
     icon: HeadphonesIcon,
-    defaultOpen: true,
+    defaultOpen: false,
     items: [
-      { href: "/itsm/portal",           icon: LifeBuoy,       label: "Destek Portalı"      },
-      { href: "/itsm/incidents",        icon: AlertCircle,    label: "Incident'lar"         },
-      { href: "/itsm/service-requests", icon: ClipboardList,  label: "Servis Talepleri"     },
-      { href: "/itsm/change-requests",  icon: GitPullRequest, label: "Değişiklikler"        },
+      { href: "/itsm",                   icon: LayoutDashboard, label: "ITSM Dashboard"  },
+      { href: "/itsm/portal",           icon: LifeBuoy,       label: "Destek Portalı"  },
+      { href: "/itsm/incidents",        icon: AlertCircle,    label: "Incident'lar"     },
+      { href: "/itsm/service-requests", icon: ClipboardList,  label: "Servis Talepleri" },
+      { href: "/itsm/change-requests",  icon: GitPullRequest, label: "Değişiklikler"    },
     ],
   },
   {
@@ -77,7 +80,7 @@ const navSections: NavSection[] = [
     icon: ShieldCheck,
     defaultOpen: false,
     items: [
-      { href: "/yetkilendirme", icon: ShieldCheck,       label: "Yetkilendirme"  },
+      { href: "/yetkilendirme", icon: ShieldCheck,       label: "Yetkilendirme" },
       { href: "/itsm/settings", icon: SlidersHorizontal, label: "ITSM Ayarları", adminOnly: true },
     ],
   },
@@ -94,8 +97,13 @@ export default function Sidebar() {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const [collapsed, setCollapsed] = useState(false);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>(
-    Object.fromEntries(navSections.map((s) => [s.id, s.defaultOpen]))
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(
+      navSections.map((s) => [
+        s.id,
+        s.items.some((i) => pathname.startsWith(i.href)),
+      ])
+    )
   );
 
   const toggleSection = (id: string) => {
@@ -103,6 +111,7 @@ export default function Sidebar() {
   };
 
   const isAdmin = user?.role === "admin";
+  const isSystemAdmin = user?.role === "system_admin";
 
   return (
     <aside
@@ -112,11 +121,14 @@ export default function Sidebar() {
       )}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-3 py-4 border-b border-gray-100">
-        <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-[#1a2d5a] flex items-center justify-center overflow-hidden">
-          <Image src="/logo.png" alt="Pixanto" width={36} height={36} unoptimized className="object-cover w-full h-full" />
-        </div>
-        {!collapsed && <span className="text-base font-bold text-[#1a2d5a] truncate">Pixanto</span>}
+      <div className="flex items-center px-4 py-4 border-b border-gray-100 overflow-hidden h-20">
+        <Link href="/dashboard">
+          {collapsed ? (
+            <Image src="/logo.png" alt="Pixanto" width={44} height={44} unoptimized className="w-11 h-11 object-contain mx-auto" />
+          ) : (
+            <Image src="/logo.png" alt="Pixanto" width={400} height={100} unoptimized className="h-14 w-auto object-contain object-left" />
+          )}
+        </Link>
       </div>
 
       {/* Nav */}
@@ -158,13 +170,51 @@ export default function Sidebar() {
               );
             })}
 
+            {/* Platform Yönetimi — sadece system_admin */}
+            {isSystemAdmin && (
+              <div className="pt-2">
+                {collapsed ? (
+                  <div className="border-t border-gray-100 mb-1" />
+                ) : (
+                  <button
+                    onClick={() => toggleSection("platform")}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-2 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                      pathname.startsWith("/platform") ? "text-rose-500" : "text-gray-400 hover:text-gray-500"
+                    )}
+                  >
+                    <Globe className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="flex-1 text-left">Platform Yönetimi</span>
+                    <ChevronDown
+                      className={cn(
+                        "w-3.5 h-3.5 transition-transform duration-200",
+                        !(openSections["platform"] ?? true) && "-rotate-90"
+                      )}
+                    />
+                  </button>
+                )}
+                {(collapsed || (openSections["platform"] ?? true)) && (
+                  <div className="space-y-0.5 mt-0.5">
+                    <Link
+                      href="/platform"
+                      className={cn("sidebar-item", pathname.startsWith("/platform") && "active", collapsed ? "justify-center px-2" : "pl-5")}
+                      title={collapsed ? "Organizasyonlar" : undefined}
+                    >
+                      <Building2 className="w-4 h-4 flex-shrink-0" />
+                      {!collapsed && <span>Organizasyonlar</span>}
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Collapsible sections */}
             {navSections.map((section) => {
               const isOpen = collapsed || (openSections[section.id] ?? section.defaultOpen);
               const SectionIcon = section.icon;
               const sectionActive = section.items.some((i) => pathname.startsWith(i.href));
               const visibleItems = section.items.filter(
-                (i) => !i.adminOnly || isAdmin
+                (i) => !i.adminOnly || isAdmin || isSystemAdmin
               );
 
               return (
@@ -259,7 +309,7 @@ export default function Sidebar() {
       {/* Collapse toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-16 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-shadow z-10"
+        className="absolute -right-3 top-[68px] w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-shadow z-10"
       >
         {collapsed
           ? <ChevronRight className="w-3.5 h-3.5 text-gray-500" />

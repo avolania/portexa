@@ -6,6 +6,7 @@ import {
   Circle, AlertCircle, ChevronDown, Calendar, FileText,
   BarChart3, Users, LayoutDashboard, ListOrdered,
   TrendingUp, DollarSign, Target, Activity,
+  Save, Download,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
@@ -16,6 +17,7 @@ import { useProjectStore } from "@/store/useProjectStore";
 import { useGovernanceStore } from "@/store/useGovernanceStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import type { Report, ReportSection, ReportStatus, ReportType } from "@/types";
+import { exportReportPDF, exportReportPPTX } from "@/lib/reportExport";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -346,7 +348,7 @@ function SectionEditor({
   onChange: (content: string) => void;
 }) {
   return (
-    <div className="mb-6">
+    <div className="mb-6 report-section">
       <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block" />
         {section.label}
@@ -361,6 +363,163 @@ function SectionEditor({
   );
 }
 
+// ─── Report Visuals ───────────────────────────────────────────────────────────
+
+function ReportVisuals({ report }: { report: Report }) {
+  const { projects, tasks } = useProjectStore();
+  const govItems = useGovernanceStore((s) => s.items);
+  const proj = projects.find((p) => p.id === report.projectId);
+  if (!proj) return null;
+
+  const projTasks = tasks.filter((t) => t.projectId === proj.id);
+  const done    = projTasks.filter((t) => t.status === "done").length;
+  const inProg  = projTasks.filter((t) => t.status === "in_progress").length;
+  const review  = projTasks.filter((t) => t.status === "review").length;
+  const todo    = projTasks.filter((t) => t.status === "todo").length;
+  const overdue = projTasks.filter((t) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "done").length;
+  const openRisks  = govItems.filter((g) => g.projectId === proj.id && g.category === "risk"  && g.status === "open").length;
+  const openIssues = govItems.filter((g) => g.projectId === proj.id && g.category === "issue" && g.status === "open").length;
+  const budgetPct = proj.budget && proj.budget > 0 ? Math.round(((proj.budgetUsed ?? 0) / proj.budget) * 100) : null;
+
+  const taskPie = [
+    { name: "Tamamlanan", value: done,   color: "#10b981" },
+    { name: "Devam",      value: inProg, color: "#6366f1" },
+    { name: "İnceleme",   value: review, color: "#f59e0b" },
+    { name: "Bekleyen",   value: todo,   color: "#d1d5db" },
+  ].filter((d) => d.value > 0);
+
+  const sprintData = report.type === "steerco"
+    ? Array.from(new Set(projTasks.filter((t) => t.sprint).map((t) => t.sprint!)))
+        .sort((a, b) => a - b).slice(-8)
+        .map((s) => {
+          const st = projTasks.filter((t) => t.sprint === s);
+          return {
+            name: `S${s}`,
+            Tamamlanan: st.filter((t) => t.status === "done").length,
+            Devam: st.filter((t) => t.status === "in_progress").length,
+            Bekleyen: st.filter((t) => t.status === "todo").length,
+          };
+        })
+    : [];
+
+  return (
+    <div className="mb-8 space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Progress */}
+        <div className="col-span-2 bg-gradient-to-br from-indigo-50 to-white rounded-xl p-5 border border-indigo-100">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Proje İlerlemesi</p>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-4xl font-bold text-gray-900">%{proj.progress}</span>
+            <span className={`text-sm font-semibold px-3 py-1 rounded-full ${
+              proj.status === "at_risk" ? "bg-red-100 text-red-700" :
+              proj.status === "completed" ? "bg-blue-100 text-blue-700" :
+              "bg-emerald-100 text-emerald-700"
+            }`}>
+              {proj.status === "active" ? "Aktif" : proj.status === "at_risk" ? "⚠ Risk" : proj.status === "completed" ? "Tamamlandı" : "Beklemede"}
+            </span>
+          </div>
+          <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden">
+            <div className={`h-full rounded-full ${proj.status === "at_risk" ? "bg-red-500" : "bg-indigo-500"}`}
+              style={{ width: `${proj.progress}%` }} />
+          </div>
+          {proj.endDate && (
+            <p className="text-xs text-gray-400 mt-2">Hedef Bitiş: {new Date(proj.endDate).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" })}</p>
+          )}
+        </div>
+
+        {/* Task pie */}
+        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Görev Durumu</p>
+          {projTasks.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={80}>
+                <PieChart>
+                  <Pie data={taskPie} cx="50%" cy="50%" innerRadius={22} outerRadius={36} dataKey="value" strokeWidth={0}>
+                    {taskPie.map((e, i) => <Cell key={i} fill={e.color} />)}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1 mt-1">
+                {taskPie.map((d) => (
+                  <div key={d.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
+                      <span className="text-gray-500">{d.name}</span>
+                    </div>
+                    <span className="font-semibold text-gray-700">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : <p className="text-sm text-gray-400 mt-6 text-center">Görev yok</p>}
+        </div>
+
+        {/* Risk & Issues */}
+        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Risk & Sorunlar</p>
+          <div className="space-y-3">
+            {[
+              { label: "Açık Risk",      value: openRisks,  danger: openRisks > 0,  warn: false },
+              { label: "Açık Sorun",     value: openIssues, danger: false, warn: openIssues > 0 },
+              { label: "Geciken Görev",  value: overdue,    danger: false, warn: overdue > 0 },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">{row.label}</span>
+                <span className={`text-xl font-bold ${row.danger ? "text-red-600" : row.warn ? "text-amber-600" : "text-emerald-600"}`}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Budget bar */}
+      {budgetPct !== null && (
+        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Bütçe Kullanımı</p>
+            <span className="text-xs text-gray-400">{(proj.budgetUsed ?? 0).toLocaleString("tr-TR")} ₺ / {proj.budget!.toLocaleString("tr-TR")} ₺</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+              <div className={`h-full rounded-full ${budgetPct > 90 ? "bg-red-500" : budgetPct > 75 ? "bg-amber-500" : "bg-emerald-500"}`}
+                style={{ width: `${Math.min(budgetPct, 100)}%` }} />
+            </div>
+            <span className={`text-xl font-bold w-14 text-right ${budgetPct > 90 ? "text-red-600" : budgetPct > 75 ? "text-amber-600" : "text-emerald-600"}`}>
+              %{budgetPct}
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            {budgetPct < 100
+              ? `Kalan: ${(proj.budget! - (proj.budgetUsed ?? 0)).toLocaleString("tr-TR")} ₺`
+              : "⚠ Bütçe aşıldı"}
+          </p>
+        </div>
+      )}
+
+      {/* Steerco: sprint breakdown bar */}
+      {report.type === "steerco" && sprintData.length > 0 && (
+        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Sprint Bazlı Görev Dağılımı</p>
+          <ResponsiveContainer width="100%" height={140}>
+            <BarChart data={sprintData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="Tamamlanan" fill="#10b981" stackId="a" radius={[0,0,0,0]} />
+              <Bar dataKey="Devam"      fill="#6366f1" stackId="a" radius={[0,0,0,0]} />
+              <Bar dataKey="Bekleyen"  fill="#d1d5db" stackId="a" radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Report Editor ────────────────────────────────────────────────────────────
 
 function ReportEditor({
@@ -371,10 +530,61 @@ function ReportEditor({
   onBack: () => void;
 }) {
   const { updateReport, updateSection, deleteReport } = useReportStore();
-  const { projects } = useProjectStore();
+  const { projects, tasks } = useProjectStore();
+  const govItems = useGovernanceStore((s) => s.items);
   const proj = projects.find((p) => p.id === report.projectId);
 
+  const [saved, setSaved]           = useState(false);
+  const [exporting, setExporting]   = useState<"pdf" | "pptx" | null>(null);
+
+  const buildStats = useCallback(() => {
+    if (!proj) return null;
+    const pt = tasks.filter((t) => t.projectId === proj.id);
+    return {
+      progress:   proj.progress,
+      status:     proj.status,
+      done:       pt.filter((t) => t.status === "done").length,
+      inProg:     pt.filter((t) => t.status === "in_progress").length,
+      todo:       pt.filter((t) => t.status === "todo").length,
+      overdue:    pt.filter((t) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "done").length,
+      openRisks:  govItems.filter((g) => g.projectId === proj.id && g.category === "risk"  && g.status === "open").length,
+      openIssues: govItems.filter((g) => g.projectId === proj.id && g.category === "issue" && g.status === "open").length,
+      budget:     proj.budget,
+      budgetUsed: proj.budgetUsed,
+      endDate:    proj.endDate,
+    };
+  }, [proj, tasks, govItems]);
+
+  const handleSave = useCallback(() => {
+    updateReport(report.id, { updatedAt: new Date().toISOString() });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }, [updateReport, report.id]);
+
   const handlePrint = useCallback(() => window.print(), []);
+
+  const handleExportPDF = useCallback(async () => {
+    const stats = buildStats();
+    if (!stats) return;
+    setExporting("pdf");
+    try {
+      await exportReportPDF(report, proj?.name ?? "Portföy", stats);
+    } finally {
+      setExporting(null);
+    }
+  }, [report, proj, buildStats]);
+
+  const handleExportPPTX = useCallback(async () => {
+    const stats = buildStats();
+    if (!stats) return;
+    setExporting("pptx");
+    try {
+      await exportReportPPTX(report, proj?.name ?? "Portföy", stats);
+    } finally {
+      setExporting(null);
+    }
+  }, [report, proj, buildStats]);
+
   const handleDelete = useCallback(() => {
     if (confirm("Bu raporu silmek istediğinize emin misiniz?")) {
       deleteReport(report.id);
@@ -392,7 +602,7 @@ function ReportEditor({
         >
           <ArrowLeft className="w-4 h-4" /> Raporlara Dön
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <button
             onClick={handleDelete}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
@@ -403,13 +613,44 @@ function ReportEditor({
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
           >
-            <Printer className="w-3.5 h-3.5" /> Yazdır / PDF
+            <Printer className="w-3.5 h-3.5" /> Yazdır
+          </button>
+          {proj && (
+            <>
+              <button
+                onClick={handleExportPDF}
+                disabled={exporting !== null}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {exporting === "pdf" ? "Oluşturuluyor…" : "PDF Sunum"}
+              </button>
+              <button
+                onClick={handleExportPPTX}
+                disabled={exporting !== null}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-violet-700 border border-violet-200 rounded-lg hover:bg-violet-50 disabled:opacity-50"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                {exporting === "pptx" ? "Oluşturuluyor…" : "PowerPoint"}
+              </button>
+            </>
+          )}
+          <button
+            onClick={handleSave}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg font-medium transition-all ${
+              saved
+                ? "bg-emerald-500 text-white border border-emerald-500"
+                : "bg-indigo-600 text-white hover:bg-indigo-700"
+            }`}
+          >
+            <Save className="w-3.5 h-3.5" />
+            {saved ? "Kaydedildi ✓" : "Kaydet"}
           </button>
         </div>
       </div>
 
       {/* Report card */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 print:shadow-none print:border-none">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 print:shadow-none print:border-none print-area">
         {/* Header */}
         <div className="border-b border-gray-100 pb-6 mb-8">
           <div className="flex items-start justify-between gap-4">
@@ -438,7 +679,19 @@ function ReportEditor({
           </div>
         </div>
 
+        {/* Visuals */}
+        {(report.type === "weekly" || report.type === "steerco") && report.projectId && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Proje Özeti</h2>
+              <ReportVisuals report={report} />
+            </div>
+            <div className="border-t border-gray-100 mb-6" />
+          </>
+        )}
+
         {/* Sections */}
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Rapor İçeriği</h2>
         {report.sections.map((section) => (
           <SectionEditor
             key={section.id}
@@ -545,7 +798,7 @@ function NewReportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-5">
           {type === "weekly" ? "Haftalık Statü Raporu" : type === "steerco" ? "Aylık Steerco Raporu" : "Dashboard Raporu"} Oluştur
         </h2>

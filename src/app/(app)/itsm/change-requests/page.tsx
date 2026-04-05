@@ -18,6 +18,7 @@ function NewCRModal({ onClose }: { onClose: () => void }) {
   const { create, addAttachment } = useChangeRequestStore();
   const { user } = useAuthStore();
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [form, setForm] = useState({
     shortDescription:   "",
@@ -39,33 +40,39 @@ function NewCRModal({ onClose }: { onClose: () => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.shortDescription.trim() || !form.plannedStartDate || !form.plannedEndDate) return;
+    setSaveError(null);
     setSaving(true);
-    const dto: CreateChangeRequestDto = {
-      requestedById:      user?.id ?? "",
-      changeManagerId:    user?.id ?? "",
-      type:               form.type,
-      category:           form.category || "Genel",
-      sapCategory:        form.sapCategory || undefined,
-      sapModule:          form.sapModule   || undefined,
-      risk:               form.risk,
-      impact:             form.impact,
-      shortDescription:   form.shortDescription,
-      description:        form.description,
-      justification:      form.justification,
-      plannedStartDate:   new Date(form.plannedStartDate).toISOString(),
-      plannedEndDate:     new Date(form.plannedEndDate).toISOString(),
-      implementationPlan: form.implementationPlan || "—",
-      backoutPlan:        form.backoutPlan        || "—",
-      testPlan:           form.testPlan           || undefined,
-    };
-    const cr = await create(dto);
-    if (cr && pendingFiles.length > 0) {
-      for (const file of pendingFiles) {
-        await addAttachment(cr.id, file);
+    try {
+      const dto: CreateChangeRequestDto = {
+        requestedById:      user?.id ?? "",
+        changeManagerId:    user?.id ?? "",
+        type:               form.type,
+        category:           form.category || "Genel",
+        sapCategory:        form.sapCategory || undefined,
+        sapModule:          form.sapModule   || undefined,
+        risk:               form.risk,
+        impact:             form.impact,
+        shortDescription:   form.shortDescription,
+        description:        form.description,
+        justification:      form.justification,
+        plannedStartDate:   new Date(form.plannedStartDate + 'T00:00:00').toISOString(),
+        plannedEndDate:     new Date(form.plannedEndDate + 'T23:59:59').toISOString(),
+        implementationPlan: form.implementationPlan || "—",
+        backoutPlan:        form.backoutPlan        || "—",
+        testPlan:           form.testPlan           || undefined,
+      };
+      const cr = await create(dto);
+      if (cr && pendingFiles.length > 0) {
+        for (const file of pendingFiles) {
+          await addAttachment(cr.id, file);
+        }
       }
+      onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Kayıt sırasında bir hata oluştu.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    onClose();
   };
 
   const f = (k: string, v: string) => setForm((s) => ({ ...s, [k]: v }));
@@ -145,11 +152,11 @@ function NewCRModal({ onClose }: { onClose: () => void }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Planlanan Başlangıç *</label>
-              <input type="datetime-local" className="input w-full" value={form.plannedStartDate} onChange={(e) => f("plannedStartDate", e.target.value)} required />
+              <input type="date" className="input w-full" value={form.plannedStartDate} onChange={(e) => f("plannedStartDate", e.target.value)} required />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Planlanan Bitiş *</label>
-              <input type="datetime-local" className="input w-full" value={form.plannedEndDate} onChange={(e) => f("plannedEndDate", e.target.value)} required />
+              <input type="date" className="input w-full" value={form.plannedEndDate} onChange={(e) => f("plannedEndDate", e.target.value)} required />
             </div>
           </div>
           <div>
@@ -190,6 +197,9 @@ function NewCRModal({ onClose }: { onClose: () => void }) {
               />
             </label>
           </div>
+          {saveError && (
+            <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{saveError}</div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">İptal</button>
             <button type="submit" disabled={saving} className="btn-primary">
@@ -205,14 +215,13 @@ function NewCRModal({ onClose }: { onClose: () => void }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const STATE_FILTERS = [
-  { value: "all",                            label: "Tümü"           },
-  { value: ChangeRequestState.NEW,           label: "Yeni"           },
-  { value: ChangeRequestState.ASSESS,        label: "Değerlendirme"  },
-  { value: ChangeRequestState.AUTHORIZE,     label: "Yetkilendirme"  },
-  { value: ChangeRequestState.SCHEDULED,     label: "Planlandı"      },
-  { value: ChangeRequestState.IMPLEMENT,     label: "Uygulama"       },
-  { value: ChangeRequestState.REVIEW,        label: "İnceleme"       },
-  { value: ChangeRequestState.CLOSED,        label: "Kapandı"        },
+  { value: "all",                                    label: "Tümü"          },
+  { value: ChangeRequestState.PENDING_APPROVAL,      label: "Onay Bekliyor" },
+  { value: ChangeRequestState.SCHEDULED,             label: "Planlandı"     },
+  { value: ChangeRequestState.IMPLEMENT,             label: "Uygulama"      },
+  { value: ChangeRequestState.REVIEW,                label: "İnceleme"      },
+  { value: ChangeRequestState.CLOSED,                label: "Kapandı"       },
+  { value: ChangeRequestState.CANCELLED,             label: "İptal"         },
 ];
 
 export default function ChangeRequestsPage() {

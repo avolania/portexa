@@ -37,7 +37,7 @@ export default function GorevlerPage() {
         <p className="text-sm text-gray-500 mt-1">Tüm projelerden {tasks.length} görev</p>
       </div>
 
-      <div className="relative max-w-xs">
+      <div className="relative w-full sm:max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
@@ -48,15 +48,15 @@ export default function GorevlerPage() {
         />
       </div>
 
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full">
+      <div className="card p-0 overflow-x-auto">
+        <table className="w-full min-w-[540px]">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Görev</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Proje</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Proje</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Durum</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Öncelik</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Atanan</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Öncelik</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Atanan</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Bitiş</th>
             </tr>
           </thead>
@@ -77,16 +77,16 @@ export default function GorevlerPage() {
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-600">
+                <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">
                   {projects.find((p) => p.id === task.projectId)?.name ?? task.projectId}
                 </td>
                 <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
-                <td className="px-4 py-3"><PriorityBadge priority={task.priority} /></td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 hidden sm:table-cell"><PriorityBadge priority={task.priority} /></td>
+                <td className="px-4 py-3 hidden sm:table-cell">
                   {task.assigneeId ? (
                     <div className="flex items-center gap-2">
                       <Avatar name={MEMBERS[task.assigneeId] || "U"} size="sm" />
-                      <span className="text-sm text-gray-700">{MEMBERS[task.assigneeId]}</span>
+                      <span className="text-sm text-gray-700 hidden lg:inline">{MEMBERS[task.assigneeId]}</span>
                     </div>
                   ) : (
                     <span className="text-sm text-gray-400">—</span>

@@ -46,14 +46,16 @@ export const SR_STATE_MAP: Record<ServiceRequestState, { label: string; badge: s
 // ─── Change Request State ─────────────────────────────────────────────────────
 
 export const CR_STATE_MAP: Record<ChangeRequestState, { label: string; badge: string }> = {
-  [ChangeRequestState.NEW]:       { label: 'Yeni',        badge: 'bg-blue-100 text-blue-700'       },
-  [ChangeRequestState.ASSESS]:    { label: 'Değerlendirme', badge: 'bg-amber-100 text-amber-700'   },
-  [ChangeRequestState.AUTHORIZE]: { label: 'Yetkilendirme', badge: 'bg-purple-100 text-purple-700' },
+  [ChangeRequestState.PENDING_APPROVAL]: { label: 'Onay Bekliyor', badge: 'bg-amber-100 text-amber-700'   },
   [ChangeRequestState.SCHEDULED]: { label: 'Planlandı',   badge: 'bg-indigo-100 text-indigo-700'   },
   [ChangeRequestState.IMPLEMENT]: { label: 'Uygulama',    badge: 'bg-orange-100 text-orange-700'   },
   [ChangeRequestState.REVIEW]:    { label: 'İnceleme',    badge: 'bg-sky-100 text-sky-700'         },
   [ChangeRequestState.CLOSED]:    { label: 'Kapandı',     badge: 'bg-gray-200 text-gray-500'       },
   [ChangeRequestState.CANCELLED]: { label: 'İptal',       badge: 'bg-gray-100 text-gray-500'       },
+  // legacy
+  [ChangeRequestState.NEW]:       { label: 'Yeni',        badge: 'bg-blue-100 text-blue-700'       },
+  [ChangeRequestState.ASSESS]:    { label: 'Değerlendirme', badge: 'bg-amber-100 text-amber-700'   },
+  [ChangeRequestState.AUTHORIZE]: { label: 'Yetkilendirme', badge: 'bg-purple-100 text-purple-700' },
 };
 
 // ─── Change Risk ──────────────────────────────────────────────────────────────

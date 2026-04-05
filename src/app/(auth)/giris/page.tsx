@@ -46,8 +46,9 @@ export default function GirisPage() {
   };
 
   return (
-    <div className="w-full max-w-md">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+    <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 shadow-xl rounded-2xl overflow-hidden border border-gray-100">
+      {/* Left: form */}
+      <div className="bg-white p-8 lg:p-10 flex flex-col justify-center">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Hoş geldiniz</h1>
           <p className="text-gray-500 text-sm">
@@ -115,6 +116,16 @@ export default function GirisPage() {
             Ücretsiz kayıt olun
           </Link>
         </p>
+      </div>
+
+      {/* Right: banner */}
+      <div className="hidden lg:flex items-center justify-center bg-white">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/banner.png"
+          alt="Pixanto"
+          className="w-full h-full object-contain"
+        />
       </div>
     </div>
   );

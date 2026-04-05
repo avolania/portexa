@@ -7,12 +7,14 @@ import { tr } from "date-fns/locale";
 import Button from "@/components/ui/Button";
 
 const typeIcons: Record<string, string> = {
-  task_assigned: "📋",
-  task_updated: "✏️",
-  comment: "💬",
-  deadline: "⏰",
-  budget_alert: "💰",
-  mention: "🔔",
+  task_assigned:    "📋",
+  task_updated:     "✏️",
+  comment:          "💬",
+  deadline:         "⏰",
+  budget_alert:     "💰",
+  mention:          "🔔",
+  approval_requested: "✅",
+  approval_resolved:  "🔔",
 };
 
 export default function BildirimlerPage() {

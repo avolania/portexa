@@ -1,21 +1,25 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronRight, Clock, CheckCircle, XCircle, AlertTriangle,
   User, Tag, Calendar, ArrowRight, Paperclip, FileText, Image, FileArchive, File, X as XIcon,
+  GitPullRequest, LifeBuoy,
 } from "lucide-react";
 import { useIncidentStore } from "@/store/useIncidentStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { IncidentState, IncidentResolutionCode, IncidentClosureCode } from "@/lib/itsm/types/enums";
+import { useChangeRequestStore } from "@/store/useChangeRequestStore";
+import { useServiceRequestStore } from "@/store/useServiceRequestStore";
+import { IncidentState, IncidentResolutionCode, IncidentClosureCode, ChangeType, ChangeRisk, Impact, Urgency } from "@/lib/itsm/types/enums";
 import { ITSM_PRIORITY_MAP, INCIDENT_STATE_MAP } from "@/lib/itsm/ui-maps";
 import { isValidIncidentTransition } from "@/lib/itsm/types/incident.types";
 import { cn } from "@/lib/utils";
 import { format, formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import type { Attachment } from "@/types";
+import TicketTimeline from "@/components/itsm/TicketTimeline";
 
 type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments";
 
@@ -85,16 +89,23 @@ function IncidentAttachments({
   onAdd: (file: File) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
 }) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setUploading(true);
-    for (const file of Array.from(files)) {
-      await onAdd(file);
+    setUploadError(null);
+    try {
+      for (const file of Array.from(files)) {
+        await onAdd(file);
+      }
+    } catch (err) {
+      console.error("[IncidentAttachments] upload error:", err);
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   }
 
   return (
@@ -134,16 +145,18 @@ function IncidentAttachments({
           ))}
         </div>
       )}
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        disabled={uploading}
-        className="flex items-center gap-2 px-3 py-2 w-full border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/30 transition-colors disabled:opacity-50"
-      >
+      {uploadError && (
+        <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{uploadError}</div>
+      )}
+      <label className={cn(
+        "relative flex items-center gap-2 px-3 py-2 w-full border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/30 transition-colors overflow-hidden",
+        uploading ? "opacity-50 pointer-events-none" : "cursor-pointer"
+      )}>
         <Paperclip className="w-4 h-4" />
         {uploading ? "Yükleniyor..." : "Dosya ekle"}
-      </button>
-      <input ref={fileInputRef} type="file" multiple className="hidden"
-        onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
+        <input type="file" multiple className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+          onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
+      </label>
     </div>
   );
 }
@@ -151,16 +164,79 @@ function IncidentAttachments({
 // ─── Action Panel ─────────────────────────────────────────────────────────────
 
 function ActionPanel({ incidentId, state }: { incidentId: string; state: IncidentState }) {
-  const { changeState, resolve, close, assign } = useIncidentStore();
+  const { changeState, resolve, close, assign, incidents } = useIncidentStore();
+  const { create: createCR } = useChangeRequestStore();
+  const { create: createSR } = useServiceRequestStore();
+  const { user } = useAuthStore();
+  const router = useRouter();
+  const incident = incidents.find((i) => i.id === incidentId);
+
   const [showResolve, setShowResolve]   = useState(false);
   const [showClose, setShowClose]       = useState(false);
   const [showAssign, setShowAssign]     = useState(false);
+  const [showConvert, setShowConvert]   = useState(false);
   const [resCode, setResCode]           = useState(IncidentResolutionCode.SOLVED_PERMANENTLY);
   const [resNotes, setResNotes]         = useState("");
   const [closeCode, setCloseCode]       = useState(IncidentClosureCode.SOLVED_PERMANENTLY);
   const [closeNotes, setCloseNotes]     = useState("");
   const [assignTo, setAssignTo]         = useState("");
   const [saving, setSaving]             = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
+
+  const convertToCR = async () => {
+    if (!incident || !user) return;
+    setSaving(true);
+    setConvertError(null);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const cr = await createCR({
+        requestedById:      user.id,
+        changeManagerId:    user.id,
+        type:               ChangeType.NORMAL,
+        category:           incident.category,
+        risk:               ChangeRisk.MODERATE,
+        impact:             incident.impact as unknown as Impact,
+        shortDescription:   incident.shortDescription,
+        description:        incident.description,
+        justification:        `Incident ${incident.number} üzerinden dönüştürüldü.`,
+        plannedStartDate:     new Date(today + 'T00:00:00').toISOString(),
+        plannedEndDate:       new Date(today + 'T23:59:59').toISOString(),
+        implementationPlan:   '—',
+        backoutPlan:          '—',
+        relatedIncidentIds:   [incident.id],
+        sourceIncidentNumber: incident.number,
+      });
+      if (cr) router.push(`/itsm/change-requests/${cr.id}`);
+    } catch (err) {
+      setConvertError(err instanceof Error ? err.message : 'Dönüştürme başarısız.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const convertToSR = async () => {
+    if (!incident || !user) return;
+    setSaving(true);
+    setConvertError(null);
+    try {
+      const sr = await createSR({
+        requestedForId:       user.id,
+        requestedById:        user.id,
+        requestType:          incident.category,
+        category:             incident.category,
+        shortDescription:     incident.shortDescription,
+        description:          incident.description ?? '',
+        impact:               incident.impact as unknown as Impact,
+        urgency:              incident.urgency as unknown as Urgency,
+        sourceIncidentNumber: incident.number,
+      });
+      if (sr) router.push(`/itsm/service-requests/${sr.id}`);
+    } catch (err) {
+      setConvertError(err instanceof Error ? err.message : 'Dönüştürme başarısız.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const canTransit = (to: IncidentState) => isValidIncidentTransition(state, to);
 
@@ -221,6 +297,28 @@ function ActionPanel({ incidentId, state }: { incidentId: string; state: Inciden
         <button onClick={() => setShowClose(true)} className="btn-secondary w-full text-sm">Kapat</button>
       )}
       <button onClick={() => setShowAssign(true)} className="btn-secondary w-full text-sm">Ata</button>
+
+      {/* Dönüştür */}
+      <div className="border-t border-gray-100 pt-2 mt-1">
+        <button onClick={() => setShowConvert((v) => !v)} className="btn-secondary w-full text-sm text-indigo-600">
+          Dönüştür...
+        </button>
+        {showConvert && (
+          <div className="mt-2 space-y-1.5">
+            {convertError && (
+              <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{convertError}</div>
+            )}
+            <button onClick={convertToCR} disabled={saving}
+              className="flex items-center gap-2 w-full px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-medium hover:bg-indigo-100 transition-colors disabled:opacity-50">
+              <GitPullRequest className="w-3.5 h-3.5" /> CR'a Dönüştür
+            </button>
+            <button onClick={convertToSR} disabled={saving}
+              className="flex items-center gap-2 w-full px-3 py-2 bg-violet-50 text-violet-700 rounded-lg text-xs font-medium hover:bg-violet-100 transition-colors disabled:opacity-50">
+              <LifeBuoy className="w-3.5 h-3.5" /> SR'a Dönüştür
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Resolve form */}
       {showResolve && (
@@ -285,6 +383,7 @@ export default function IncidentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { incidents, addWorkNote, addComment, addAttachment, removeAttachment } = useIncidentStore();
+  const { profiles } = useAuthStore();
   const incident = incidents.find((i) => i.id === id);
 
   const [tab, setTab] = useState<Tab>("details");
@@ -492,36 +591,7 @@ export default function IncidentDetailPage() {
           )}
 
           {/* Tab: Timeline */}
-          {tab === "timeline" && (
-            <div className="card">
-              {incident.timeline.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">Zaman çizelgesi boş.</p>
-              ) : (
-                <ol className="relative border-l border-gray-200 ml-3 space-y-6 py-2">
-                  {[...incident.timeline].reverse().map((event) => (
-                    <li key={event.id} className="ml-6">
-                      <span className="absolute -left-2 w-4 h-4 bg-indigo-100 rounded-full border-2 border-indigo-400 flex items-center justify-center" />
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <span className="text-sm font-medium text-gray-800">{event.actorName}</span>
-                          <span className="text-sm text-gray-500"> · {event.type.replace(/_/g, " ")}</span>
-                          {event.previousValue && event.newValue && (
-                            <span className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                              {event.previousValue} <ArrowRight className="w-3 h-3" /> {event.newValue}
-                            </span>
-                          )}
-                          {event.note && <p className="text-xs text-gray-500 mt-0.5">{event.note}</p>}
-                        </div>
-                        <span className="text-xs text-gray-400 flex-shrink-0">
-                          {format(new Date(event.timestamp), "dd MMM HH:mm", { locale: tr })}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          )}
+          {tab === "timeline" && <TicketTimeline timeline={incident.timeline} />}
         </div>
 
         {/* Right 1/3 */}
@@ -535,7 +605,7 @@ export default function IncidentDetailPage() {
             {[
               { label: "Etki",         value: incident.impact.replace(/^\d-/, "") },
               { label: "Aciliyet",     value: incident.urgency.replace(/^\d-/, "") },
-              { label: "Atanan",       value: incident.assignedToId ?? "—" },
+              { label: "Atanan",       value: incident.assignedToId ? (Object.values(profiles).find((p) => p.id === incident.assignedToId)?.name ?? incident.assignedToId) : "—" },
               { label: "Grup",         value: incident.assignmentGroupName ?? "—" },
               { label: "İlişkili CR",  value: incident.relatedCRId ?? "—" },
             ].map(({ label, value }) => (
