@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, Clock, MoreHorizontal,
   Briefcase, Users, BarChart3, Settings, User, LogOut,
-  ShieldCheck, AlertCircle, GitPullRequest,
+  ShieldCheck, AlertCircle, GitPullRequest, HeadphonesIcon,
   LifeBuoy, Ticket, SlidersHorizontal, ClipboardList, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,10 +44,11 @@ const DRAWER_SECTIONS = [
   {
     label: "ITSM",
     items: [
-      { href: "/itsm/portal",           icon: LifeBuoy,       label: "Destek Portalı"   },
-      { href: "/itsm/incidents",        icon: AlertCircle,    label: "Incident'lar"      },
-      { href: "/itsm/service-requests", icon: ClipboardList,  label: "Servis Talepleri"  },
-      { href: "/itsm/change-requests",  icon: GitPullRequest, label: "Değişiklikler"     },
+      { href: "/itsm",                   icon: HeadphonesIcon, label: "ITSM"              },
+      { href: "/itsm/incidents",         icon: AlertCircle,    label: "Incident'lar"      },
+      { href: "/itsm/service-requests",  icon: ClipboardList,  label: "Servis Talepleri"  },
+      { href: "/itsm/change-requests",   icon: GitPullRequest, label: "Değişiklikler"     },
+      { href: "/itsm/portal",            icon: LifeBuoy,       label: "Destek Portalı"   },
     ],
   },
   {
@@ -83,7 +84,7 @@ export default function MobileNav() {
   const isEndUser = user?.role === "end_user";
   const primaryItems = isEndUser ? PRIMARY_END_USER : PRIMARY;
   const allDrawerItems = DRAWER_SECTIONS.flatMap((s) => s.items);
-  const isMoreActive = allDrawerItems.some((i) => pathname.startsWith(i.href));
+  const isMoreActive = allDrawerItems.some((i) => pathname === i.href || pathname.startsWith(i.href + "/"));
 
   return (
     <>
@@ -153,7 +154,7 @@ export default function MobileNav() {
                   </div>
                   <div className="grid grid-cols-3 gap-1">
                     {section.items.map(({ href, icon: Icon, label }) => {
-                      const active = pathname.startsWith(href);
+                      const active = pathname === href || pathname.startsWith(href + "/");
                       return (
                         <Link
                           key={href}

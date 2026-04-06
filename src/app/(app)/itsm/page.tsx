@@ -162,14 +162,14 @@ export default function ITSMDashboardPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">ITSM Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {format(new Date(), "EEEE, d MMMM yyyy", { locale: tr })}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href="/itsm/incidents" className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors">
             <Plus className="w-3.5 h-3.5" /> Incident
           </Link>
@@ -262,7 +262,8 @@ export default function ITSMDashboardPage() {
             {recentIncidents.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-10">Henüz incident bulunmuyor.</p>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
                     {["ID", "Başlık", "Öncelik", "Durum", "Atanan", "SLA"].map((h) => (
@@ -322,6 +323,7 @@ export default function ITSMDashboardPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
 
