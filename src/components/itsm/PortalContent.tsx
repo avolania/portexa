@@ -61,12 +61,13 @@ const SERVICE_CATS = [
 // ─── Incident step data ────────────────────────────────────────────────────────
 
 const INCIDENT_CATS = [
-  { id: "infra",    icon: Database,    label: "Altyapı & Sunucu", desc: "Sunucu, disk, performans"    },
-  { id: "network",  icon: Wifi,        label: "Ağ & Bağlantı",   desc: "İnternet, VPN, Wi-Fi"        },
-  { id: "app",      icon: Code2,       label: "Uygulama",         desc: "SAP, Office 365, CRM hatası" },
-  { id: "hardware", icon: Monitor,     label: "Donanım",          desc: "Laptop, yazıcı, monitör"     },
-  { id: "security", icon: ShieldAlert, label: "Güvenlik",         desc: "Virüs, şüpheli e-posta"      },
-  { id: "email",    icon: Mail,        label: "E-posta",          desc: "Gönderilemiyor, spam"        },
+  { id: "infra",    icon: Database,    label: "Altyapı & Sunucu",   desc: "Sunucu, disk, performans"         },
+  { id: "network",  icon: Wifi,        label: "Ağ & Bağlantı",     desc: "İnternet, VPN, Wi-Fi"             },
+  { id: "sap",      icon: Settings2,   label: "SAP",                desc: "SAP modül hataları, yetki, veri" },
+  { id: "app",      icon: Code2,       label: "Diğer Uygulamalar",  desc: "Office 365, Teams, CRM, tarayıcı" },
+  { id: "hardware", icon: Monitor,     label: "Donanım",            desc: "Laptop, yazıcı, monitör"         },
+  { id: "security", icon: ShieldAlert, label: "Güvenlik",           desc: "Virüs, şüpheli e-posta"          },
+  { id: "email",    icon: Mail,        label: "E-posta",            desc: "Gönderilemiyor, spam"            },
 ];
 
 const INC_URGENCY_OPTS = [
@@ -94,7 +95,7 @@ const SAP_CATEGORY_OPTIONS = [
 ];
 
 function isSapCategory(cat: string) {
-  return cat.toLowerCase().includes("sap") || cat === "app";
+  return cat === "sap";
 }
 
 // ─── Shared UI ─────────────────────────────────────────────────────────────────
