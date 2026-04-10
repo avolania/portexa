@@ -74,6 +74,7 @@ const navSections: NavSection[] = [
       { href: "/itsm/change-requests",        icon: GitPullRequest,  label: "Değişiklikler"     },
       { href: "/itsm/workbench/l1",           icon: MonitorCheck,    label: "L1 Workbench"      },
       { href: "/itsm/workbench/l2",           icon: MonitorCheck,    label: "L2/L3 Specialist"  },
+      { href: "/itsm/workbench/sdm",          icon: MonitorCheck,    label: "SDM Dashboard"     },
     ],
   },
   {

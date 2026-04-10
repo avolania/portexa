@@ -51,6 +51,7 @@ const DRAWER_SECTIONS = [
       { href: "/itsm/portal",            icon: LifeBuoy,       label: "Destek Portalı"    },
       { href: "/itsm/workbench/l1",      icon: MonitorCheck,   label: "L1 Workbench"      },
       { href: "/itsm/workbench/l2",      icon: MonitorCheck,   label: "L2/L3 Specialist"  },
+      { href: "/itsm/workbench/sdm",     icon: MonitorCheck,   label: "SDM Dashboard"     },
     ],
   },
   {
