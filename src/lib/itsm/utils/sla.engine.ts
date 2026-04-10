@@ -181,10 +181,11 @@ export function createServiceRequestSLA(
 export function checkIncidentSLABreaches(
   sla: IncidentSLA,
   now: Date = new Date(),
+  resolvedAt?: string,
 ): { responseBreached: boolean; resolutionBreached: boolean } {
   return {
     responseBreached:   !sla.respondedAt && now > new Date(sla.responseDeadline),
-    resolutionBreached: now > new Date(sla.resolutionDeadline),
+    resolutionBreached: !resolvedAt && now > new Date(sla.resolutionDeadline),
   };
 }
 

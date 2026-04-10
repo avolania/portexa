@@ -231,7 +231,7 @@ export async function changeIncidentState(
     sla = resumeIncidentSLA(sla, new Date(now), DEFAULT_BUSINESS_HOURS);
   }
   // Check breaches
-  const breaches = checkIncidentSLABreaches(sla);
+  const breaches = checkIncidentSLABreaches(sla, new Date(), existing.resolvedAt);
   sla = { ...sla, ...breaches };
 
   const event: TicketEvent = {
@@ -269,7 +269,7 @@ export async function resolveIncident(
   if (!isValidIncidentTransition(existing.state, IncidentState.RESOLVED)) return null;
 
   const now = new Date().toISOString();
-  const breaches = checkIncidentSLABreaches(existing.sla);
+  const breaches = checkIncidentSLABreaches(existing.sla, new Date(), existing.resolvedAt);
 
   const updated: Incident = {
     ...existing,
