@@ -452,7 +452,7 @@ export default function SpecialistWorkbenchPage() {
 
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
-    .wb-root,::-webkit-scrollbar{width:5px}.wb-root ::-webkit-scrollbar-track{background:transparent}.wb-root ::-webkit-scrollbar-thumb{background:#CBD5E0;border-radius:3px}
+    .wb-root ::-webkit-scrollbar{width:5px}.wb-root ::-webkit-scrollbar-track{background:transparent}.wb-root ::-webkit-scrollbar-thumb{background:#CBD5E0;border-radius:3px}
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
     @keyframes slideUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
