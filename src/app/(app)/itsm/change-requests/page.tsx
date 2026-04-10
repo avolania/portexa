@@ -243,10 +243,7 @@ function CRStepper({ state }: { state: ChangeRequestState }) {
       </div>
     );
   }
-  const effectiveState =
-    state === ChangeRequestState.NEW || state === ChangeRequestState.ASSESS || state === ChangeRequestState.AUTHORIZE
-      ? ChangeRequestState.PENDING_APPROVAL : state;
-  const currentIdx = CR_STEPS.findIndex((s) => s.state === effectiveState);
+  const currentIdx = CR_STEPS.findIndex((s) => s.state === state);
 
   return (
     <div className="flex items-center px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex-shrink-0">

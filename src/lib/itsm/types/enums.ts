@@ -71,10 +71,7 @@ export enum ChangeType {
 }
 
 export enum ChangeRequestState {
-  NEW = 'New',                          // legacy — eski kayıtlar için
-  ASSESS = 'Assess',                    // legacy
-  AUTHORIZE = 'Authorize',              // legacy
-  PENDING_APPROVAL = 'Pending Approval', // yeni CR'lar buradan başlar
+  PENDING_APPROVAL = 'Pending Approval',
   SCHEDULED = 'Scheduled',
   IMPLEMENT = 'Implement',
   REVIEW = 'Review',

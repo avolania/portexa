@@ -147,22 +147,6 @@ export const CR_STATE_TRANSITIONS: Record<ChangeRequestState, ChangeRequestState
   ],
   [ChangeRequestState.CLOSED]: [],
   [ChangeRequestState.CANCELLED]: [],
-  // ── Eski kayıtlar için legacy geçişler ─────────────────────────────────────
-  [ChangeRequestState.NEW]: [
-    ChangeRequestState.PENDING_APPROVAL,
-    ChangeRequestState.ASSESS,
-    ChangeRequestState.CANCELLED,
-  ],
-  [ChangeRequestState.ASSESS]: [
-    ChangeRequestState.PENDING_APPROVAL,
-    ChangeRequestState.AUTHORIZE,
-    ChangeRequestState.CANCELLED,
-  ],
-  [ChangeRequestState.AUTHORIZE]: [
-    ChangeRequestState.SCHEDULED,
-    ChangeRequestState.ASSESS,
-    ChangeRequestState.CANCELLED,
-  ],
 };
 
 export function isValidCRTransition(

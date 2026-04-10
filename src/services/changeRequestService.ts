@@ -149,8 +149,8 @@ export async function changeRequestStateTransition(
 
   const now = new Date().toISOString();
 
-  // Request approval when moving to AUTHORIZE
-  const approvalState = toState === ChangeRequestState.AUTHORIZE
+  // Request approval when moving to PENDING_APPROVAL
+  const approvalState = toState === ChangeRequestState.PENDING_APPROVAL
     ? ApprovalState.REQUESTED
     : existing.approvalState;
 
@@ -181,7 +181,7 @@ export async function approveChangeRequest(
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
-  if (existing.state !== ChangeRequestState.AUTHORIZE) return null;
+  if (existing.state !== ChangeRequestState.PENDING_APPROVAL) return null;
 
   const now = new Date().toISOString();
   const entry: ApproverEntry = {
@@ -216,7 +216,7 @@ export async function rejectChangeRequest(
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
-  if (existing.state !== ChangeRequestState.AUTHORIZE) return null;
+  if (existing.state !== ChangeRequestState.PENDING_APPROVAL) return null;
 
   const now = new Date().toISOString();
   const entry: ApproverEntry = {
@@ -230,10 +230,10 @@ export async function rejectChangeRequest(
     ...existing,
     approvalState: ApprovalState.REJECTED,
     approvers:     [...existing.approvers, entry],
-    state:         ChangeRequestState.ASSESS, // send back to assess
+    state:         ChangeRequestState.PENDING_APPROVAL, // send back for re-approval
     timeline: [
       ...existing.timeline,
-      { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId: approverId, actorName: approverName, previousValue: existing.state, newValue: ChangeRequestState.ASSESS, note: dto.comments, timestamp: now },
+      { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId: approverId, actorName: approverName, previousValue: existing.state, newValue: ChangeRequestState.PENDING_APPROVAL, note: dto.comments, timestamp: now },
     ],
     updatedAt: now,
   };

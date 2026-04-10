@@ -35,14 +35,7 @@ function CRProgress({ state }: { state: ChangeRequestState }) {
       <p className="text-sm text-gray-500 text-center py-2">Bu değişiklik talebi iptal edildi.</p>
     </div>
   );
-  // Legacy states (NEW, ASSESS, AUTHORIZE) → göster ama PENDING_APPROVAL olarak konumlandır
-  const effectiveState =
-    state === ChangeRequestState.NEW ||
-    state === ChangeRequestState.ASSESS ||
-    state === ChangeRequestState.AUTHORIZE
-      ? ChangeRequestState.PENDING_APPROVAL
-      : state;
-  const activeIdx = CR_STEPS.findIndex((s) => s.state === effectiveState);
+  const activeIdx = CR_STEPS.findIndex((s) => s.state === state);
   return (
     <div className="card">
       <div className="flex items-center gap-1 overflow-x-auto pb-1">

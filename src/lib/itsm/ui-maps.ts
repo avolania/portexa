@@ -52,10 +52,7 @@ export const CR_STATE_MAP: Record<ChangeRequestState, { label: string; badge: st
   [ChangeRequestState.REVIEW]:    { label: 'İnceleme',    badge: 'bg-sky-100 text-sky-700'         },
   [ChangeRequestState.CLOSED]:    { label: 'Kapandı',     badge: 'bg-gray-200 text-gray-500'       },
   [ChangeRequestState.CANCELLED]: { label: 'İptal',       badge: 'bg-gray-100 text-gray-500'       },
-  // legacy
-  [ChangeRequestState.NEW]:       { label: 'Yeni',        badge: 'bg-blue-100 text-blue-700'       },
-  [ChangeRequestState.ASSESS]:    { label: 'Değerlendirme', badge: 'bg-amber-100 text-amber-700'   },
-  [ChangeRequestState.AUTHORIZE]: { label: 'Yetkilendirme', badge: 'bg-purple-100 text-purple-700' },
+
 };
 
 // ─── Change Risk ──────────────────────────────────────────────────────────────
