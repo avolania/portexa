@@ -203,10 +203,13 @@ export function pauseIncidentSLA(sla: IncidentSLA, now = new Date()): IncidentSL
   return { ...sla, pausedAt: now.toISOString() };
 }
 
-export function resumeIncidentSLA(sla: IncidentSLA, now = new Date()): IncidentSLA {
+export function resumeIncidentSLA(
+  sla: IncidentSLA,
+  now = new Date(),
+  cfg: BusinessHoursConfig = DEFAULT_BUSINESS_HOURS,
+): IncidentSLA {
   if (!sla.pausedAt) return sla;
-  const pausedMs = now.getTime() - new Date(sla.pausedAt).getTime();
-  const pausedMinutes = Math.floor(pausedMs / 60_000);
+  const pausedMinutes = countBusinessMinutesElapsed(new Date(sla.pausedAt), now, cfg);
   return {
     ...sla,
     pausedAt:           undefined,

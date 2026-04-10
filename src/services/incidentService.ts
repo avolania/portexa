@@ -3,7 +3,7 @@ import type { Attachment } from '@/types';
 const uuid = () => crypto.randomUUID();
 import { createIncidentSLA, checkIncidentSLABreaches, pauseIncidentSLA, resumeIncidentSLA } from '@/lib/itsm/utils/sla.engine';
 import { generateTicketNumber } from '@/lib/itsm/utils/ticket-number';
-import { calculatePriority } from '@/lib/itsm/types/interfaces';
+import { calculatePriority, DEFAULT_BUSINESS_HOURS } from '@/lib/itsm/types/interfaces';
 import { IncidentState, TicketEventType } from '@/lib/itsm/types/enums';
 import type {
   Incident,
@@ -228,7 +228,7 @@ export async function changeIncidentState(
   if (dto.state === IncidentState.PENDING && !sla.pausedAt) {
     sla = pauseIncidentSLA(sla, new Date(now));
   } else if (existing.state === IncidentState.PENDING && dto.state === IncidentState.IN_PROGRESS) {
-    sla = resumeIncidentSLA(sla, new Date(now));
+    sla = resumeIncidentSLA(sla, new Date(now), DEFAULT_BUSINESS_HOURS);
   }
   // Check breaches
   const breaches = checkIncidentSLABreaches(sla);
