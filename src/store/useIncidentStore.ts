@@ -43,7 +43,7 @@ interface IncidentState {
   linkCR: (id: string, dto: LinkCRDto) => Promise<void>;
   addAttachment: (id: string, file: File) => Promise<void>;
   removeAttachment: (id: string, attachmentId: string) => Promise<void>;
-  remove: (id: string) => void;
+  remove: (id: string) => Promise<void>;
 }
 
 export const useIncidentStore = create<IncidentState>()((set, get) => ({
@@ -134,8 +134,14 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
-  remove: (id) => {
+  remove: async (id) => {
+    const rollback = get().incidents.find((i) => i.id === id);
     set((s) => ({ incidents: s.incidents.filter((i) => i.id !== id) }));
-    deleteIncident(id);
+    try {
+      await deleteIncident(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ incidents: [...s.incidents, rollback] }));
+      throw err;
+    }
   },
 }));
