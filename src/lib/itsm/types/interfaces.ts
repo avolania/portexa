@@ -19,7 +19,7 @@ export interface ITSMGroup {
   name: string;
 }
 
-export interface WorkNote {
+export interface BaseNote {
   id: string;
   authorId: string;
   authorName: string;
@@ -27,13 +27,8 @@ export interface WorkNote {
   createdAt: string;
 }
 
-export interface TicketComment {
-  id: string;
-  authorId: string;
-  authorName: string;
-  content: string;
-  createdAt: string;
-}
+export interface WorkNote extends BaseNote {}
+export interface TicketComment extends BaseNote {}
 
 export interface TicketEvent {
   id: string;

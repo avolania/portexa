@@ -1,6 +1,8 @@
 import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl } from '@/lib/db';
 import type { Attachment } from '@/types';
 const uuid = () => crypto.randomUUID();
+const makeNote = (authorId: string, authorName: string, content: string, now: string) =>
+  ({ id: uuid(), authorId, authorName, content, createdAt: now });
 import { createIncidentSLA, checkIncidentSLABreaches, pauseIncidentSLA, resumeIncidentSLA } from '@/lib/itsm/utils/sla.engine';
 import { generateTicketNumber } from '@/lib/itsm/utils/ticket-number';
 import { calculatePriority, DEFAULT_BUSINESS_HOURS } from '@/lib/itsm/types/interfaces';
@@ -188,7 +190,7 @@ export async function assignIncident(
   };
 
   const workNotes = dto.workNote
-    ? [...existing.workNotes, { id: uuid(), authorId: actorId, authorName: actorName, content: dto.workNote, createdAt: now }]
+    ? [...existing.workNotes, makeNote(actorId, actorName, dto.workNote, now)]
     : existing.workNotes;
 
   const updated: Incident = {
@@ -334,7 +336,7 @@ export async function addIncidentWorkNote(
   const now = new Date().toISOString();
   const updated: Incident = {
     ...existing,
-    workNotes: [...existing.workNotes, { id: uuid(), authorId: actorId, authorName: actorName, content: dto.content, createdAt: now }],
+    workNotes: [...existing.workNotes, makeNote(actorId, actorName, dto.content, now)],
     timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }],
     updatedAt: now,
   };
@@ -354,7 +356,7 @@ export async function addIncidentComment(
   const now = new Date().toISOString();
   const updated: Incident = {
     ...existing,
-    comments: [...existing.comments, { id: uuid(), authorId: actorId, authorName: actorName, content: dto.content, createdAt: now }],
+    comments: [...existing.comments, makeNote(actorId, actorName, dto.content, now)],
     timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }],
     updatedAt: now,
   };
