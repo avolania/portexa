@@ -452,8 +452,7 @@ export default function SpecialistWorkbenchPage() {
 
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
-    *{margin:0;padding:0;box-sizing:border-box}
-    ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E0;border-radius:3px}
+    .wb-root,::-webkit-scrollbar{width:5px}.wb-root ::-webkit-scrollbar-track{background:transparent}.wb-root ::-webkit-scrollbar-thumb{background:#CBD5E0;border-radius:3px}
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
     @keyframes slideUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -462,26 +461,8 @@ export default function SpecialistWorkbenchPage() {
   `;
 
   return (
-    <div style={{ fontFamily: "'IBM Plex Sans',sans-serif", background: "#F1F5F9", height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", color: "#0F172A" }}>
+    <div className="wb-root" style={{ fontFamily: "'IBM Plex Sans',sans-serif", background: "#F1F5F9", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", color: "#0F172A" }}>
       <style>{css}</style>
-
-      {/* Top Bar */}
-      <header style={{ height: 48, background: "#1E293B", display: "flex", alignItems: "center", padding: "0 16px", gap: 12, flexShrink: 0, color: "#E2E8F0" }}>
-        <div style={{ width: 28, height: 28, borderRadius: 6, background: "linear-gradient(135deg,#3B82F6,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff" }}>Px</div>
-        <span style={{ fontWeight: 700, fontSize: 14 }}>Pixanto</span>
-        <span style={{ color: "#475569" }}>›</span>
-        <span style={{ color: "#94A3B8" }}>ITSM</span>
-        <span style={{ color: "#475569" }}>›</span>
-        <span style={{ color: "#CBD5E1", fontWeight: 600 }}>Specialist Workbench</span>
-        <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "#334155", color: "#F59E0B", fontFamily: "'IBM Plex Mono',monospace" }}>L2 / L3</span>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#334155", borderRadius: 6, padding: "5px 12px", width: 240 }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Ticket ara..."
-            style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "#E2E8F0", fontSize: 12, fontFamily: "'IBM Plex Sans',sans-serif" }} />
-        </div>
-        <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,#3B82F6,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff" }}>EK</div>
-      </header>
 
       {/* Filter Bar */}
       <div style={{ height: 46, background: "#fff", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", padding: "0 16px", gap: 10, flexShrink: 0 }}>
@@ -503,6 +484,11 @@ export default function SpecialistWorkbenchPage() {
         </div>
         <button onClick={() => setFilterMine(!filterMine)} style={{ padding: "4px 12px", borderRadius: 6, border: filterMine ? "1.5px solid #3B82F6" : "1px solid #E2E8F0", background: filterMine ? "#EFF6FF" : "#fff", color: filterMine ? "#2563EB" : "#64748B", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>👤 Benim ({myCount})</button>
         <div style={{ flex: 1 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 6, padding: "4px 10px", width: 200 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Ticket ara..."
+            style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 11, fontFamily: "'IBM Plex Sans',sans-serif", color: "#334155" }} />
+        </div>
         <span style={{ fontSize: 11, color: "#94A3B8", fontFamily: "'IBM Plex Mono',monospace" }}>{filtered.length} eskalasyon</span>
       </div>
 
