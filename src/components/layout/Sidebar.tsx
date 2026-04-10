@@ -67,21 +67,13 @@ const navSections: NavSection[] = [
     icon: HeadphonesIcon,
     defaultOpen: false,
     items: [
-      { href: "/itsm",                        icon: LayoutDashboard, label: "ITSM Dashboard"  },
-      { href: "/itsm/portal",                 icon: LifeBuoy,        label: "Destek Portalı"  },
-      { href: "/itsm/incidents",              icon: AlertCircle,     label: "Incident'lar"     },
-      { href: "/itsm/service-requests",       icon: ClipboardList,   label: "Servis Talepleri" },
-      { href: "/itsm/change-requests",        icon: GitPullRequest,  label: "Değişiklikler"    },
-    ],
-  },
-  {
-    id: "workbench",
-    label: "ITSM Workbench",
-    icon: MonitorCheck,
-    defaultOpen: false,
-    items: [
-      { href: "/itsm/workbench/l1", icon: MonitorCheck, label: "L1 Workbench" },
-      { href: "/itsm/workbench/l2", icon: MonitorCheck, label: "L2/L3 Specialist" },
+      { href: "/itsm",                        icon: LayoutDashboard, label: "ITSM Dashboard"   },
+      { href: "/itsm/portal",                 icon: LifeBuoy,        label: "Destek Portalı"   },
+      { href: "/itsm/incidents",              icon: AlertCircle,     label: "Incident'lar"      },
+      { href: "/itsm/service-requests",       icon: ClipboardList,   label: "Servis Talepleri"  },
+      { href: "/itsm/change-requests",        icon: GitPullRequest,  label: "Değişiklikler"     },
+      { href: "/itsm/workbench/l1",           icon: MonitorCheck,    label: "L1 Workbench"      },
+      { href: "/itsm/workbench/l2",           icon: MonitorCheck,    label: "L2/L3 Specialist"  },
     ],
   },
   {

@@ -7,7 +7,7 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, Clock, MoreHorizontal,
   Briefcase, Users, BarChart3, Settings, User, LogOut,
   ShieldCheck, AlertCircle, GitPullRequest, HeadphonesIcon,
-  LifeBuoy, Ticket, SlidersHorizontal, ClipboardList, Wallet,
+  LifeBuoy, Ticket, SlidersHorizontal, ClipboardList, Wallet, MonitorCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -48,7 +48,9 @@ const DRAWER_SECTIONS = [
       { href: "/itsm/incidents",         icon: AlertCircle,    label: "Incident'lar"      },
       { href: "/itsm/service-requests",  icon: ClipboardList,  label: "Servis Talepleri"  },
       { href: "/itsm/change-requests",   icon: GitPullRequest, label: "Değişiklikler"     },
-      { href: "/itsm/portal",            icon: LifeBuoy,       label: "Destek Portalı"   },
+      { href: "/itsm/portal",            icon: LifeBuoy,       label: "Destek Portalı"    },
+      { href: "/itsm/workbench/l1",      icon: MonitorCheck,   label: "L1 Workbench"      },
+      { href: "/itsm/workbench/l2",      icon: MonitorCheck,   label: "L2/L3 Specialist"  },
     ],
   },
   {
