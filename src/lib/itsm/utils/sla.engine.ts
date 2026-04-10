@@ -108,23 +108,67 @@ export function addBusinessMinutes(
   return cur;
 }
 
-/** Count business minutes elapsed between two dates (paused minutes excluded). */
+/**
+ * Count business minutes elapsed between two dates (paused minutes excluded).
+ *
+ * O(days) day-based algorithm instead of the previous O(minutes) per-minute loop.
+ * For a 30-day range this is ~30 iterations instead of 43,200.
+ *
+ * Edge cases preserved:
+ *  - First/last day are counted partially (clamped to actual from/to time)
+ *  - Non-work days and holidays are skipped
+ *  - DST-safe: from/to minute-of-day resolved via Intl (getLocalParts);
+ *    intermediate days iterated as UTC calendar dates (dayOfWeek is
+ *    timezone-independent for any date string already expressed in cfg.timezone)
+ */
 export function countBusinessMinutesElapsed(
   from: Date,
   to: Date,
   cfg: BusinessHoursConfig,
   pausedMinutes = 0,
 ): number {
-  let elapsed = 0;
-  let cur = new Date(from);
-  const endMs = to.getTime();
+  if (to <= from) return 0;
 
-  // Step in 1-minute increments (capped at 30 days for safety)
-  const maxSteps = 30 * 24 * 60;
-  for (let i = 0; i < maxSteps && cur.getTime() < endMs; i++) {
-    if (isBusinessTime(cur, cfg)) elapsed++;
-    cur = new Date(cur.getTime() + 60_000);
+  const startMin = cfg.startHour * 60 + cfg.startMinute;
+  const endMin   = cfg.endHour   * 60 + cfg.endMinute;
+
+  const fromParts    = getLocalParts(from, cfg.timezone);
+  const toParts      = getLocalParts(to,   cfg.timezone);
+  const fromDateStr  = toISODateStr(fromParts);
+  const toDateStr    = toISODateStr(toParts);
+  const fromMinOfDay = fromParts.hour * 60 + fromParts.minute;
+  const toMinOfDay   = toParts.hour   * 60 + toParts.minute;
+
+  let elapsed    = 0;
+  let curDateStr = fromDateStr;
+
+  // Max 366 iterations (one per calendar day)
+  for (let d = 0; d < 366; d++) {
+    if (curDateStr > toDateStr) break;
+
+    const isFirst = curDateStr === fromDateStr;
+    const isLast  = curDateStr === toDateStr;
+
+    // dayOfWeek is a property of the calendar date string — timezone-independent
+    const [cy, cm, cd] = curDateStr.split('-').map(Number);
+    const dayOfWeek = new Date(Date.UTC(cy, cm - 1, cd)).getUTCDay();
+
+    if (cfg.workDays.includes(dayOfWeek) && !cfg.holidays.includes(curDateStr)) {
+      // Clamp to actual from/to times on the first and last day
+      const dayStart = isFirst ? Math.max(startMin, fromMinOfDay) : startMin;
+      const dayEnd   = isLast  ? Math.min(endMin,   toMinOfDay)   : endMin;
+
+      if (dayEnd > dayStart) {
+        elapsed += dayEnd - dayStart;
+      }
+    }
+
+    if (isLast) break;
+
+    // Advance to next calendar day (Date.UTC handles month/year overflow correctly)
+    curDateStr = new Date(Date.UTC(cy, cm - 1, cd + 1)).toISOString().slice(0, 10);
   }
+
   return Math.max(0, elapsed - pausedMinutes);
 }
 
