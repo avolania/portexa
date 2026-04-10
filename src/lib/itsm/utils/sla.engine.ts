@@ -153,7 +153,6 @@ export function createIncidentSLA(
     responseBreached:          false,
     resolutionBreached:        false,
     totalPausedMinutes:        0,
-    businessTimeElapsedMinutes: 0,
   };
 }
 

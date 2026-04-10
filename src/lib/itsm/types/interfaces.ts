@@ -62,7 +62,6 @@ export interface IncidentSLA {
   respondedAt?: string;
   pausedAt?: string;
   totalPausedMinutes: number;
-  businessTimeElapsedMinutes: number;
   warningNotifiedAt?: string;
 }
 
