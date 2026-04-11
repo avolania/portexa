@@ -87,25 +87,29 @@ export const useServiceRequestStore = create<ServiceRequestState>()((set, get) =
 
     // Onay gerekiyorsa ve bir workflow tanımlanmışsa engine'i tetikle
     if (updated.approvalRequired) {
-      const configStore = useITSMConfigStore.getState();
-      if (!configStore.config.approvalWorkflows.length && !configStore.loading) {
-        await configStore.load();
-      }
-      const { config } = useITSMConfigStore.getState();
-      const workflowId = config.srApprovalConfig.workflowId;
-      const definition = workflowId
-        ? config.approvalWorkflows.find((w) => w.id === workflowId)
-        : undefined;
-      if (definition) {
-        const instance = await triggerWorkflow(
-          definition,
-          'service_request',
-          id,
-          user.orgId,
-          config,
-          updated.requestedById,
-        );
-        useWorkflowInstanceStore.getState().addInstance(instance);
+      try {
+        const configStore = useITSMConfigStore.getState();
+        if (!configStore.config.approvalWorkflows.length && !configStore.loading) {
+          await configStore.load();
+        }
+        const { config } = useITSMConfigStore.getState();
+        const workflowId = config.srApprovalConfig.workflowId;
+        const definition = workflowId
+          ? config.approvalWorkflows.find((w) => w.id === workflowId)
+          : undefined;
+        if (definition) {
+          const instance = await triggerWorkflow(
+            definition,
+            'service_request',
+            id,
+            user.orgId,
+            config,
+            updated.requestedById,
+          );
+          useWorkflowInstanceStore.getState().addInstance(instance);
+        }
+      } catch (err) {
+        console.error('[workflow] SR submit workflow trigger failed:', err);
       }
     }
   },
