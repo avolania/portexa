@@ -66,7 +66,9 @@ export const useServiceRequestStore = create<ServiceRequestState>()((set, get) =
   },
 
   update: async (id, dto) => {
-    const updated = await updateServiceRequest(id, dto, get().serviceRequests);
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const updated = await updateServiceRequest(id, dto, get().serviceRequests, user.id, user.name);
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 

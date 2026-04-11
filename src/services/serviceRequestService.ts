@@ -16,6 +16,7 @@ import type {
   AddCommentDto,
   ServiceRequestFilters,
   ServiceRequestClosureCode,
+  ServiceRequestPriority,
 } from '@/lib/itsm/types/service-request.types';
 import { isValidSRTransition } from '@/lib/itsm/types/service-request.types';
 import type { ApproverEntry, TicketEvent } from '@/lib/itsm/types/interfaces';
@@ -118,11 +119,47 @@ export async function updateServiceRequest(
   id: string,
   dto: UpdateServiceRequestDto,
   current: ServiceRequest[],
+  actorId: string,
+  actorName: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
+
   const now = new Date().toISOString();
-  const updated: ServiceRequest = { ...existing, ...dto, updatedAt: now };
+  const events: TicketEvent[] = [];
+
+  // Recalculate priority if impact/urgency changed
+  let priority = existing.priority;
+  if (dto.impact || dto.urgency) {
+    const newImpact  = dto.impact  ?? existing.impact;
+    const newUrgency = dto.urgency ?? existing.urgency;
+    const newPriority = calculatePriority(newImpact, newUrgency) as ServiceRequestPriority;
+    if (newPriority !== existing.priority) {
+      priority = newPriority;
+      events.push({
+        id: uuid(), type: TicketEventType.PRIORITY_CHANGED,
+        actorId, actorName,
+        previousValue: existing.priority, newValue: newPriority,
+        timestamp: now,
+      });
+    }
+  }
+
+  // Generic update event
+  events.push({
+    id: uuid(), type: TicketEventType.STATE_CHANGED,
+    actorId, actorName,
+    note: 'Ticket güncellendi',
+    timestamp: now,
+  });
+
+  const updated: ServiceRequest = {
+    ...existing,
+    ...dto,
+    priority,
+    timeline: [...existing.timeline, ...events],
+    updatedAt: now,
+  };
   await dbUpsert(TABLE, id, updated);
   return updated;
 }
