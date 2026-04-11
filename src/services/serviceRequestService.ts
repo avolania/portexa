@@ -31,7 +31,7 @@ export async function loadServiceRequests(filters?: ServiceRequestFilters): Prom
 
   return all.filter((sr) => {
     if (filters.state?.length       && !filters.state.includes(sr.state))              return false;
-    if (filters.priority?.length    && !filters.priority.includes(sr.priority as never))   return false;
+    if (filters.priority?.length    && !filters.priority.includes(sr.priority))            return false;
     if (filters.requestedForId      && sr.requestedForId !== filters.requestedForId)    return false;
     if (filters.requestedById       && sr.requestedById  !== filters.requestedById)     return false;
     if (filters.assignedToId        && sr.assignedToId   !== filters.assignedToId)      return false;
