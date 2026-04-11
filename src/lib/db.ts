@@ -39,7 +39,10 @@ export async function dbDelete(table: string, id: string): Promise<void> {
 
 export async function dbLoadProfiles(orgId?: string): Promise<Record<string, User>> {
   const { data, error } = await supabase.from("auth_profiles").select("id, data");
-  if (error) { console.error("[db] load auth_profiles:", error.message); return {}; }
+  if (error) {
+    console.error("[db] load auth_profiles:", error.message);
+    throw new Error(error.message);
+  }
   const result: Record<string, User> = {};
   for (const row of data ?? []) {
     const user = row.data as User;
