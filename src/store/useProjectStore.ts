@@ -100,22 +100,24 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   updateTask: async (id, patch) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     const current = get().tasks;
+    const projectId = current.find((t) => t.id === id)?.projectId;
     set({ tasks: current.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
     const updated = await updateTask(id, patch, current, orgId);
     if (updated) {
       set((s) => {
         const tasks = s.tasks.map((t) => (t.id === id ? updated : t));
-        const projects = _syncProgress(tasks, s.projects);
+        const projects = projectId ? _syncOneProject(tasks, s.projects, projectId) : s.projects;
         return { tasks, projects };
       });
-    } else {
-      set((s) => ({ projects: _syncProgress(s.tasks, s.projects) }));
+    } else if (projectId) {
+      set((s) => ({ projects: _syncOneProject(s.tasks, s.projects, projectId) }));
     }
   },
 
   moveTask: (taskId, newStatus) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     const rollbackTasks = get().tasks;
+    const projectId = rollbackTasks.find((t) => t.id === taskId)?.projectId;
     set((s) => {
       const tasks = s.tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t));
       moveTask(taskId, newStatus, rollbackTasks, orgId)
@@ -123,9 +125,15 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
           if (updated) set((s2) => ({ tasks: s2.tasks.map((t) => (t.id === taskId ? updated : t)) }));
         })
         .catch(() => {
-          set({ tasks: rollbackTasks, projects: _syncProgress(rollbackTasks, get().projects) });
+          const projects = projectId
+            ? _syncOneProject(rollbackTasks, get().projects, projectId)
+            : _syncProgress(rollbackTasks, get().projects);
+          set({ tasks: rollbackTasks, projects });
         });
-      return { tasks, projects: _syncProgress(tasks, s.projects) };
+      const projects = projectId
+        ? _syncOneProject(tasks, s.projects, projectId)
+        : _syncProgress(tasks, s.projects);
+      return { tasks, projects };
     });
   },
 
@@ -143,13 +151,20 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   getProjectTasks: (projectId) => get().tasks.filter((t) => t.projectId === projectId),
 }));
 
-// Tüm projelerin progress değerini görevlere göre hesaplar
+// Tüm projelerin progress değerini görevlere göre hesaplar (load / deleteProject)
 function _syncProgress(tasks: import("@/types").Task[], projects: import("@/types").Project[]): import("@/types").Project[] {
-  return projects.map((p) => {
-    const pt = tasks.filter((t) => t.projectId === p.id);
-    if (pt.length === 0) return p;
-    const done = pt.filter((t) => t.status === "done").length;
-    const progress = Math.round((done / pt.length) * 100);
-    return progress !== p.progress ? { ...p, progress } : p;
-  });
+  return projects.map((p) => _calcProgress(tasks, p));
+}
+
+// Tek bir projenin progress değerini günceller (updateTask / moveTask)
+function _syncOneProject(tasks: import("@/types").Task[], projects: import("@/types").Project[], projectId: string): import("@/types").Project[] {
+  return projects.map((p) => (p.id === projectId ? _calcProgress(tasks, p) : p));
+}
+
+function _calcProgress(tasks: import("@/types").Task[], project: import("@/types").Project): import("@/types").Project {
+  const pt = tasks.filter((t) => t.projectId === project.id);
+  if (pt.length === 0) return project;
+  const done = pt.filter((t) => t.status === "done").length;
+  const progress = Math.round((done / pt.length) * 100);
+  return progress !== project.progress ? { ...project, progress } : project;
 }
