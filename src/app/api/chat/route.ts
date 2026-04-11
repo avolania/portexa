@@ -1,9 +1,19 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
+  const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { messages, context } = await req.json();
 
   const system = `Sen Pixanto PPM platformunun yapay zeka asistanı Pixa'sın. Kullanıcıya proje yönetimi, görev takibi, ekip koordinasyonu, bütçe izleme ve yönetişim konularında yardım edersin.
