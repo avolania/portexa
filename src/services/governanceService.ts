@@ -13,12 +13,13 @@ export async function createGovernanceItem(item: GovernanceItem, orgId: string):
 export async function updateGovernanceItem(
   id: string,
   patch: Partial<GovernanceItem>,
-  current: GovernanceItem[]
+  current: GovernanceItem[],
+  orgId: string,
 ): Promise<GovernanceItem | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
   const updated: GovernanceItem = { ...existing, ...patch, updatedAt: new Date().toISOString() };
-  await dbUpsert("governance_items", id, updated);
+  await dbUpsert("governance_items", id, updated, orgId);
   return updated;
 }
 

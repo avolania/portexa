@@ -39,13 +39,15 @@ export const useGovernanceStore = create<GovernanceState>()((set, get) => ({
     createGovernanceItem(item, orgId);
   },
 
-  updateItem: (id, patch) =>
+  updateItem: (id, patch) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => {
-      updateGovernanceItem(id, patch, s.items).then((updated) => {
+      updateGovernanceItem(id, patch, s.items, orgId).then((updated) => {
         if (updated) set((s2) => ({ items: s2.items.map((i) => (i.id === id ? updated : i)) }));
       });
       return { items: s.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) };
-    }),
+    });
+  },
 
   deleteItem: (id) => {
     set((s) => ({ items: s.items.filter((i) => i.id !== id) }));
