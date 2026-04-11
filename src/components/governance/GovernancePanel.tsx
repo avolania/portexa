@@ -229,6 +229,7 @@ export default function GovernancePanel({ projectId }: Props) {
             decidedBy: row.decidedBy || undefined,
             rationale: row.rationale || undefined,
             createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           });
           success++;
         });
@@ -382,20 +383,24 @@ export default function GovernancePanel({ projectId }: Props) {
         form.recurrenceEndDate,
       );
       dates.forEach((d, idx) => {
+        const now = new Date().toISOString();
         addItem({
           ...baseItem,
           id: `g${Date.now()}_${idx}`,
           title: dates.length > 1 ? `${baseItem.title} #${idx + 1}` : baseItem.title,
           meetingDate: buildMeetingDate(d, form.meetingHour, form.meetingMinute),
-          createdAt: new Date().toISOString(),
+          createdAt: now,
+          updatedAt: now,
         });
       });
     } else {
+      const now = new Date().toISOString();
       addItem({
         ...baseItem,
         id: `g${Date.now()}`,
         meetingDate: buildMeetingDate(form.meetingDateOnly, form.meetingHour, form.meetingMinute),
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
       });
     }
 

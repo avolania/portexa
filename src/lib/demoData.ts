@@ -201,7 +201,7 @@ export const DEMO_GOVERNANCE: GovernanceItem[] = [
     id: "g1", projectId: "2", category: "charter",
     title: "Mobil Uygulama Redesign Proje Tüzüğü",
     description: "Projenin kapsamı, hedefleri, paydaşları ve temel kısıtları tanımlanmıştır.",
-    status: "approved", owner: "Ahmet Yılmaz", createdAt: "2026-02-01T09:00:00Z",
+    status: "approved", owner: "Ahmet Yılmaz", createdAt: "2026-02-01T09:00:00Z", updatedAt: "2026-02-01T09:00:00Z",
   },
   {
     id: "g2", projectId: "2", category: "meeting",
@@ -211,7 +211,7 @@ export const DEMO_GOVERNANCE: GovernanceItem[] = [
     meetingDate: "2026-02-28T14:00:00Z",
     attendees: ["Ahmet Yılmaz", "Zeynep Kaya", "Mehmet Demir"],
     minutes: "Tasarım fazı %100 tamamlandı. Geliştirme fazına geçildi.",
-    createdAt: "2026-02-28T09:00:00Z",
+    createdAt: "2026-02-28T09:00:00Z", updatedAt: "2026-02-28T09:00:00Z",
   },
   {
     id: "g3", projectId: "2", category: "meeting",
@@ -220,7 +220,7 @@ export const DEMO_GOVERNANCE: GovernanceItem[] = [
     status: "scheduled", owner: "Zeynep Kaya",
     meetingDate: "2026-03-28T14:00:00Z",
     attendees: ["Ahmet Yılmaz", "Zeynep Kaya", "Mehmet Demir", "Ayşe Çelik"],
-    createdAt: "2026-03-10T09:00:00Z",
+    createdAt: "2026-03-10T09:00:00Z", updatedAt: "2026-03-10T09:00:00Z",
   },
   {
     id: "g4", projectId: "2", category: "risk",
@@ -229,7 +229,7 @@ export const DEMO_GOVERNANCE: GovernanceItem[] = [
     status: "open", priority: "high", owner: "Ahmet Yılmaz",
     impact: "high", probability: "high",
     mitigationPlan: "Haftalık bütçe takibi yapılacak, gereksiz harcamalar kısıtlanacak.",
-    createdAt: "2026-03-15T09:00:00Z",
+    createdAt: "2026-03-15T09:00:00Z", updatedAt: "2026-03-15T09:00:00Z",
   },
   {
     id: "g5", projectId: "2", category: "risk",
@@ -238,7 +238,7 @@ export const DEMO_GOVERNANCE: GovernanceItem[] = [
     status: "mitigated", priority: "medium", owner: "Zeynep Kaya",
     impact: "medium", probability: "low",
     mitigationPlan: "Freelance geliştirici alternatifi değerlendirildi ve yedek plan oluşturuldu.",
-    createdAt: "2026-02-10T09:00:00Z",
+    createdAt: "2026-02-10T09:00:00Z", updatedAt: "2026-02-10T09:00:00Z",
   },
   {
     id: "g6", projectId: "2", category: "change",
@@ -247,7 +247,7 @@ export const DEMO_GOVERNANCE: GovernanceItem[] = [
     status: "pending", priority: "medium", owner: "Mehmet Demir",
     requestedBy: "Ürün Yöneticisi",
     impactAssessment: "Tahmini 2 hafta ek geliştirme süresi ve ₺15.000 ek maliyet.",
-    dueDate: "2026-03-25", createdAt: "2026-03-12T09:00:00Z",
+    dueDate: "2026-03-25", createdAt: "2026-03-12T09:00:00Z", updatedAt: "2026-03-12T09:00:00Z",
   },
   {
     id: "g7", projectId: "2", category: "change",
@@ -256,21 +256,21 @@ export const DEMO_GOVERNANCE: GovernanceItem[] = [
     status: "approved", priority: "low", owner: "Ayşe Çelik",
     requestedBy: "Teknik Lider",
     impactAssessment: "Yaklaşık %5 kullanıcı etkilenecek. Test coverage genişletilmeli.",
-    createdAt: "2026-02-25T09:00:00Z",
+    createdAt: "2026-02-25T09:00:00Z", updatedAt: "2026-02-25T09:00:00Z",
   },
   {
     id: "g8", projectId: "2", category: "issue",
     title: "App Store Onay Süreci Gecikmesi",
     description: "Apple App Store inceleme sürecinin 2 haftaya kadar uzayabileceği öğrenildi.",
     status: "open", priority: "high", owner: "Ahmet Yılmaz",
-    dueDate: "2026-04-10", createdAt: "2026-03-18T09:00:00Z",
+    dueDate: "2026-04-10", createdAt: "2026-03-18T09:00:00Z", updatedAt: "2026-03-18T09:00:00Z",
   },
   {
     id: "g9", projectId: "2", category: "issue",
     title: "Tasarım Sistemi Uyumsuzluğu",
     description: "Bazı komponentler mevcut tasarım sistemi standartlarıyla uyumsuz.",
     status: "closed", priority: "medium", owner: "Mehmet Demir",
-    createdAt: "2026-03-05T09:00:00Z",
+    createdAt: "2026-03-05T09:00:00Z", updatedAt: "2026-03-05T09:00:00Z",
   },
   {
     id: "g10", projectId: "2", category: "decision",
@@ -279,7 +279,7 @@ export const DEMO_GOVERNANCE: GovernanceItem[] = [
     status: "approved", owner: "Ahmet Yılmaz",
     decidedBy: "Yürütme Komitesi",
     rationale: "Mevcut ekip yetkinliği ve proje süresini kısaltma önceliği göz önünde bulundurularak React Native tercih edildi.",
-    createdAt: "2026-02-05T09:00:00Z",
+    createdAt: "2026-02-05T09:00:00Z", updatedAt: "2026-02-05T09:00:00Z",
   },
 ];
 
