@@ -6,7 +6,8 @@ export async function loadGovernanceItems(): Promise<GovernanceItem[]> {
 }
 
 export async function createGovernanceItem(item: GovernanceItem, orgId: string): Promise<void> {
-  await dbUpsert("governance_items", item.id, item, orgId);
+  const normalized: GovernanceItem = { ...item, updatedAt: item.updatedAt ?? item.createdAt };
+  await dbUpsert("governance_items", item.id, normalized, orgId);
 }
 
 export async function updateGovernanceItem(
