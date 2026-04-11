@@ -56,7 +56,10 @@ export async function dbLoadProfile(userId: string): Promise<User | null> {
 
 export async function dbUpsertProfile(userId: string, data: unknown): Promise<void> {
   const { error } = await supabase.from("auth_profiles").upsert([{ id: userId, data }], { defaultToNull: false });
-  if (error) console.error("[db] upsert auth_profiles:", error.message);
+  if (error) {
+    console.error("[db] upsert auth_profiles:", error.message);
+    throw new Error(error.message);
+  }
 }
 
 // E-posta ile kullanıcı bul ve orgId'yi güncelle (security definer RPC ile RLS bypass)
@@ -87,7 +90,10 @@ export async function dbLoadOrg(orgId: string): Promise<Organization | null> {
 
 export async function dbUpsertOrg(orgId: string, org: Organization): Promise<void> {
   const { error } = await supabase.from("organizations").upsert([{ id: orgId, data: org }], { defaultToNull: false });
-  if (error) console.error("[db] upsert organization:", error.message);
+  if (error) {
+    console.error("[db] upsert organization:", error.message);
+    throw new Error(error.message);
+  }
 }
 
 // ─── Storage helpers ──────────────────────────────────────────────────────────
