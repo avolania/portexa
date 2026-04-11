@@ -10,6 +10,8 @@ import {
 
 interface WorkflowState {
   templates: WorkflowTemplate[];
+  loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   addTemplate: (t: WorkflowTemplate) => void;
   updateTemplate: (id: string, data: Partial<WorkflowTemplate>) => void;
@@ -18,10 +20,17 @@ interface WorkflowState {
 
 export const useWorkflowStore = create<WorkflowState>()((set) => ({
   templates: [],
+  loading: false,
+  error: null,
 
   load: async () => {
-    const templates = await loadWorkflowTemplates();
-    set({ templates });
+    set({ loading: true, error: null });
+    try {
+      const templates = await loadWorkflowTemplates();
+      set({ templates, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   addTemplate: (t) => {

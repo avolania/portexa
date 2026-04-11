@@ -11,6 +11,8 @@ import {
 
 interface GovernanceState {
   items: GovernanceItem[];
+  loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   reset: (items: GovernanceItem[]) => void;
   addItem: (item: GovernanceItem) => void;
@@ -21,10 +23,17 @@ interface GovernanceState {
 
 export const useGovernanceStore = create<GovernanceState>()((set, get) => ({
   items: [],
+  loading: false,
+  error: null,
 
   load: async () => {
-    const items = await loadGovernanceItems();
-    set({ items });
+    set({ loading: true, error: null });
+    try {
+      const items = await loadGovernanceItems();
+      set({ items, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   reset: (items) => {

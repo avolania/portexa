@@ -13,7 +13,9 @@ import {
 interface FileState {
   files: ProjectFile[];
   folders: FileFolder[];
+  loading: boolean;
   uploading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   addFolder: (folder: FileFolder) => void;
   renameFolder: (id: string, name: string) => void;
@@ -31,11 +33,18 @@ interface FileState {
 export const useFileStore = create<FileState>()((set, get) => ({
   files: [],
   folders: [],
+  loading: false,
   uploading: false,
+  error: null,
 
   load: async () => {
-    const { files, folders } = await loadFiles();
-    set({ files, folders });
+    set({ loading: true, error: null });
+    try {
+      const { files, folders } = await loadFiles();
+      set({ files, folders, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   addFolder: (folder) => {

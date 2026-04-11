@@ -12,6 +12,8 @@ import {
 
 interface RequestState {
   requests: WorkflowRequest[];
+  loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   addRequest: (r: WorkflowRequest) => void;
   updateRequest: (id: string, data: Partial<WorkflowRequest>) => void;
@@ -22,10 +24,17 @@ interface RequestState {
 
 export const useRequestStore = create<RequestState>()((set) => ({
   requests: [],
+  loading: false,
+  error: null,
 
   load: async () => {
-    const requests = await loadRequests();
-    set({ requests });
+    set({ loading: true, error: null });
+    try {
+      const requests = await loadRequests();
+      set({ requests, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   addRequest: (r) => {

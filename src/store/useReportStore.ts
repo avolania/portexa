@@ -12,6 +12,8 @@ import {
 
 interface ReportState {
   reports: Report[];
+  loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   addReport: (report: Report) => void;
   updateReport: (id: string, data: Partial<Report>) => void;
@@ -23,10 +25,17 @@ interface ReportState {
 
 export const useReportStore = create<ReportState>()((set, get) => ({
   reports: [],
+  loading: false,
+  error: null,
 
   load: async () => {
-    const reports = await loadReports();
-    set({ reports });
+    set({ loading: true, error: null });
+    try {
+      const reports = await loadReports();
+      set({ reports, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   reset: (reports) => {

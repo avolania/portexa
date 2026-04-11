@@ -14,6 +14,8 @@ import {
 
 interface ActivityState {
   entries: ActivityEntry[];
+  loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   addEntry: (entry: ActivityEntry) => void;
   updateEntry: (id: string, data: Partial<ActivityEntry>) => void;
@@ -26,10 +28,17 @@ interface ActivityState {
 
 export const useActivityStore = create<ActivityState>()((set) => ({
   entries: [],
+  loading: false,
+  error: null,
 
   load: async () => {
-    const entries = await loadActivities();
-    set({ entries });
+    set({ loading: true, error: null });
+    try {
+      const entries = await loadActivities();
+      set({ entries, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   reset: (entries = []) => {

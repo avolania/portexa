@@ -11,6 +11,8 @@ import {
 
 interface NotificationState {
   notifications: Notification[];
+  loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   reset: (notifications: Notification[]) => void;
   markAsRead: (id: string) => void;
@@ -21,10 +23,17 @@ interface NotificationState {
 
 export const useNotificationStore = create<NotificationState>()((set, get) => ({
   notifications: [],
+  loading: false,
+  error: null,
 
   load: async () => {
-    const notifications = await loadNotifications();
-    set({ notifications });
+    set({ loading: true, error: null });
+    try {
+      const notifications = await loadNotifications();
+      set({ notifications, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   reset: (notifications) => {

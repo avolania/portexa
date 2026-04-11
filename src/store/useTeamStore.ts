@@ -14,6 +14,8 @@ import {
 
 interface TeamState {
   members: TeamMember[];
+  loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   addMember: (member: TeamMember) => Promise<void>;
   updateMember: (id: string, data: Partial<TeamMember>) => void;
@@ -26,10 +28,17 @@ interface TeamState {
 
 export const useTeamStore = create<TeamState>()((set, get) => ({
   members: [],
+  loading: false,
+  error: null,
 
   load: async () => {
-    const members = await loadTeamMembers();
-    set({ members });
+    set({ loading: true, error: null });
+    try {
+      const members = await loadTeamMembers();
+      set({ members, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   reset: (members) => {
