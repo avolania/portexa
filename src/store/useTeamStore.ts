@@ -17,10 +17,10 @@ interface TeamState {
   load: () => Promise<void>;
   addMember: (member: TeamMember) => Promise<void>;
   updateMember: (id: string, data: Partial<TeamMember>) => void;
-  removeMember: (id: string) => void;
-  changeRole: (id: string, role: UserRole) => void;
-  assignProject: (memberId: string, projectId: string) => void;
-  unassignProject: (memberId: string, projectId: string) => void;
+  removeMember: (id: string) => Promise<void>;
+  changeRole: (id: string, role: UserRole) => Promise<void>;
+  assignProject: (memberId: string, projectId: string) => Promise<void>;
+  unassignProject: (memberId: string, projectId: string) => Promise<void>;
   reset: (members: TeamMember[]) => void;
 }
 
@@ -58,46 +58,62 @@ export const useTeamStore = create<TeamState>()((set, get) => ({
       return { members: s.members.map((m) => (m.id === id ? { ...m, ...patch } : m)) };
     }),
 
-  removeMember: (id) => {
+  removeMember: async (id) => {
+    const rollback = get().members.find((m) => m.id === id);
     set((s) => ({ members: s.members.filter((m) => m.id !== id) }));
-    removeMember(id);
+    try {
+      await removeMember(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ members: [...s.members, rollback] }));
+      throw err;
+    }
   },
 
-  changeRole: (id, role) =>
-    set((s) => {
-      changeMemberRole(id, role, s.members).then((updated) => {
-        if (updated) set((s2) => ({ members: s2.members.map((m) => (m.id === id ? updated : m)) }));
-      });
-      return { members: s.members.map((m) => (m.id === id ? { ...m, role } : m)) };
-    }),
+  changeRole: async (id, role) => {
+    const rollback = get().members.find((m) => m.id === id);
+    set((s) => ({ members: s.members.map((m) => (m.id === id ? { ...m, role } : m)) }));
+    try {
+      const updated = await changeMemberRole(id, role, get().members);
+      if (updated) set((s) => ({ members: s.members.map((m) => (m.id === id ? updated : m)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ members: s.members.map((m) => (m.id === id ? rollback : m)) }));
+      throw err;
+    }
+  },
 
-  assignProject: (memberId, projectId) =>
-    set((s) => {
-      assignMemberToProject(memberId, projectId, s.members).then((updated) => {
-        if (updated)
-          set((s2) => ({ members: s2.members.map((m) => (m.id === memberId ? updated : m)) }));
-      });
-      return {
-        members: s.members.map((m) =>
-          m.id === memberId && !m.projectIds.includes(projectId)
-            ? { ...m, projectIds: [...m.projectIds, projectId] }
-            : m
-        ),
-      };
-    }),
+  assignProject: async (memberId, projectId) => {
+    const rollback = get().members.find((m) => m.id === memberId);
+    set((s) => ({
+      members: s.members.map((m) =>
+        m.id === memberId && !m.projectIds.includes(projectId)
+          ? { ...m, projectIds: [...m.projectIds, projectId] }
+          : m
+      ),
+    }));
+    try {
+      const updated = await assignMemberToProject(memberId, projectId, get().members);
+      if (updated) set((s) => ({ members: s.members.map((m) => (m.id === memberId ? updated : m)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ members: s.members.map((m) => (m.id === memberId ? rollback : m)) }));
+      throw err;
+    }
+  },
 
-  unassignProject: (memberId, projectId) =>
-    set((s) => {
-      unassignMemberFromProject(memberId, projectId, s.members).then((updated) => {
-        if (updated)
-          set((s2) => ({ members: s2.members.map((m) => (m.id === memberId ? updated : m)) }));
-      });
-      return {
-        members: s.members.map((m) =>
-          m.id === memberId
-            ? { ...m, projectIds: m.projectIds.filter((p) => p !== projectId) }
-            : m
-        ),
-      };
-    }),
+  unassignProject: async (memberId, projectId) => {
+    const rollback = get().members.find((m) => m.id === memberId);
+    set((s) => ({
+      members: s.members.map((m) =>
+        m.id === memberId
+          ? { ...m, projectIds: m.projectIds.filter((p) => p !== projectId) }
+          : m
+      ),
+    }));
+    try {
+      const updated = await unassignMemberFromProject(memberId, projectId, get().members);
+      if (updated) set((s) => ({ members: s.members.map((m) => (m.id === memberId ? updated : m)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ members: s.members.map((m) => (m.id === memberId ? rollback : m)) }));
+      throw err;
+    }
+  },
 }));
