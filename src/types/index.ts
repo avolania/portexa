@@ -398,6 +398,7 @@ export interface GovernanceItem {
   owner?: string;
   dueDate?: string;
   createdAt: string;
+  updatedAt?: string;
   // Risk specific
   impact?: "low" | "medium" | "high";
   probability?: "low" | "medium" | "high";

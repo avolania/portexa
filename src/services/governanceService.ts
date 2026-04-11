@@ -16,7 +16,7 @@ export async function updateGovernanceItem(
 ): Promise<GovernanceItem | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
-  const updated: GovernanceItem = { ...existing, ...patch };
+  const updated: GovernanceItem = { ...existing, ...patch, updatedAt: new Date().toISOString() };
   await dbUpsert("governance_items", id, updated);
   return updated;
 }
