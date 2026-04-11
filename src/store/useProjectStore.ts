@@ -20,13 +20,13 @@ interface ProjectState {
   load: () => Promise<void>;
   reset: (projects: Project[], tasks: Task[]) => void;
   setSelectedProject: (id: string | null) => void;
-  addProject: (project: Project) => void;
+  addProject: (project: Project) => Promise<void>;
   updateProject: (id: string, data: Partial<Project>) => Promise<void>;
-  deleteProject: (id: string) => void;
-  addTask: (task: Task) => void;
+  deleteProject: (id: string) => Promise<void>;
+  addTask: (task: Task) => Promise<void>;
   updateTask: (id: string, data: Partial<Task>) => Promise<void>;
   moveTask: (taskId: string, newStatus: TaskStatus) => void;
-  deleteTask: (id: string) => void;
+  deleteTask: (id: string) => Promise<void>;
   getProjectTasks: (projectId: string) => Task[];
 }
 
@@ -47,10 +47,15 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
 
   setSelectedProject: (id) => set({ selectedProjectId: id }),
 
-  addProject: (project) => {
+  addProject: async (project) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ projects: [...s.projects, project] }));
-    createProject(project, orgId);
+    try {
+      await createProject(project, orgId);
+    } catch (err) {
+      set((s) => ({ projects: s.projects.filter((p) => p.id !== project.id) }));
+      throw err;
+    }
   },
 
   updateProject: async (id, patch) => {
@@ -61,19 +66,34 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     if (updated) set((s) => ({ projects: s.projects.map((p) => (p.id === id ? updated : p)) }));
   },
 
-  deleteProject: (id) => {
-    const { tasks } = get();
+  deleteProject: async (id) => {
+    const { projects, tasks } = get();
+    const rollbackProject = projects.find((p) => p.id === id);
+    const rollbackTasks   = tasks.filter((t) => t.projectId === id);
     set((s) => ({
       projects: s.projects.filter((p) => p.id !== id),
-      tasks: s.tasks.filter((t) => t.projectId !== id),
+      tasks:    s.tasks.filter((t) => t.projectId !== id),
     }));
-    deleteProject(id, tasks);
+    try {
+      await deleteProject(id, tasks);
+    } catch (err) {
+      set((s) => ({
+        projects: rollbackProject ? [...s.projects, rollbackProject] : s.projects,
+        tasks:    [...s.tasks, ...rollbackTasks],
+      }));
+      throw err;
+    }
   },
 
-  addTask: (task) => {
+  addTask: async (task) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ tasks: [...s.tasks, task] }));
-    createTask(task, orgId);
+    try {
+      await createTask(task, orgId);
+    } catch (err) {
+      set((s) => ({ tasks: s.tasks.filter((t) => t.id !== task.id) }));
+      throw err;
+    }
   },
 
   updateTask: async (id, patch) => {
@@ -100,9 +120,15 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       return { tasks, projects: _syncProgress(tasks, s.projects) };
     }),
 
-  deleteTask: (id) => {
+  deleteTask: async (id) => {
+    const rollback = get().tasks.find((t) => t.id === id);
     set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
-    deleteTask(id);
+    try {
+      await deleteTask(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ tasks: [...s.tasks, rollback] }));
+      throw err;
+    }
   },
 
   getProjectTasks: (projectId) => get().tasks.filter((t) => t.projectId === projectId),
