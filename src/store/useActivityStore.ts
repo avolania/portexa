@@ -18,11 +18,11 @@ interface ActivityState {
   error: string | null;
   load: () => Promise<void>;
   addEntry: (entry: ActivityEntry) => Promise<void>;
-  updateEntry: (id: string, data: Partial<ActivityEntry>) => void;
+  updateEntry: (id: string, data: Partial<ActivityEntry>) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
-  submitEntry: (id: string) => void;
-  approveEntry: (id: string, reviewerId: string) => void;
-  rejectEntry: (id: string, reviewerId: string, note?: string) => void;
+  submitEntry: (id: string) => Promise<void>;
+  approveEntry: (id: string, reviewerId: string) => Promise<void>;
+  rejectEntry: (id: string, reviewerId: string, note?: string) => Promise<void>;
   reset: (entries?: ActivityEntry[]) => void;
 }
 
@@ -58,18 +58,21 @@ export const useActivityStore = create<ActivityState>()((set, get) => ({
     }
   },
 
-  updateEntry: (id, patch) =>
-    set((s) => {
-      updateActivity(id, patch, s.entries).then((updated) => {
-        if (updated)
-          set((s2) => ({ entries: s2.entries.map((e) => (e.id === id ? updated : e)) }));
-      });
-      return {
-        entries: s.entries.map((e) =>
-          e.id === id ? { ...e, ...patch, updatedAt: new Date().toISOString() } : e
-        ),
-      };
-    }),
+  updateEntry: async (id, patch) => {
+    const rollback = get().entries.find((e) => e.id === id);
+    set((s) => ({
+      entries: s.entries.map((e) =>
+        e.id === id ? { ...e, ...patch, updatedAt: new Date().toISOString() } : e
+      ),
+    }));
+    try {
+      const updated = await updateActivity(id, patch, get().entries);
+      if (updated) set((s) => ({ entries: s.entries.map((e) => (e.id === id ? updated : e)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ entries: s.entries.map((e) => (e.id === id ? rollback : e)) }));
+      throw err;
+    }
+  },
 
   deleteEntry: async (id) => {
     const rollback = get().entries.find((e) => e.id === id);
@@ -82,50 +85,59 @@ export const useActivityStore = create<ActivityState>()((set, get) => ({
     }
   },
 
-  submitEntry: (id) =>
-    set((s) => {
-      submitActivity(id, s.entries).then((updated) => {
-        if (updated)
-          set((s2) => ({ entries: s2.entries.map((e) => (e.id === id ? updated : e)) }));
-      });
-      return {
-        entries: s.entries.map((e) =>
-          e.id === id
-            ? { ...e, status: "submitted" as const, submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-            : e
-        ),
-      };
-    }),
+  submitEntry: async (id) => {
+    const rollback = get().entries.find((e) => e.id === id);
+    set((s) => ({
+      entries: s.entries.map((e) =>
+        e.id === id
+          ? { ...e, status: "submitted" as const, submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+          : e
+      ),
+    }));
+    try {
+      const updated = await submitActivity(id, get().entries);
+      if (updated) set((s) => ({ entries: s.entries.map((e) => (e.id === id ? updated : e)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ entries: s.entries.map((e) => (e.id === id ? rollback : e)) }));
+      throw err;
+    }
+  },
 
-  approveEntry: (id, reviewerId) =>
-    set((s) => {
-      approveActivity(id, reviewerId, s.entries).then((updated) => {
-        if (updated)
-          set((s2) => ({ entries: s2.entries.map((e) => (e.id === id ? updated : e)) }));
-      });
-      const now = new Date().toISOString();
-      return {
-        entries: s.entries.map((e) =>
-          e.id === id
-            ? { ...e, status: "approved" as const, reviewedBy: reviewerId, reviewedAt: now, updatedAt: now }
-            : e
-        ),
-      };
-    }),
+  approveEntry: async (id, reviewerId) => {
+    const rollback = get().entries.find((e) => e.id === id);
+    const now = new Date().toISOString();
+    set((s) => ({
+      entries: s.entries.map((e) =>
+        e.id === id
+          ? { ...e, status: "approved" as const, reviewedBy: reviewerId, reviewedAt: now, updatedAt: now }
+          : e
+      ),
+    }));
+    try {
+      const updated = await approveActivity(id, reviewerId, get().entries);
+      if (updated) set((s) => ({ entries: s.entries.map((e) => (e.id === id ? updated : e)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ entries: s.entries.map((e) => (e.id === id ? rollback : e)) }));
+      throw err;
+    }
+  },
 
-  rejectEntry: (id, reviewerId, note) =>
-    set((s) => {
-      rejectActivity(id, reviewerId, s.entries, note).then((updated) => {
-        if (updated)
-          set((s2) => ({ entries: s2.entries.map((e) => (e.id === id ? updated : e)) }));
-      });
-      const now = new Date().toISOString();
-      return {
-        entries: s.entries.map((e) =>
-          e.id === id
-            ? { ...e, status: "rejected" as const, reviewedBy: reviewerId, reviewedAt: now, rejectionNote: note, updatedAt: now }
-            : e
-        ),
-      };
-    }),
+  rejectEntry: async (id, reviewerId, note) => {
+    const rollback = get().entries.find((e) => e.id === id);
+    const now = new Date().toISOString();
+    set((s) => ({
+      entries: s.entries.map((e) =>
+        e.id === id
+          ? { ...e, status: "rejected" as const, reviewedBy: reviewerId, reviewedAt: now, rejectionNote: note, updatedAt: now }
+          : e
+      ),
+    }));
+    try {
+      const updated = await rejectActivity(id, reviewerId, get().entries, note);
+      if (updated) set((s) => ({ entries: s.entries.map((e) => (e.id === id ? updated : e)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ entries: s.entries.map((e) => (e.id === id ? rollback : e)) }));
+      throw err;
+    }
+  },
 }));

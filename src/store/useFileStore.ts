@@ -17,8 +17,8 @@ interface FileState {
   uploading: boolean;
   error: string | null;
   load: () => Promise<void>;
-  addFolder: (folder: FileFolder) => void;
-  renameFolder: (id: string, name: string) => void;
+  addFolder: (folder: FileFolder) => Promise<void>;
+  renameFolder: (id: string, name: string) => Promise<void>;
   deleteFolder: (id: string) => void;
   uploadFile: (
     file: File,
@@ -47,15 +47,26 @@ export const useFileStore = create<FileState>()((set, get) => ({
     }
   },
 
-  addFolder: (folder) => {
+  addFolder: async (folder) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ folders: [...s.folders, folder] }));
-    createFolder(folder, orgId);
+    try {
+      await createFolder(folder, orgId);
+    } catch (err) {
+      set((s) => ({ folders: s.folders.filter((f) => f.id !== folder.id) }));
+      throw err;
+    }
   },
 
-  renameFolder: (id, name) => {
+  renameFolder: async (id, name) => {
+    const rollback = get().folders.find((f) => f.id === id);
     set((s) => ({ folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)) }));
-    renameFolder(id, name, get().folders);
+    try {
+      await renameFolder(id, name, get().folders);
+    } catch (err) {
+      if (rollback) set((s) => ({ folders: s.folders.map((f) => (f.id === id ? rollback : f)) }));
+      throw err;
+    }
   },
 
   deleteFolder: (id) => {

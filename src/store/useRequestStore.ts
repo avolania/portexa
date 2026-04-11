@@ -16,10 +16,10 @@ interface RequestState {
   error: string | null;
   load: () => Promise<void>;
   addRequest: (r: WorkflowRequest) => Promise<void>;
-  updateRequest: (id: string, data: Partial<WorkflowRequest>) => void;
+  updateRequest: (id: string, data: Partial<WorkflowRequest>) => Promise<void>;
   deleteRequest: (id: string) => Promise<void>;
-  review: (id: string, status: "approved" | "rejected", reviewedBy: string, note?: string) => void;
-  advanceStep: (id: string, entry: WorkflowStepHistoryEntry, isLastStep: boolean) => void;
+  review: (id: string, status: "approved" | "rejected", reviewedBy: string, note?: string) => Promise<void>;
+  advanceStep: (id: string, entry: WorkflowStepHistoryEntry, isLastStep: boolean) => Promise<void>;
 }
 
 export const useRequestStore = create<RequestState>()((set, get) => ({
@@ -48,18 +48,21 @@ export const useRequestStore = create<RequestState>()((set, get) => ({
     }
   },
 
-  updateRequest: (id, patch) =>
-    set((s) => {
-      updateRequest(id, patch, s.requests).then((updated) => {
-        if (updated)
-          set((s2) => ({ requests: s2.requests.map((r) => (r.id === id ? updated : r)) }));
-      });
-      return {
-        requests: s.requests.map((r) =>
-          r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r
-        ),
-      };
-    }),
+  updateRequest: async (id, patch) => {
+    const rollback = get().requests.find((r) => r.id === id);
+    set((s) => ({
+      requests: s.requests.map((r) =>
+        r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r
+      ),
+    }));
+    try {
+      const updated = await updateRequest(id, patch, get().requests);
+      if (updated) set((s) => ({ requests: s.requests.map((r) => (r.id === id ? updated : r)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ requests: s.requests.map((r) => (r.id === id ? rollback : r)) }));
+      throw err;
+    }
+  },
 
   deleteRequest: async (id) => {
     const rollback = get().requests.find((r) => r.id === id);
@@ -72,51 +75,57 @@ export const useRequestStore = create<RequestState>()((set, get) => ({
     }
   },
 
-  review: (id, status, reviewedBy, note) =>
-    set((s) => {
-      reviewRequest(id, status, reviewedBy, s.requests, note).then((updated) => {
-        if (updated)
-          set((s2) => ({ requests: s2.requests.map((r) => (r.id === id ? updated : r)) }));
-      });
-      const now = new Date().toISOString();
-      return {
-        requests: s.requests.map((r) =>
-          r.id === id
-            ? { ...r, status, reviewedBy, reviewedAt: now, reviewNote: note ?? r.reviewNote, updatedAt: now }
-            : r
-        ),
-      };
-    }),
+  review: async (id, status, reviewedBy, note) => {
+    const rollback = get().requests.find((r) => r.id === id);
+    const now = new Date().toISOString();
+    set((s) => ({
+      requests: s.requests.map((r) =>
+        r.id === id
+          ? { ...r, status, reviewedBy, reviewedAt: now, reviewNote: note ?? r.reviewNote, updatedAt: now }
+          : r
+      ),
+    }));
+    try {
+      const updated = await reviewRequest(id, status, reviewedBy, get().requests, note);
+      if (updated) set((s) => ({ requests: s.requests.map((r) => (r.id === id ? updated : r)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ requests: s.requests.map((r) => (r.id === id ? rollback : r)) }));
+      throw err;
+    }
+  },
 
-  advanceStep: (id, entry, isLastStep) =>
-    set((s) => {
-      advanceRequestStep(id, entry, isLastStep, s.requests).then((updated) => {
-        if (updated)
-          set((s2) => ({ requests: s2.requests.map((r) => (r.id === id ? updated : r)) }));
-      });
-      const now = new Date().toISOString();
-      const existing = s.requests.find((r) => r.id === id);
-      if (!existing) return {};
-      const history = [...(existing.stepHistory ?? []), entry];
-      const currentIdx = existing.currentStepIndex ?? 0;
-      let status: RequestStatus = existing.status;
-      let nextIdx = currentIdx;
-      if (entry.action === "rejected") {
-        status = "rejected";
-      } else if (isLastStep) {
-        status = "approved";
-      } else {
-        status = "in_review";
-        nextIdx = currentIdx + 1;
-      }
-      return {
-        requests: s.requests.map((r) =>
-          r.id === id
-            ? { ...r, status, stepHistory: history, currentStepIndex: nextIdx, reviewedBy: entry.actorId, reviewedAt: now, reviewNote: entry.note, updatedAt: now }
-            : r
-        ),
-      };
-    }),
+  advanceStep: async (id, entry, isLastStep) => {
+    const rollback = get().requests.find((r) => r.id === id);
+    const now = new Date().toISOString();
+    const existing = get().requests.find((r) => r.id === id);
+    if (!existing) return;
+    const history = [...(existing.stepHistory ?? []), entry];
+    const currentIdx = existing.currentStepIndex ?? 0;
+    let status: RequestStatus = existing.status;
+    let nextIdx = currentIdx;
+    if (entry.action === "rejected") {
+      status = "rejected";
+    } else if (isLastStep) {
+      status = "approved";
+    } else {
+      status = "in_review";
+      nextIdx = currentIdx + 1;
+    }
+    set((s) => ({
+      requests: s.requests.map((r) =>
+        r.id === id
+          ? { ...r, status, stepHistory: history, currentStepIndex: nextIdx, reviewedBy: entry.actorId, reviewedAt: now, reviewNote: entry.note, updatedAt: now }
+          : r
+      ),
+    }));
+    try {
+      const updated = await advanceRequestStep(id, entry, isLastStep, get().requests);
+      if (updated) set((s) => ({ requests: s.requests.map((r) => (r.id === id ? updated : r)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ requests: s.requests.map((r) => (r.id === id ? rollback : r)) }));
+      throw err;
+    }
+  },
 }));
 
 export const REQUEST_TYPE_META: Record<WorkflowRequest["type"], { label: string; icon: string; color: string; bg: string }> = {

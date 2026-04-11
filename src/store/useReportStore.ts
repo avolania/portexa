@@ -16,8 +16,8 @@ interface ReportState {
   error: string | null;
   load: () => Promise<void>;
   addReport: (report: Report) => Promise<void>;
-  updateReport: (id: string, data: Partial<Report>) => void;
-  updateSection: (reportId: string, sectionId: string, content: string) => void;
+  updateReport: (id: string, data: Partial<Report>) => Promise<void>;
+  updateSection: (reportId: string, sectionId: string, content: string) => Promise<void>;
   deleteReport: (id: string) => Promise<void>;
   getByType: (type: ReportType) => Report[];
   reset: (reports: Report[]) => void;
@@ -55,41 +55,45 @@ export const useReportStore = create<ReportState>()((set, get) => ({
     }
   },
 
-  updateReport: (id, patch) =>
-    set((s) => {
-      updateReport(id, patch, s.reports).then((updated) => {
-        if (updated)
-          set((s2) => ({ reports: s2.reports.map((r) => (r.id === id ? updated : r)) }));
-      });
-      return {
-        reports: s.reports.map((r) =>
-          r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r
-        ),
-      };
-    }),
+  updateReport: async (id, patch) => {
+    const rollback = get().reports.find((r) => r.id === id);
+    set((s) => ({
+      reports: s.reports.map((r) =>
+        r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r
+      ),
+    }));
+    try {
+      const updated = await updateReport(id, patch, get().reports);
+      if (updated) set((s) => ({ reports: s.reports.map((r) => (r.id === id ? updated : r)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ reports: s.reports.map((r) => (r.id === id ? rollback : r)) }));
+      throw err;
+    }
+  },
 
-  updateSection: (reportId, sectionId, content) =>
-    set((s) => {
-      updateReportSection(reportId, sectionId, content, s.reports).then((updated) => {
-        if (updated)
-          set((s2) => ({
-            reports: s2.reports.map((r) => (r.id === reportId ? updated : r)),
-          }));
-      });
-      return {
-        reports: s.reports.map((r) =>
-          r.id === reportId
-            ? {
-                ...r,
-                updatedAt: new Date().toISOString(),
-                sections: r.sections.map((sec) =>
-                  sec.id === sectionId ? { ...sec, content } : sec
-                ),
-              }
-            : r
-        ),
-      };
-    }),
+  updateSection: async (reportId, sectionId, content) => {
+    const rollback = get().reports.find((r) => r.id === reportId);
+    set((s) => ({
+      reports: s.reports.map((r) =>
+        r.id === reportId
+          ? {
+              ...r,
+              updatedAt: new Date().toISOString(),
+              sections: r.sections.map((sec) =>
+                sec.id === sectionId ? { ...sec, content } : sec
+              ),
+            }
+          : r
+      ),
+    }));
+    try {
+      const updated = await updateReportSection(reportId, sectionId, content, get().reports);
+      if (updated) set((s) => ({ reports: s.reports.map((r) => (r.id === reportId ? updated : r)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ reports: s.reports.map((r) => (r.id === reportId ? rollback : r)) }));
+      throw err;
+    }
+  },
 
   deleteReport: async (id) => {
     const rollback = get().reports.find((r) => r.id === id);
