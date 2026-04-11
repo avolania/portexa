@@ -43,11 +43,14 @@ export async function deleteFolder(
 
   const deletedFiles = files.filter((f) => f.folderId && deletedFolderIds.has(f.folderId));
 
+  // DB first — if this fails nothing has been touched in storage
   await Promise.all([
     ...[...deletedFolderIds].map((fid) => dbDelete("file_folders", fid)),
-    ...deletedFiles.map((f) => dbDeleteFile(f.storagePath)),
     ...deletedFiles.map((f) => dbDelete("project_files", f.id)),
   ]);
+
+  // Storage best-effort — orphan storage files are recoverable; broken DB references are not
+  await Promise.allSettled(deletedFiles.map((f) => dbDeleteFile(f.storagePath)));
 
   return { deletedFolderIds, deletedFiles };
 }
