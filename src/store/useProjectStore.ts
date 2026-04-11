@@ -68,7 +68,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       const updated = await updateProject(id, patch, current, orgId);
       if (updated) set((s) => ({ projects: s.projects.map((p) => (p.id === id ? updated : p)) }));
     } catch (err) {
-      set({ projects: current });
+      const original = current.find((p) => p.id === id);
+      set((s) => ({ projects: s.projects.map((p) => (p.id === id ? (original ?? p) : p)) }));
       throw err;
     }
   },
@@ -120,10 +121,12 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         set((s) => ({ projects: _syncOneProject(s.tasks, s.projects, projectId) }));
       }
     } catch (err) {
-      set((s) => ({
-        tasks: current,
-        projects: projectId ? _syncOneProject(current, s.projects, projectId) : s.projects,
-      }));
+      const original = current.find((t) => t.id === id);
+      set((s) => {
+        const tasks = s.tasks.map((t) => (t.id === id ? (original ?? t) : t));
+        const projects = projectId ? _syncOneProject(tasks, s.projects, projectId) : s.projects;
+        return { tasks, projects };
+      });
       throw err;
     }
   },
