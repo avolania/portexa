@@ -81,8 +81,13 @@ export const useFileStore = create<FileState>()((set, get) => ({
   },
 
   deleteFile: async (fileId) => {
-    const { files } = get();
+    const rollback = get().files.find((f) => f.id === fileId);
     set((s) => ({ files: s.files.filter((f) => f.id !== fileId) }));
-    await deleteFile(fileId, files);
+    try {
+      await deleteFile(fileId, get().files);
+    } catch (err) {
+      if (rollback) set((s) => ({ files: [...s.files, rollback] }));
+      throw err;
+    }
   },
 }));
