@@ -1,6 +1,5 @@
 import type { Project, Task, TaskStatus } from "@/types";
 import { dbLoadAll, dbUpsert, dbDelete } from "@/lib/db";
-import { useAuthStore } from "@/store/useAuthStore";
 
 // ─── Load ──────────────────────────────────────────────────────────────────────
 
@@ -21,11 +20,11 @@ export async function createProject(project: Project, orgId: string): Promise<vo
 export async function updateProject(
   id: string,
   patch: Partial<Project>,
-  current: Project[]
+  current: Project[],
+  orgId: string,
 ): Promise<Project | null> {
   const existing = current.find((p) => p.id === id);
   if (!existing) return null;
-  const orgId = useAuthStore.getState().user?.orgId;
   const updated: Project = { ...existing, ...patch, updatedAt: new Date().toISOString() };
   await dbUpsert("projects", id, updated, orgId);
   return updated;
@@ -59,11 +58,11 @@ export async function createTask(task: Task, orgId: string): Promise<void> {
 export async function updateTask(
   id: string,
   patch: Partial<Task>,
-  current: Task[]
+  current: Task[],
+  orgId: string,
 ): Promise<Task | null> {
   const existing = current.find((t) => t.id === id);
   if (!existing) return null;
-  const orgId = useAuthStore.getState().user?.orgId;
   const updated: Task = { ...existing, ...patch, updatedAt: new Date().toISOString() };
   await dbUpsert("tasks", id, updated, orgId);
   return updated;
@@ -72,9 +71,10 @@ export async function updateTask(
 export async function moveTask(
   taskId: string,
   newStatus: TaskStatus,
-  current: Task[]
+  current: Task[],
+  orgId: string,
 ): Promise<Task | null> {
-  return updateTask(taskId, { status: newStatus }, current);
+  return updateTask(taskId, { status: newStatus }, current, orgId);
 }
 
 export async function deleteTask(id: string): Promise<void> {

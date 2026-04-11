@@ -59,10 +59,11 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   },
 
   updateProject: async (id, patch) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     const current = get().projects;
     // Optimistic update
     set({ projects: current.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
-    const updated = await updateProject(id, patch, current);
+    const updated = await updateProject(id, patch, current, orgId);
     if (updated) set((s) => ({ projects: s.projects.map((p) => (p.id === id ? updated : p)) }));
   },
 
@@ -97,9 +98,10 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   },
 
   updateTask: async (id, patch) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     const current = get().tasks;
     set({ tasks: current.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
-    const updated = await updateTask(id, patch, current);
+    const updated = await updateTask(id, patch, current, orgId);
     if (updated) {
       set((s) => {
         const tasks = s.tasks.map((t) => (t.id === id ? updated : t));
@@ -111,14 +113,16 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     }
   },
 
-  moveTask: (taskId, newStatus) =>
+  moveTask: (taskId, newStatus) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => {
       const tasks = s.tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t));
-      moveTask(taskId, newStatus, s.tasks).then((updated) => {
+      moveTask(taskId, newStatus, s.tasks, orgId).then((updated) => {
         if (updated) set((s2) => ({ tasks: s2.tasks.map((t) => (t.id === taskId ? updated : t)) }));
       });
       return { tasks, projects: _syncProgress(tasks, s.projects) };
-    }),
+    });
+  },
 
   deleteTask: async (id) => {
     const rollback = get().tasks.find((t) => t.id === id);
