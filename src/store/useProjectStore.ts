@@ -18,6 +18,7 @@ interface ProjectState {
   tasks: Task[];
   selectedProjectId: string | null;
   load: () => Promise<void>;
+  /** Demo-only: fire-and-forget by design. DB errors are non-critical; UI shows the new data immediately. */
   reset: (projects: Project[], tasks: Task[]) => void;
   setSelectedProject: (id: string | null) => void;
   addProject: (project: Project) => Promise<void>;
