@@ -12,6 +12,7 @@ import type { SLAPolicyEntry, BusinessHoursConfig } from '@/lib/itsm/types/inter
 interface ITSMConfigState {
   config: ITSMConfig;
   loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   saveGroups: (groups: ITSMConfigGroup[]) => Promise<void>;
   saveUserRoles: (userRoles: Record<string, ITSMRole>) => Promise<void>;
@@ -34,16 +35,17 @@ async function persist(get: () => ITSMConfigState, set: (s: Partial<ITSMConfigSt
 export const useITSMConfigStore = create<ITSMConfigState>()((set, get) => ({
   config: { ...DEFAULT_ITSM_CONFIG },
   loading: false,
+  error: null,
 
   load: async () => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    set({ loading: true });
+    set({ loading: true, error: null });
     try {
       const config = await loadITSMConfig(user.orgId);
       set({ config, loading: false });
-    } catch {
-      set({ loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "ITSM yapılandırması yüklenemedi" });
     }
   },
 

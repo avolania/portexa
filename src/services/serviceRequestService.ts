@@ -1,4 +1,4 @@
-import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl } from '@/lib/db';
+import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl, dbLoadOne } from '@/lib/db';
 import type { Attachment } from '@/types';
 const uuid = () => crypto.randomUUID();
 import { createServiceRequestSLA, checkSRSLABreach } from '@/lib/itsm/utils/sla.engine';
@@ -48,8 +48,7 @@ export async function loadServiceRequests(filters?: ServiceRequestFilters): Prom
 }
 
 export async function loadServiceRequestById(id: string): Promise<ServiceRequest | null> {
-  const all = await dbLoadAll<ServiceRequest>(TABLE);
-  return all.find((sr) => sr.id === id) ?? null;
+  return dbLoadOne<ServiceRequest>(TABLE, id);
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
