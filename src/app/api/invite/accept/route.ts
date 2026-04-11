@@ -46,17 +46,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   }
 
-  // Kullanıcı zaten var mı kontrol et (O(1) — tüm tabloyu çekmez)
-  const { data: existingUser } = await supabaseAdmin.auth.admin.getUserByEmail(invite.email);
-
-  if (existingUser?.user) {
-    return NextResponse.json(
-      { error: "Bu e-posta adresiyle zaten bir hesap var. Giriş yapmayı deneyin." },
-      { status: 409 }
-    );
-  }
-
   // Admin API ile kullanıcı oluştur — e-posta onayı gerekmez
+  // Kullanıcı zaten varsa createUser "already registered" hatası döndürür
   const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
     email: invite.email,
     password,
@@ -69,9 +60,12 @@ export async function POST(req: NextRequest) {
   });
 
   if (createError || !newUser?.user) {
+    const alreadyExists =
+      createError?.message?.toLowerCase().includes("already") ||
+      createError?.message?.toLowerCase().includes("registered");
     return NextResponse.json(
-      { error: createError?.message ?? "Kullanıcı oluşturulamadı." },
-      { status: 500 }
+      { error: alreadyExists ? "Bu e-posta adresiyle zaten bir hesap var. Giriş yapmayı deneyin." : (createError?.message ?? "Kullanıcı oluşturulamadı.") },
+      { status: alreadyExists ? 409 : 500 }
     );
   }
 
