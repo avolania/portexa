@@ -11,7 +11,7 @@
  *     for all using (auth.role() = 'authenticated');
  */
 
-import { dbLoadAll, dbUpsert } from '@/lib/db';
+import { dbLoadAll, dbLoadOne, dbUpsert } from '@/lib/db';
 import { createNotification } from '@/services/notificationService';
 import type { ApprovalWorkflowTemplate, ITSMConfig } from '@/lib/itsm/types/config.types';
 import type {
@@ -247,19 +247,25 @@ export async function triggerWorkflow(
  * - Herhangi bir adım reddedildiğinde instance 'rejected' olur → outcome: 'rejected'.
  */
 export async function submitDecision(
-  instance: WorkflowInstance,
+  instanceOrId: WorkflowInstance | string,
   stepDefId: string,
   approverId: string,
   approverName: string,
   decision: 'approved' | 'rejected',
   comment?: string,
 ): Promise<StepDecisionResult> {
+  // Always fetch a fresh copy from DB to avoid concurrent-write race conditions
+  const instanceId = typeof instanceOrId === 'string' ? instanceOrId : instanceOrId.id;
+  const instance = await dbLoadOne<WorkflowInstance>(TABLE, instanceId);
+
   const noop: StepDecisionResult = {
-    instance,
+    instance: instance ?? (typeof instanceOrId === 'object' ? instanceOrId : ({} as WorkflowInstance)),
     stepCompleted: false,
     instanceCompleted: false,
     outcome: 'pending',
   };
+
+  if (!instance) return noop;
 
   const stepIdx = instance.steps.findIndex((s) => s.stepDefId === stepDefId);
   if (stepIdx === -1) return noop;

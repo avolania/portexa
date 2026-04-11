@@ -9,6 +9,12 @@ export async function dbLoadAll<T>(table: string): Promise<T[]> {
   return (data ?? []).map((row) => row.data as T);
 }
 
+export async function dbLoadOne<T>(table: string, id: string): Promise<T | null> {
+  const { data, error } = await supabase.from(table).select("data").eq("id", id).single();
+  if (error || !data) return null;
+  return data.data as T;
+}
+
 export async function dbUpsert(table: string, id: string, data: unknown, orgId?: string): Promise<void> {
   const row = orgId ? { id, data, org_id: orgId } : { id, data };
   const { error } = await supabase.from(table).upsert([row], { defaultToNull: false });
