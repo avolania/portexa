@@ -33,8 +33,9 @@ export const useTeamStore = create<TeamState>()((set, get) => ({
   },
 
   reset: (members) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set({ members });
-    resetMembers(members);
+    resetMembers(members, orgId);
   },
 
   addMember: async (member) => {

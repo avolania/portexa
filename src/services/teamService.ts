@@ -57,6 +57,6 @@ export async function unassignMemberFromProject(
   );
 }
 
-export async function resetMembers(members: TeamMember[]): Promise<void> {
-  await Promise.all(members.map((m) => dbUpsert("team_members", m.id, m)));
+export async function resetMembers(members: TeamMember[], orgId: string): Promise<void> {
+  await Promise.all(members.map((m) => dbUpsert("team_members", m.id, m, orgId)));
 }
