@@ -41,8 +41,9 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   },
 
   reset: (projects, tasks) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set({ projects, tasks, selectedProjectId: null });
-    resetProjectsAndTasks(projects, tasks);
+    resetProjectsAndTasks(projects, tasks, orgId);
   },
 
   setSelectedProject: (id) => set({ selectedProjectId: id }),

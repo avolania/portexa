@@ -83,9 +83,9 @@ export async function deleteTask(id: string): Promise<void> {
 
 // ─── Bulk reset (demo data) ────────────────────────────────────────────────────
 
-export async function resetProjectsAndTasks(projects: Project[], tasks: Task[]): Promise<void> {
+export async function resetProjectsAndTasks(projects: Project[], tasks: Task[], orgId: string): Promise<void> {
   await Promise.all([
-    ...projects.map((p) => dbUpsert("projects", p.id, p)),
-    ...tasks.map((t) => dbUpsert("tasks", t.id, t)),
+    ...projects.map((p) => dbUpsert("projects", p.id, p, orgId)),
+    ...tasks.map((t) => dbUpsert("tasks", t.id, t, orgId)),
   ]);
 }

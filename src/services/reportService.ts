@@ -44,6 +44,6 @@ export async function deleteReport(id: string): Promise<void> {
   await dbDelete("reports", id);
 }
 
-export async function resetReports(reports: Report[]): Promise<void> {
-  await Promise.all(reports.map((r) => dbUpsert("reports", r.id, r)));
+export async function resetReports(reports: Report[], orgId: string): Promise<void> {
+  await Promise.all(reports.map((r) => dbUpsert("reports", r.id, r, orgId)));
 }

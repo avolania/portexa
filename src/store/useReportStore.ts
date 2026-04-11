@@ -30,8 +30,9 @@ export const useReportStore = create<ReportState>()((set, get) => ({
   },
 
   reset: (reports) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set({ reports });
-    resetReports(reports);
+    resetReports(reports, orgId);
   },
 
   addReport: (report) => {

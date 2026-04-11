@@ -28,8 +28,9 @@ export const useGovernanceStore = create<GovernanceState>()((set, get) => ({
   },
 
   reset: (items) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set({ items });
-    resetGovernanceItems(items);
+    resetGovernanceItems(items, orgId);
   },
 
   addItem: (item) => {

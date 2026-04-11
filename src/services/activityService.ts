@@ -59,6 +59,6 @@ export async function rejectActivity(
   );
 }
 
-export async function resetActivities(entries: ActivityEntry[]): Promise<void> {
-  await Promise.all(entries.map((e) => dbUpsert("activity_entries", e.id, e)));
+export async function resetActivities(entries: ActivityEntry[], orgId: string): Promise<void> {
+  await Promise.all(entries.map((e) => dbUpsert("activity_entries", e.id, e, orgId)));
 }

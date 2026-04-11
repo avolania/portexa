@@ -25,6 +25,6 @@ export async function deleteGovernanceItem(id: string): Promise<void> {
   await dbDelete("governance_items", id);
 }
 
-export async function resetGovernanceItems(items: GovernanceItem[]): Promise<void> {
-  await Promise.all(items.map((i) => dbUpsert("governance_items", i.id, i)));
+export async function resetGovernanceItems(items: GovernanceItem[], orgId: string): Promise<void> {
+  await Promise.all(items.map((i) => dbUpsert("governance_items", i.id, i, orgId)));
 }

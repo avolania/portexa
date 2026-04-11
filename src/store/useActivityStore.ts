@@ -33,8 +33,9 @@ export const useActivityStore = create<ActivityState>()((set) => ({
   },
 
   reset: (entries = []) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     set({ entries });
-    resetActivities(entries);
+    resetActivities(entries, orgId);
   },
 
   addEntry: (entry) => {
