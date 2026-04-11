@@ -20,7 +20,10 @@ export async function dbUpsert(table: string, id: string, data: unknown, orgId?:
 
 export async function dbDelete(table: string, id: string): Promise<void> {
   const { error } = await supabase.from(table).delete().eq("id", id);
-  if (error) console.error(`[db] delete ${table}:`, error.message);
+  if (error) {
+    console.error(`[db] delete ${table}:`, error.message);
+    throw new Error(error.message);
+  }
 }
 
 // ─── Auth profiles (keyed by userId) ─────────────────────────────────────────

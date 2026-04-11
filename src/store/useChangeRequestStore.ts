@@ -46,7 +46,7 @@ interface ChangeRequestState {
   linkIncident: (id: string, dto: LinkIncidentDto) => Promise<void>;
   addAttachment: (id: string, file: File) => Promise<void>;
   removeAttachment: (id: string, attachmentId: string) => Promise<void>;
-  remove: (id: string) => void;
+  remove: (id: string) => Promise<void>;
 }
 
 export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => ({
@@ -166,8 +166,14 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 
-  remove: (id) => {
+  remove: async (id) => {
+    const rollback = get().changeRequests.find((cr) => cr.id === id);
     set((s) => ({ changeRequests: s.changeRequests.filter((cr) => cr.id !== id) }));
-    deleteChangeRequest(id);
+    try {
+      await deleteChangeRequest(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ changeRequests: [...s.changeRequests, rollback] }));
+      throw err;
+    }
   },
 }));

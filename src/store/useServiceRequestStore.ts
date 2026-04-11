@@ -44,7 +44,7 @@ interface ServiceRequestState {
   addComment: (id: string, dto: AddCommentDto) => Promise<void>;
   addAttachment: (id: string, file: File) => Promise<void>;
   removeAttachment: (id: string, attachmentId: string) => Promise<void>;
-  remove: (id: string) => void;
+  remove: (id: string) => Promise<void>;
 }
 
 export const useServiceRequestStore = create<ServiceRequestState>()((set, get) => ({
@@ -156,8 +156,14 @@ export const useServiceRequestStore = create<ServiceRequestState>()((set, get) =
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 
-  remove: (id) => {
+  remove: async (id) => {
+    const rollback = get().serviceRequests.find((sr) => sr.id === id);
     set((s) => ({ serviceRequests: s.serviceRequests.filter((sr) => sr.id !== id) }));
-    deleteServiceRequest(id);
+    try {
+      await deleteServiceRequest(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ serviceRequests: [...s.serviceRequests, rollback] }));
+      throw err;
+    }
   },
 }));
