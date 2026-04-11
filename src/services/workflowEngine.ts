@@ -193,17 +193,27 @@ export async function triggerWorkflow(
 
   const sortedSteps = [...definition.steps].sort((a, b) => a.order - b.order);
 
-  const steps: WorkflowStepInstance[] = sortedSteps.map((stepDef, idx) => ({
-    stepDefId: stepDef.id,
-    order: stepDef.order,
-    label: stepDef.label,
-    approverType: stepDef.approverType,
-    approvalMode: stepDef.approvalMode,
-    resolvedApproverIds: resolveApproverIds(stepDef, config),
-    status: idx === 0 ? 'active' : 'pending',
-    decisions: [],
-    activatedAt: idx === 0 ? now : undefined,
-  }));
+  const steps: WorkflowStepInstance[] = sortedSteps.map((stepDef, idx) => {
+    const resolvedApproverIds = resolveApproverIds(stepDef, config);
+    if (resolvedApproverIds.length === 0) {
+      throw new Error(
+        `Workflow "${definition.name}" adım "${stepDef.label}" için onaylayıcı çözümlenemedi ` +
+        `(approverType: ${stepDef.approverType}). ` +
+        `İlgili rol/grup/kullanıcıyı ITSM Ayarları'ndan yapılandırın.`,
+      );
+    }
+    return {
+      stepDefId: stepDef.id,
+      order: stepDef.order,
+      label: stepDef.label,
+      approverType: stepDef.approverType,
+      approvalMode: stepDef.approvalMode,
+      resolvedApproverIds,
+      status: idx === 0 ? 'active' : 'pending',
+      decisions: [],
+      activatedAt: idx === 0 ? now : undefined,
+    };
+  });
 
   const instance: WorkflowInstance = {
     id,
