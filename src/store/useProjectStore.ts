@@ -129,7 +129,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
 
   moveTask: (taskId, newStatus) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
-    const rollbackTasks = get().tasks;
+    const rollbackTasks    = get().tasks;
+    const rollbackProjects = get().projects;
     const projectId = rollbackTasks.find((t) => t.id === taskId)?.projectId;
     set((s) => {
       const tasks = s.tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t));
@@ -139,8 +140,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
         })
         .catch(() => {
           const projects = projectId
-            ? _syncOneProject(rollbackTasks, get().projects, projectId)
-            : _syncProgress(rollbackTasks, get().projects);
+            ? _syncOneProject(rollbackTasks, rollbackProjects, projectId)
+            : _syncProgress(rollbackTasks, rollbackProjects);
           set({ tasks: rollbackTasks, projects });
         });
       const projects = projectId
