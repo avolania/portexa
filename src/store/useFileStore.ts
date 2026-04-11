@@ -19,7 +19,7 @@ interface FileState {
   load: () => Promise<void>;
   addFolder: (folder: FileFolder) => Promise<void>;
   renameFolder: (id: string, name: string) => Promise<void>;
-  deleteFolder: (id: string) => void;
+  deleteFolder: (id: string) => Promise<void>;
   uploadFile: (
     file: File,
     projectId: string,
@@ -69,15 +69,21 @@ export const useFileStore = create<FileState>()((set, get) => ({
     }
   },
 
-  deleteFolder: (id) => {
+  deleteFolder: async (id) => {
     const { folders, files } = get();
-    deleteFolder(id, folders, files).then(({ deletedFolderIds, deletedFiles }) => {
+    const rollbackFolders = folders;
+    const rollbackFiles = files;
+    try {
+      const { deletedFolderIds, deletedFiles } = await deleteFolder(id, folders, files);
       const deletedFileIds = new Set(deletedFiles.map((f) => f.id));
       set((s) => ({
         folders: s.folders.filter((f) => !deletedFolderIds.has(f.id)),
         files: s.files.filter((f) => !deletedFileIds.has(f.id)),
       }));
-    });
+    } catch (err) {
+      set({ folders: rollbackFolders, files: rollbackFiles });
+      throw err;
+    }
   },
 
   uploadFile: async (file, projectId, phaseId, userId, folderId) => {

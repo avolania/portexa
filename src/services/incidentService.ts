@@ -1,4 +1,4 @@
-import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl } from '@/lib/db';
+import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl, dbLoadOne } from '@/lib/db';
 import type { Attachment } from '@/types';
 const uuid = () => crypto.randomUUID();
 const makeNote = (authorId: string, authorName: string, content: string, now: string) =>
@@ -49,8 +49,7 @@ export async function loadIncidents(filters?: IncidentFilters): Promise<Incident
 }
 
 export async function loadIncidentById(id: string): Promise<Incident | null> {
-  const all = await dbLoadAll<Incident>(TABLE);
-  return all.find((i) => i.id === id) ?? null;
+  return dbLoadOne<Incident>(TABLE, id);
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl } from '@/lib/db';
+import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl, dbLoadOne } from '@/lib/db';
 import type { Attachment } from '@/types';
 const uuid = () => crypto.randomUUID();
 
@@ -55,8 +55,7 @@ export async function loadChangeRequests(filters?: ChangeRequestFilters): Promis
 }
 
 export async function loadChangeRequestById(id: string): Promise<ChangeRequest | null> {
-  const all = await dbLoadAll<ChangeRequest>(TABLE);
-  return all.find((cr) => cr.id === id) ?? null;
+  return dbLoadOne<ChangeRequest>(TABLE, id);
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
