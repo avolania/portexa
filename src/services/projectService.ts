@@ -33,10 +33,21 @@ export async function updateProject(
 
 export async function deleteProject(id: string, tasks: Task[]): Promise<void> {
   const relatedTasks = tasks.filter((t) => t.projectId === id);
-  await Promise.all([
-    ...relatedTasks.map((t) => dbDelete("tasks", t.id)),
-    dbDelete("projects", id),
-  ]);
+
+  // Step 1: delete all related tasks, collect failures
+  if (relatedTasks.length > 0) {
+    const taskResults = await Promise.allSettled(
+      relatedTasks.map((t) => dbDelete("tasks", t.id)),
+    );
+    const failed = taskResults.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failed.length > 0) {
+      const messages = failed.map((r) => r.reason?.message ?? String(r.reason)).join("; ");
+      throw new Error(`${failed.length} görev silinemedi: ${messages}`);
+    }
+  }
+
+  // Step 2: delete the project only after all tasks are confirmed deleted
+  await dbDelete("projects", id);
 }
 
 // ─── Task CRUD ─────────────────────────────────────────────────────────────────
