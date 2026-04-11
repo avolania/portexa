@@ -115,11 +115,16 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
 
   moveTask: (taskId, newStatus) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
+    const rollbackTasks = get().tasks;
     set((s) => {
       const tasks = s.tasks.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t));
-      moveTask(taskId, newStatus, s.tasks, orgId).then((updated) => {
-        if (updated) set((s2) => ({ tasks: s2.tasks.map((t) => (t.id === taskId ? updated : t)) }));
-      });
+      moveTask(taskId, newStatus, rollbackTasks, orgId)
+        .then((updated) => {
+          if (updated) set((s2) => ({ tasks: s2.tasks.map((t) => (t.id === taskId ? updated : t)) }));
+        })
+        .catch(() => {
+          set({ tasks: rollbackTasks, projects: _syncProgress(rollbackTasks, get().projects) });
+        });
       return { tasks, projects: _syncProgress(tasks, s.projects) };
     });
   },
