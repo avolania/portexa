@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jsPDF } from "jspdf";
 import type { Report, ReportStatus } from "@/types";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const RAG_LABEL: Record<ReportStatus, string> = {
   green: "Yolunda",
@@ -40,7 +41,17 @@ function slideFooter(pdf: jsPDF, projectName: string, report: Report, W: number,
 }
 
 export async function POST(req: NextRequest) {
-  const { report, projectName, stats } = await req.json() as {
+  const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const { report, projectName, stats } = body as {
     report: Report;
     projectName: string;
     stats: {
@@ -50,6 +61,17 @@ export async function POST(req: NextRequest) {
       budget?: number; budgetUsed?: number;
     };
   };
+
+  if (
+    !report || typeof report !== "object" ||
+    !Array.isArray(report.sections) ||
+    typeof report.status !== "string" ||
+    typeof projectName !== "string" || !projectName.trim() ||
+    !stats || typeof stats !== "object" ||
+    typeof stats.progress !== "number"
+  ) {
+    return NextResponse.json({ error: "Geçersiz istek verisi" }, { status: 400 });
+  }
 
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const W = 297;

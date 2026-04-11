@@ -1,4 +1,10 @@
 import type { Report } from "@/types";
+import { supabase } from "@/lib/supabase";
+
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+}
 
 // ─── PDF Export (server-side API route kullanır) ──────────────────────────────
 
@@ -20,7 +26,7 @@ export async function exportReportPDF(
 ): Promise<void> {
   const res = await fetch("/api/reports/export-pdf", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
     body: JSON.stringify({ report, projectName, stats }),
   });
   if (!res.ok) throw new Error("PDF oluşturulamadı");
@@ -53,7 +59,7 @@ export async function exportReportPPTX(
 ): Promise<void> {
   const res = await fetch("/api/reports/export-pptx", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
     body: JSON.stringify({ report, projectName, stats }),
   });
   if (!res.ok) throw new Error("PPTX oluşturulamadı");
