@@ -16,8 +16,8 @@ interface AuthState {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<string | null>;
   loadProfiles: () => Promise<void>;
-  updateUser: (data: Partial<User>) => void;
-  updateProfile: (userId: string, data: Partial<User>) => void;
+  updateUser: (data: Partial<User>) => Promise<void>;
+  updateProfile: (userId: string, data: Partial<User>) => Promise<void>;
 }
 
 // ─── Profil oluşturma (metadata'dan) ──────────────────────────────────────────
@@ -192,23 +192,35 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ profiles });
   },
 
-  updateUser: (data) => {
+  updateUser: async (data) => {
     const current = get().user;
     if (!current) return;
     const updated = { ...current, ...data };
     set({ user: updated });
-    dbUpsertProfile(current.id, updated);
+    try {
+      await dbUpsertProfile(current.id, updated);
+    } catch (err) {
+      set({ user: current });
+      throw err;
+    }
   },
 
-  updateProfile: (emailKey, data) =>
-    set((s) => {
-      const existing = s.profiles[emailKey];
-      if (!existing) return {};
-      const updated = { ...existing, ...data };
-      dbUpsertProfile(existing.id, updated); // UUID kullan, email değil
-      return {
-        profiles: { ...s.profiles, [emailKey]: updated },
-        user: s.user?.email === emailKey ? { ...s.user, ...data } : s.user,
-      };
-    }),
+  updateProfile: async (emailKey, data) => {
+    const existing = get().profiles[emailKey];
+    if (!existing) return;
+    const updated = { ...existing, ...data };
+    set((s) => ({
+      profiles: { ...s.profiles, [emailKey]: updated },
+      user: s.user?.email === emailKey ? { ...s.user, ...data } : s.user,
+    }));
+    try {
+      await dbUpsertProfile(existing.id, updated);
+    } catch (err) {
+      set((s) => ({
+        profiles: { ...s.profiles, [emailKey]: existing },
+        user: s.user?.email === emailKey ? existing : s.user,
+      }));
+      throw err;
+    }
+  },
 }));
