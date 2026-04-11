@@ -22,8 +22,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   update: async (patch) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
-    const next = { ...get().settings, ...patch };
+    const current = get().settings;
+    const next = { ...current, ...patch };
     set({ settings: next });
-    await saveOrgSettings(orgId, next);
+    try {
+      await saveOrgSettings(orgId, next);
+    } catch (err) {
+      set({ settings: current });
+      throw err;
+    }
   },
 }));
