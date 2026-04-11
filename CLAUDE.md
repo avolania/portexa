@@ -427,10 +427,12 @@ New → Open → In Progress → Pending → Resolved → Closed
 ### Service Request States
 
 ```
-Draft → Open → Awaiting Approval → In Progress → Fulfilled → Closed
-                                        ↑
-                                     Pending
+Draft → Submitted → Pending Approval → Approved → In Progress → Fulfilled → Closed
+                                                        ↑
+                                                     Pending
 ```
+
+States: Draft, Submitted, Pending Approval, Approved, In Progress, Pending, Fulfilled, Closed, Rejected, Cancelled
 
 ### Change Request States
 
