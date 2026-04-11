@@ -34,6 +34,7 @@ import type { ChangeRequestState as CRState } from '@/lib/itsm/types/enums';
 interface ChangeRequestState {
   changeRequests: ChangeRequest[];
   loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   create: (dto: CreateChangeRequestDto) => Promise<ChangeRequest | null>;
   update: (id: string, dto: UpdateChangeRequestDto) => Promise<void>;
@@ -52,11 +53,16 @@ interface ChangeRequestState {
 export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => ({
   changeRequests: [],
   loading: false,
+  error: null,
 
   load: async () => {
-    set({ loading: true });
-    const changeRequests = await loadChangeRequests();
-    set({ changeRequests, loading: false });
+    set({ loading: true, error: null });
+    try {
+      const changeRequests = await loadChangeRequests();
+      set({ changeRequests, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   create: async (dto) => {

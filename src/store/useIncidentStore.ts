@@ -31,6 +31,7 @@ import type {
 interface IncidentState {
   incidents: Incident[];
   loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   create: (dto: CreateIncidentDto) => Promise<Incident | null>;
   update: (id: string, dto: UpdateIncidentDto) => Promise<void>;
@@ -49,11 +50,16 @@ interface IncidentState {
 export const useIncidentStore = create<IncidentState>()((set, get) => ({
   incidents: [],
   loading: false,
+  error: null,
 
   load: async () => {
-    set({ loading: true });
-    const incidents = await loadIncidents();
-    set({ incidents, loading: false });
+    set({ loading: true, error: null });
+    try {
+      const incidents = await loadIncidents();
+      set({ incidents, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   create: async (dto) => {

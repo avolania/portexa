@@ -5,7 +5,10 @@ import type { User, Organization } from "@/types";
 
 export async function dbLoadAll<T>(table: string): Promise<T[]> {
   const { data, error } = await supabase.from(table).select("data");
-  if (error) { console.error(`[db] load ${table}:`, error.message); return []; }
+  if (error) {
+    console.error(`[db] load ${table}:`, error.message);
+    throw new Error(error.message);
+  }
   return (data ?? []).map((row) => row.data as T);
 }
 

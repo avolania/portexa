@@ -32,6 +32,7 @@ import type {
 interface ServiceRequestState {
   serviceRequests: ServiceRequest[];
   loading: boolean;
+  error: string | null;
   load: () => Promise<void>;
   create: (dto: CreateServiceRequestDto) => Promise<ServiceRequest | null>;
   update: (id: string, dto: UpdateServiceRequestDto) => Promise<void>;
@@ -50,11 +51,16 @@ interface ServiceRequestState {
 export const useServiceRequestStore = create<ServiceRequestState>()((set, get) => ({
   serviceRequests: [],
   loading: false,
+  error: null,
 
   load: async () => {
-    set({ loading: true });
-    const serviceRequests = await loadServiceRequests();
-    set({ serviceRequests, loading: false });
+    set({ loading: true, error: null });
+    try {
+      const serviceRequests = await loadServiceRequests();
+      set({ serviceRequests, loading: false });
+    } catch (err) {
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+    }
   },
 
   create: async (dto) => {
