@@ -51,24 +51,28 @@ function isBusinessTime(date: Date, cfg: BusinessHoursConfig): boolean {
   return minuteOfDay >= start && minuteOfDay < end;
 }
 
-/** Move `date` forward (1-minute steps, max 10 days) to the next business-hours start. */
+/** Move `date` forward to the next business-hours start (at most 366 day-level steps). */
 function nextBusinessStart(date: Date, cfg: BusinessHoursConfig): Date {
   const startMin = cfg.startHour * 60 + cfg.startMinute;
   const endMin   = cfg.endHour   * 60 + cfg.endMinute;
   let cur = new Date(date);
 
-  for (let i = 0; i < 14400; i++) { // max 10 days * 1440 min
+  for (let i = 0; i < 366; i++) {
     if (isBusinessTime(cur, cfg)) return cur;
-    const p = getLocalParts(cur, cfg.timezone);
+    const p   = getLocalParts(cur, cfg.timezone);
     const mow = p.hour * 60 + p.minute;
     if (mow < startMin) {
+      // Before business hours — jump to start of today's business hours
       cur = new Date(cur.getTime() + (startMin - mow) * 60_000);
     } else if (mow >= endMin) {
-      // jump to start of next day's business hours
+      // After business hours — jump to start of next day's business hours
       const minutesToNextDayStart = (24 * 60 - mow) + startMin;
       cur = new Date(cur.getTime() + minutesToNextDayStart * 60_000);
     } else {
-      cur = new Date(cur.getTime() + 60_000);
+      // In business hours window but not a business day (holiday / non-work day)
+      // Jump to midnight then loop will advance to next day's start
+      const minutesToEndOfDay = 24 * 60 - mow;
+      cur = new Date(cur.getTime() + minutesToEndOfDay * 60_000);
     }
   }
   return cur;
