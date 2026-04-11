@@ -77,13 +77,19 @@ export async function dbAssignUserToOrg(email: string, newOrgId: string): Promis
 
 export async function dbLoadAllOrgs(): Promise<Organization[]> {
   const { data, error } = await supabase.from("organizations").select("data");
-  if (error) { console.error("[db] load organizations:", error.message); return []; }
+  if (error) {
+    console.error("[db] load organizations:", error.message);
+    throw new Error(error.message);
+  }
   return (data ?? []).map((row) => row.data as Organization);
 }
 
 export async function dbLoadOrg(orgId: string): Promise<Organization | null> {
   const { data, error } = await supabase.from("organizations").select("data").eq("id", orgId).maybeSingle();
-  if (error) { console.error("[db] load organization:", error.message); return null; }
+  if (error) {
+    console.error("[db] load organization:", error.message);
+    throw new Error(error.message);
+  }
   if (!data) return null;
   return data.data as Organization;
 }
