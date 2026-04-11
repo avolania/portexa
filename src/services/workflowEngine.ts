@@ -143,27 +143,20 @@ function resolveApproverIds(
 ): string[] {
   // Sabit kullanıcı her zaman önce denenir
   if (step.fixedUserId) {
-    console.log('[workflow] resolveApproverIds: fixedUserId →', step.fixedUserId);
     return [step.fixedUserId];
   }
 
   if (step.approverType === 'user') {
-    const ids = step.userId ? [step.userId] : [];
-    console.log('[workflow] resolveApproverIds: user →', ids);
-    return ids;
+    return step.userId ? [step.userId] : [];
   }
   if (step.approverType === 'role') {
-    const ids = Object.entries(config.userRoles)
+    return Object.entries(config.userRoles)
       .filter(([, role]) => role === step.itsmRole)
       .map(([userId]) => userId);
-    console.log('[workflow] resolveApproverIds: role', step.itsmRole, '→', ids, '| userRoles:', config.userRoles);
-    return ids;
   }
   if (step.approverType === 'group') {
     const group = config.groups.find((g) => g.id === step.groupId);
-    const ids = group?.memberIds ?? [];
-    console.log('[workflow] resolveApproverIds: group', step.groupId, '→', ids);
-    return ids;
+    return group?.memberIds ?? [];
   }
   return [];
 }
@@ -229,7 +222,6 @@ export async function triggerWorkflow(
   };
 
   await dbUpsert(TABLE, id, instance, orgId);
-  console.log('[workflow] instance created, steps[0].resolvedApproverIds:', steps[0]?.resolvedApproverIds);
 
   // İlk adım aktivasyonunda onaylayıcılara bildirim gönder
   try {
