@@ -160,7 +160,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     // Hesap oluşturuldu — direkt giriş yap (e-posta onayı gerekmez)
     const email = body.email as string;
     if (email) {
-      await supabase.auth.signInWithPassword({ email, password });
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) return signInError.message;
     }
 
     return null;
