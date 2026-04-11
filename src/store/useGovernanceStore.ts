@@ -15,9 +15,9 @@ interface GovernanceState {
   error: string | null;
   load: () => Promise<void>;
   reset: (items: GovernanceItem[]) => void;
-  addItem: (item: GovernanceItem) => void;
+  addItem: (item: GovernanceItem) => Promise<void>;
   updateItem: (id: string, data: Partial<GovernanceItem>) => void;
-  deleteItem: (id: string) => void;
+  deleteItem: (id: string) => Promise<void>;
   getProjectItems: (projectId: string, category?: GovernanceCategory) => GovernanceItem[];
 }
 
@@ -42,10 +42,15 @@ export const useGovernanceStore = create<GovernanceState>()((set, get) => ({
     resetGovernanceItems(items, orgId);
   },
 
-  addItem: (item) => {
+  addItem: async (item) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ items: [...s.items, item] }));
-    createGovernanceItem(item, orgId);
+    try {
+      await createGovernanceItem(item, orgId);
+    } catch (err) {
+      set((s) => ({ items: s.items.filter((i) => i.id !== item.id) }));
+      throw err;
+    }
   },
 
   updateItem: (id, patch) => {
@@ -58,9 +63,15 @@ export const useGovernanceStore = create<GovernanceState>()((set, get) => ({
     });
   },
 
-  deleteItem: (id) => {
+  deleteItem: async (id) => {
+    const rollback = get().items.find((i) => i.id === id);
     set((s) => ({ items: s.items.filter((i) => i.id !== id) }));
-    deleteGovernanceItem(id);
+    try {
+      await deleteGovernanceItem(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ items: [...s.items, rollback] }));
+      throw err;
+    }
   },
 
   getProjectItems: (projectId, category) =>

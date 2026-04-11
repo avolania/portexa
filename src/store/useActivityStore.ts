@@ -17,16 +17,16 @@ interface ActivityState {
   loading: boolean;
   error: string | null;
   load: () => Promise<void>;
-  addEntry: (entry: ActivityEntry) => void;
+  addEntry: (entry: ActivityEntry) => Promise<void>;
   updateEntry: (id: string, data: Partial<ActivityEntry>) => void;
-  deleteEntry: (id: string) => void;
+  deleteEntry: (id: string) => Promise<void>;
   submitEntry: (id: string) => void;
   approveEntry: (id: string, reviewerId: string) => void;
   rejectEntry: (id: string, reviewerId: string, note?: string) => void;
   reset: (entries?: ActivityEntry[]) => void;
 }
 
-export const useActivityStore = create<ActivityState>()((set) => ({
+export const useActivityStore = create<ActivityState>()((set, get) => ({
   entries: [],
   loading: false,
   error: null,
@@ -47,10 +47,15 @@ export const useActivityStore = create<ActivityState>()((set) => ({
     resetActivities(entries, orgId);
   },
 
-  addEntry: (entry) => {
+  addEntry: async (entry) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ entries: [entry, ...s.entries] }));
-    createActivity(entry, orgId);
+    try {
+      await createActivity(entry, orgId);
+    } catch (err) {
+      set((s) => ({ entries: s.entries.filter((e) => e.id !== entry.id) }));
+      throw err;
+    }
   },
 
   updateEntry: (id, patch) =>
@@ -66,9 +71,15 @@ export const useActivityStore = create<ActivityState>()((set) => ({
       };
     }),
 
-  deleteEntry: (id) => {
+  deleteEntry: async (id) => {
+    const rollback = get().entries.find((e) => e.id === id);
     set((s) => ({ entries: s.entries.filter((e) => e.id !== id) }));
-    deleteActivity(id);
+    try {
+      await deleteActivity(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ entries: [...s.entries, rollback] }));
+      throw err;
+    }
   },
 
   submitEntry: (id) =>

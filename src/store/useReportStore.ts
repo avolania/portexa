@@ -15,10 +15,10 @@ interface ReportState {
   loading: boolean;
   error: string | null;
   load: () => Promise<void>;
-  addReport: (report: Report) => void;
+  addReport: (report: Report) => Promise<void>;
   updateReport: (id: string, data: Partial<Report>) => void;
   updateSection: (reportId: string, sectionId: string, content: string) => void;
-  deleteReport: (id: string) => void;
+  deleteReport: (id: string) => Promise<void>;
   getByType: (type: ReportType) => Report[];
   reset: (reports: Report[]) => void;
 }
@@ -44,10 +44,15 @@ export const useReportStore = create<ReportState>()((set, get) => ({
     resetReports(reports, orgId);
   },
 
-  addReport: (report) => {
+  addReport: async (report) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ reports: [report, ...s.reports] }));
-    createReport(report, orgId);
+    try {
+      await createReport(report, orgId);
+    } catch (err) {
+      set((s) => ({ reports: s.reports.filter((r) => r.id !== report.id) }));
+      throw err;
+    }
   },
 
   updateReport: (id, patch) =>
@@ -86,9 +91,15 @@ export const useReportStore = create<ReportState>()((set, get) => ({
       };
     }),
 
-  deleteReport: (id) => {
+  deleteReport: async (id) => {
+    const rollback = get().reports.find((r) => r.id === id);
     set((s) => ({ reports: s.reports.filter((r) => r.id !== id) }));
-    deleteReport(id);
+    try {
+      await deleteReport(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ reports: [...s.reports, rollback] }));
+      throw err;
+    }
   },
 
   getByType: (type) => get().reports.filter((r) => r.type === type),

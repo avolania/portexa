@@ -13,12 +13,12 @@ interface WorkflowState {
   loading: boolean;
   error: string | null;
   load: () => Promise<void>;
-  addTemplate: (t: WorkflowTemplate) => void;
+  addTemplate: (t: WorkflowTemplate) => Promise<void>;
   updateTemplate: (id: string, data: Partial<WorkflowTemplate>) => void;
-  deleteTemplate: (id: string) => void;
+  deleteTemplate: (id: string) => Promise<void>;
 }
 
-export const useWorkflowStore = create<WorkflowState>()((set) => ({
+export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
   templates: [],
   loading: false,
   error: null,
@@ -33,10 +33,15 @@ export const useWorkflowStore = create<WorkflowState>()((set) => ({
     }
   },
 
-  addTemplate: (t) => {
+  addTemplate: async (t) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ templates: [...s.templates, t] }));
-    createWorkflowTemplate(t, orgId);
+    try {
+      await createWorkflowTemplate(t, orgId);
+    } catch (err) {
+      set((s) => ({ templates: s.templates.filter((tmpl) => tmpl.id !== t.id) }));
+      throw err;
+    }
   },
 
   updateTemplate: (id, patch) =>
@@ -54,8 +59,14 @@ export const useWorkflowStore = create<WorkflowState>()((set) => ({
       };
     }),
 
-  deleteTemplate: (id) => {
+  deleteTemplate: async (id) => {
+    const rollback = get().templates.find((t) => t.id === id);
     set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
-    deleteWorkflowTemplate(id);
+    try {
+      await deleteWorkflowTemplate(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ templates: [...s.templates, rollback] }));
+      throw err;
+    }
   },
 }));

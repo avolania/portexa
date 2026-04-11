@@ -14,6 +14,7 @@ import type {
 interface WorkflowInstanceState {
   instances: WorkflowInstance[];
   loading: boolean;
+  error: string | null;
 
   /** Tüm instance'ları Supabase'den yükler */
   load: () => Promise<void>;
@@ -57,11 +58,16 @@ export const useWorkflowInstanceStore = create<WorkflowInstanceState>()(
   (set, get) => ({
     instances: [],
     loading: false,
+    error: null,
 
     load: async () => {
-      set({ loading: true });
-      const instances = await loadWorkflowInstances();
-      set({ instances, loading: false });
+      set({ loading: true, error: null });
+      try {
+        const instances = await loadWorkflowInstances();
+        set({ instances, loading: false });
+      } catch (err) {
+        set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
+      }
     },
 
     addInstance: (instance) => {

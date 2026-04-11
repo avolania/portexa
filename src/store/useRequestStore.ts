@@ -15,14 +15,14 @@ interface RequestState {
   loading: boolean;
   error: string | null;
   load: () => Promise<void>;
-  addRequest: (r: WorkflowRequest) => void;
+  addRequest: (r: WorkflowRequest) => Promise<void>;
   updateRequest: (id: string, data: Partial<WorkflowRequest>) => void;
-  deleteRequest: (id: string) => void;
+  deleteRequest: (id: string) => Promise<void>;
   review: (id: string, status: "approved" | "rejected", reviewedBy: string, note?: string) => void;
   advanceStep: (id: string, entry: WorkflowStepHistoryEntry, isLastStep: boolean) => void;
 }
 
-export const useRequestStore = create<RequestState>()((set) => ({
+export const useRequestStore = create<RequestState>()((set, get) => ({
   requests: [],
   loading: false,
   error: null,
@@ -37,10 +37,15 @@ export const useRequestStore = create<RequestState>()((set) => ({
     }
   },
 
-  addRequest: (r) => {
+  addRequest: async (r) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     set((s) => ({ requests: [...s.requests, r] }));
-    createRequest(r, orgId);
+    try {
+      await createRequest(r, orgId);
+    } catch (err) {
+      set((s) => ({ requests: s.requests.filter((req) => req.id !== r.id) }));
+      throw err;
+    }
   },
 
   updateRequest: (id, patch) =>
@@ -56,9 +61,15 @@ export const useRequestStore = create<RequestState>()((set) => ({
       };
     }),
 
-  deleteRequest: (id) => {
+  deleteRequest: async (id) => {
+    const rollback = get().requests.find((r) => r.id === id);
     set((s) => ({ requests: s.requests.filter((r) => r.id !== id) }));
-    deleteRequest(id);
+    try {
+      await deleteRequest(id);
+    } catch (err) {
+      if (rollback) set((s) => ({ requests: [...s.requests, rollback] }));
+      throw err;
+    }
   },
 
   review: (id, status, reviewedBy, note) =>

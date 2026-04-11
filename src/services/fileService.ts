@@ -95,5 +95,6 @@ export async function uploadFile(
 export async function deleteFile(fileId: string, files: ProjectFile[]): Promise<void> {
   const file = files.find((f) => f.id === fileId);
   if (!file) return;
-  await Promise.all([dbDeleteFile(file.storagePath), dbDelete("project_files", fileId)]);
+  await dbDelete("project_files", fileId);
+  await dbDeleteFile(file.storagePath).catch(() => {});
 }

@@ -18,7 +18,7 @@ interface TeamState {
   error: string | null;
   load: () => Promise<void>;
   addMember: (member: TeamMember) => Promise<void>;
-  updateMember: (id: string, data: Partial<TeamMember>) => void;
+  updateMember: (id: string, data: Partial<TeamMember>) => Promise<void>;
   removeMember: (id: string) => Promise<void>;
   changeRole: (id: string, role: UserRole) => Promise<void>;
   assignProject: (memberId: string, projectId: string) => Promise<void>;
@@ -59,13 +59,17 @@ export const useTeamStore = create<TeamState>()((set, get) => ({
     }
   },
 
-  updateMember: (id, patch) =>
-    set((s) => {
-      updateMember(id, patch, s.members).then((updated) => {
-        if (updated) set((s2) => ({ members: s2.members.map((m) => (m.id === id ? updated : m)) }));
-      });
-      return { members: s.members.map((m) => (m.id === id ? { ...m, ...patch } : m)) };
-    }),
+  updateMember: async (id, patch) => {
+    const rollback = get().members.find((m) => m.id === id);
+    set((s) => ({ members: s.members.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
+    try {
+      const updated = await updateMember(id, patch, get().members);
+      if (updated) set((s) => ({ members: s.members.map((m) => (m.id === id ? updated : m)) }));
+    } catch (err) {
+      if (rollback) set((s) => ({ members: s.members.map((m) => (m.id === id ? rollback : m)) }));
+      throw err;
+    }
+  },
 
   removeMember: async (id) => {
     const rollback = get().members.find((m) => m.id === id);
