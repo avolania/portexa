@@ -137,12 +137,11 @@ export async function submitServiceRequest(
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
-  if (!isValidSRTransition(existing.state, ServiceRequestState.SUBMITTED)) return null;
-
   const now = new Date().toISOString();
   const nextState = existing.approvalRequired
     ? ServiceRequestState.PENDING_APPROVAL
     : ServiceRequestState.SUBMITTED;
+  if (!isValidSRTransition(existing.state, nextState)) return null;
 
   const updated: ServiceRequest = {
     ...existing,
