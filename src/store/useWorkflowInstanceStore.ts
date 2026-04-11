@@ -84,14 +84,20 @@ export const useWorkflowInstanceStore = create<WorkflowInstanceState>()(
       const instance = get().instances.find((i) => i.id === instanceId);
       if (!instance) return null;
 
-      const result = await submitDecision(
-        instance,
-        stepDefId,
-        user.id,
-        user.name,
-        decision,
-        comment,
-      );
+      let result;
+      try {
+        result = await submitDecision(
+          instance,
+          stepDefId,
+          user.id,
+          user.name,
+          decision,
+          comment,
+        );
+      } catch (err) {
+        console.error('[workflow] decide failed:', err);
+        throw err;
+      }
 
       set((s) => ({
         instances: s.instances.map((i) =>
