@@ -80,7 +80,12 @@ export async function uploadFile(
     createdAt: new Date().toISOString(),
   };
 
-  await dbUpsert("project_files", id, entry, orgId);
+  try {
+    await dbUpsert("project_files", id, entry, orgId);
+  } catch (err) {
+    await dbDeleteFile(storagePath).catch(() => {});
+    throw err;
+  }
   return entry;
 }
 
