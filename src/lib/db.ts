@@ -121,5 +121,8 @@ export async function dbGetFileUrl(path: string): Promise<string> {
 
 export async function dbDeleteFile(path: string): Promise<void> {
   const { error } = await supabase.storage.from(BUCKET).remove([path]);
-  if (error) console.error("[db] delete file:", error.message);
+  if (error) {
+    console.error("[db] delete file:", error.message);
+    throw new Error(error.message);
+  }
 }
