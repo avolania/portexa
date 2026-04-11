@@ -17,6 +17,7 @@ interface ProjectState {
   projects: Project[];
   tasks: Task[];
   loading: boolean;
+  error: string | null;
   selectedProjectId: string | null;
   load: () => Promise<void>;
   /** Demo-only: fire-and-forget by design. DB errors are non-critical; UI shows the new data immediately. */
@@ -36,16 +37,16 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   projects: [],
   tasks: [],
   loading: false,
+  error: null,
   selectedProjectId: null,
 
   load: async () => {
-    set({ loading: true });
+    set({ loading: true, error: null });
     try {
       const { projects, tasks } = await loadProjects();
       set({ projects: _syncProgress(tasks, projects), tasks, loading: false });
     } catch (err) {
-      set({ loading: false });
-      throw err;
+      set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
     }
   },
 
