@@ -1,9 +1,15 @@
 import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl } from '@/lib/db';
 import type { Attachment } from '@/types';
 const uuid = () => crypto.randomUUID();
+
+function riskToUrgency(risk: ChangeRisk): Urgency {
+  if (risk === ChangeRisk.CRITICAL || risk === ChangeRisk.HIGH) return Urgency.HIGH;
+  if (risk === ChangeRisk.MODERATE) return Urgency.MEDIUM;
+  return Urgency.LOW;
+}
 import { calculatePriority } from '@/lib/itsm/types/interfaces';
 import { generateTicketNumber } from '@/lib/itsm/utils/ticket-number';
-import { ApprovalState, ChangeRequestState, TicketEventType } from '@/lib/itsm/types/enums';
+import { ApprovalState, ChangeRequestState, ChangeRisk, TicketEventType, Urgency } from '@/lib/itsm/types/enums';
 import type {
   ChangeRequest,
   CreateChangeRequestDto,
@@ -64,7 +70,7 @@ export async function createChangeRequest(
   const now    = new Date().toISOString();
   const id     = uuid();
   const number = await generateTicketNumber('CHG');
-  const priority = calculatePriority(dto.impact, dto.impact as never); // risk drives priority in CRs
+  const priority = calculatePriority(dto.impact, riskToUrgency(dto.risk));
 
   const cr: ChangeRequest = {
     id,
