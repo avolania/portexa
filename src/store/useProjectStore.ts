@@ -62,10 +62,14 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   updateProject: async (id, patch) => {
     const orgId = useAuthStore.getState().user?.orgId ?? "";
     const current = get().projects;
-    // Optimistic update
     set({ projects: current.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
-    const updated = await updateProject(id, patch, current, orgId);
-    if (updated) set((s) => ({ projects: s.projects.map((p) => (p.id === id ? updated : p)) }));
+    try {
+      const updated = await updateProject(id, patch, current, orgId);
+      if (updated) set((s) => ({ projects: s.projects.map((p) => (p.id === id ? updated : p)) }));
+    } catch (err) {
+      set({ projects: current });
+      throw err;
+    }
   },
 
   deleteProject: async (id) => {
@@ -103,15 +107,23 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     const current = get().tasks;
     const projectId = current.find((t) => t.id === id)?.projectId;
     set({ tasks: current.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
-    const updated = await updateTask(id, patch, current, orgId);
-    if (updated) {
-      set((s) => {
-        const tasks = s.tasks.map((t) => (t.id === id ? updated : t));
-        const projects = projectId ? _syncOneProject(tasks, s.projects, projectId) : s.projects;
-        return { tasks, projects };
-      });
-    } else if (projectId) {
-      set((s) => ({ projects: _syncOneProject(s.tasks, s.projects, projectId) }));
+    try {
+      const updated = await updateTask(id, patch, current, orgId);
+      if (updated) {
+        set((s) => {
+          const tasks = s.tasks.map((t) => (t.id === id ? updated : t));
+          const projects = projectId ? _syncOneProject(tasks, s.projects, projectId) : s.projects;
+          return { tasks, projects };
+        });
+      } else if (projectId) {
+        set((s) => ({ projects: _syncOneProject(s.tasks, s.projects, projectId) }));
+      }
+    } catch (err) {
+      set((s) => ({
+        tasks: current,
+        projects: projectId ? _syncOneProject(current, s.projects, projectId) : s.projects,
+      }));
+      throw err;
     }
   },
 
