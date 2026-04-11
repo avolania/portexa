@@ -46,13 +46,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   }
 
-  // Kullanıcı zaten var mı kontrol et
-  const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-  const alreadyExists = existingUsers?.users?.some(
-    (u) => u.email?.toLowerCase() === invite.email.toLowerCase()
-  );
+  // Kullanıcı zaten var mı kontrol et (O(1) — tüm tabloyu çekmez)
+  const { data: existingUser } = await supabaseAdmin.auth.admin.getUserByEmail(invite.email);
 
-  if (alreadyExists) {
+  if (existingUser?.user) {
     return NextResponse.json(
       { error: "Bu e-posta adresiyle zaten bir hesap var. Giriş yapmayı deneyin." },
       { status: 409 }
