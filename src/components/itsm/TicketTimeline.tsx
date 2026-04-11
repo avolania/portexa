@@ -15,6 +15,7 @@ const EVENT_CONFIG: Record<
 > = {
   [TicketEventType.CREATED]:                   { label: "Oluşturuldu",               dot: "bg-indigo-400 border-indigo-300" },
   [TicketEventType.ASSIGNED]:                  { label: "Atandı",                    dot: "bg-blue-400 border-blue-300" },
+  [TicketEventType.UPDATED]:                   { label: "Güncellendi",               dot: "bg-gray-400 border-gray-300" },
   [TicketEventType.STATE_CHANGED]:             { label: "Durum değişti",             dot: "bg-violet-400 border-violet-300" },
   [TicketEventType.PRIORITY_CHANGED]:          { label: "Öncelik değişti",           dot: "bg-amber-400 border-amber-300" },
   [TicketEventType.COMMENT_ADDED]:             { label: "Yorum eklendi",             dot: "bg-gray-400 border-gray-300" },

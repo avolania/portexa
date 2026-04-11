@@ -96,6 +96,7 @@ export enum ChangeCloseCode {
 export enum TicketEventType {
   CREATED = 'created',
   ASSIGNED = 'assigned',
+  UPDATED = 'updated',
   STATE_CHANGED = 'state_changed',
   PRIORITY_CHANGED = 'priority_changed',
   COMMENT_ADDED = 'comment_added',

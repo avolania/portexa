@@ -147,7 +147,7 @@ export async function updateServiceRequest(
 
   // Generic update event
   events.push({
-    id: uuid(), type: TicketEventType.STATE_CHANGED,
+    id: uuid(), type: TicketEventType.UPDATED,
     actorId, actorName,
     note: 'Ticket güncellendi',
     timestamp: now,
