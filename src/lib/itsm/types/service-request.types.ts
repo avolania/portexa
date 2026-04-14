@@ -122,7 +122,7 @@ export type { AddWorkNoteDto, AddCommentDto } from './interfaces';
 export const SR_STATE_TRANSITIONS: Record<ServiceRequestState, ServiceRequestState[]> = {
   [ServiceRequestState.DRAFT]: [
     ServiceRequestState.SUBMITTED,
-    ServiceRequestState.APPROVED,
+    ServiceRequestState.PENDING_APPROVAL,
     ServiceRequestState.CANCELLED,
   ],
   [ServiceRequestState.SUBMITTED]: [
