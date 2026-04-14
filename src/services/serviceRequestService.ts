@@ -120,6 +120,7 @@ export async function updateServiceRequest(
   current: ServiceRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
@@ -159,7 +160,7 @@ export async function updateServiceRequest(
     timeline: [...existing.timeline, ...events],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -170,19 +171,21 @@ export async function submitServiceRequest(
   current: ServiceRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
+  // Submit is allowed from DRAFT or SUBMITTED; the actual next state is determined by approvalRequired
+  if (existing.state !== ServiceRequestState.DRAFT && existing.state !== ServiceRequestState.SUBMITTED) return null;
   const now = new Date().toISOString();
   const nextState = existing.approvalRequired
     ? ServiceRequestState.PENDING_APPROVAL
-    : ServiceRequestState.SUBMITTED;
-  if (!isValidSRTransition(existing.state, nextState)) return null;
+    : ServiceRequestState.APPROVED;
 
   const updated: ServiceRequest = {
     ...existing,
     state: nextState,
-    approvalState: existing.approvalRequired ? ApprovalState.REQUESTED : ApprovalState.NOT_REQUESTED,
+    approvalState: existing.approvalRequired ? ApprovalState.REQUESTED : ApprovalState.NOT_REQUIRED,
     timeline: [
       ...existing.timeline,
       { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId, actorName, previousValue: existing.state, newValue: nextState, timestamp: now },
@@ -190,7 +193,7 @@ export async function submitServiceRequest(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -202,9 +205,11 @@ export async function approveServiceRequest(
   current: ServiceRequest[],
   approverId: string,
   approverName: string,
+  orgId: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
+  if (!isValidSRTransition(existing.state, ServiceRequestState.APPROVED)) return null;
 
   const now = new Date().toISOString();
   const approverEntry: ApproverEntry = {
@@ -226,7 +231,7 @@ export async function approveServiceRequest(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -238,9 +243,11 @@ export async function rejectServiceRequest(
   current: ServiceRequest[],
   approverId: string,
   approverName: string,
+  orgId: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
+  if (!isValidSRTransition(existing.state, ServiceRequestState.REJECTED)) return null;
 
   const now = new Date().toISOString();
   const approverEntry: ApproverEntry = {
@@ -262,7 +269,7 @@ export async function rejectServiceRequest(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -274,6 +281,7 @@ export async function fulfillServiceRequest(
   current: ServiceRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
@@ -296,7 +304,7 @@ export async function fulfillServiceRequest(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -307,6 +315,7 @@ export async function closeServiceRequest(
   current: ServiceRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
@@ -324,7 +333,7 @@ export async function closeServiceRequest(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -336,6 +345,7 @@ export async function addSRWorkNote(
   current: ServiceRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
@@ -346,7 +356,7 @@ export async function addSRWorkNote(
     timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -356,6 +366,7 @@ export async function addSRComment(
   current: ServiceRequest[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
@@ -366,7 +377,7 @@ export async function addSRComment(
     timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -409,6 +420,7 @@ export async function removeServiceRequestAttachment(
   id: string,
   attachmentId: string,
   current: ServiceRequest[],
+  orgId: string,
 ): Promise<ServiceRequest | null> {
   const existing = current.find((sr) => sr.id === id);
   if (!existing) return null;
@@ -418,7 +430,35 @@ export async function removeServiceRequestAttachment(
     attachments: (existing.attachments ?? []).filter((a) => a.id !== attachmentId),
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
+  return updated;
+}
+
+// ─── Generic state change (IN_PROGRESS, PENDING, CANCELLED) ──────────────────
+
+export async function changeServiceRequestState(
+  id: string,
+  targetState: ServiceRequestState,
+  current: ServiceRequest[],
+  actorId: string,
+  actorName: string,
+  orgId: string,
+): Promise<ServiceRequest | null> {
+  const existing = current.find((sr) => sr.id === id);
+  if (!existing) return null;
+  if (!isValidSRTransition(existing.state, targetState)) return null;
+
+  const now = new Date().toISOString();
+  const updated: ServiceRequest = {
+    ...existing,
+    state: targetState,
+    timeline: [
+      ...existing.timeline,
+      { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId, actorName, previousValue: existing.state, newValue: targetState, timestamp: now },
+    ],
+    updatedAt: now,
+  };
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -426,4 +466,57 @@ export async function removeServiceRequestAttachment(
 
 export async function deleteServiceRequest(id: string): Promise<void> {
   await dbDelete(TABLE, id);
+}
+
+// ─── L2 Workbench: Link CR to SR ──────────────────────────────────────────────
+
+/**
+ * Bir Service Request'e Change Request bağlar.
+ * SR'ın linkedCRIds dizisine crId eklenir, work note yazılır.
+ */
+export async function linkCRToSR(
+  srId: string,
+  crId: string,
+  crNumber: string,
+  note: string,
+  current: ServiceRequest[],
+  orgId: string,
+  actorId: string,
+  actorName: string,
+): Promise<ServiceRequest | null> {
+  const existing = current.find((s) => s.id === srId);
+  if (!existing) return null;
+
+  const now = new Date().toISOString();
+  const linkedCRIds = [...(existing.linkedCRIds ?? [])];
+  if (!linkedCRIds.includes(crId)) {
+    linkedCRIds.push(crId);
+  }
+
+  const noteContent = `[CR BAĞLANDI] ${crNumber}${note ? ': ' + note : ''}`;
+  const uuid = () => crypto.randomUUID();
+
+  const updated: ServiceRequest = {
+    ...existing,
+    linkedCRIds,
+    workNotes: [
+      ...existing.workNotes,
+      { id: uuid(), authorId: actorId, authorName: actorName, content: noteContent, createdAt: now },
+    ],
+    timeline: [
+      ...existing.timeline,
+      {
+        id: uuid(),
+        type: TicketEventType.RELATED_CR_LINKED,
+        actorId,
+        actorName,
+        newValue: crNumber,
+        timestamp: now,
+      },
+    ],
+    updatedAt: now,
+  };
+
+  await dbUpsert(TABLE, srId, updated, orgId);
+  return updated;
 }
