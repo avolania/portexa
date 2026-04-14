@@ -6,7 +6,7 @@ const makeNote = (authorId: string, authorName: string, content: string, now: st
 import { createIncidentSLA, checkIncidentSLABreaches, pauseIncidentSLA, resumeIncidentSLA } from '@/lib/itsm/utils/sla.engine';
 import { generateTicketNumber } from '@/lib/itsm/utils/ticket-number';
 import { calculatePriority, DEFAULT_BUSINESS_HOURS } from '@/lib/itsm/types/interfaces';
-import { IncidentState, TicketEventType } from '@/lib/itsm/types/enums';
+import { IncidentState, TicketEventType, IncidentResolutionCode } from '@/lib/itsm/types/enums';
 import type {
   Incident,
   CreateIncidentDto,
@@ -120,6 +120,7 @@ export async function updateIncident(
   current: Incident[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<Incident | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
@@ -127,9 +128,20 @@ export async function updateIncident(
   const now = new Date().toISOString();
   const events: TicketEvent[] = [];
 
-  // Recalculate priority if impact/urgency changed
+  // Recalculate priority if impact/urgency changed, or apply explicit override
   let priority = existing.priority;
-  if ((dto.impact || dto.urgency) && !existing.priorityOverride) {
+  if (dto.priorityOverride !== undefined) {
+    // Explicit override value takes precedence
+    if (dto.priorityOverride !== existing.priority) {
+      priority = dto.priorityOverride;
+      events.push({
+        id: uuid(), type: TicketEventType.PRIORITY_CHANGED,
+        actorId, actorName,
+        previousValue: existing.priority, newValue: dto.priorityOverride,
+        timestamp: now,
+      });
+    }
+  } else if ((dto.impact || dto.urgency) && !existing.priorityOverride) {
     const newImpact  = dto.impact  ?? existing.impact;
     const newUrgency = dto.urgency ?? existing.urgency;
     const newPriority = calculatePriority(newImpact, newUrgency);
@@ -163,7 +175,7 @@ export async function updateIncident(
     timeline: [...existing.timeline, ...events],
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -175,6 +187,7 @@ export async function assignIncident(
   current: Incident[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<Incident | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
@@ -202,7 +215,7 @@ export async function assignIncident(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -214,6 +227,7 @@ export async function changeIncidentState(
   current: Incident[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<Incident | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
@@ -252,7 +266,7 @@ export async function changeIncidentState(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -264,6 +278,7 @@ export async function resolveIncident(
   current: Incident[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<Incident | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
@@ -286,7 +301,7 @@ export async function resolveIncident(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -298,6 +313,7 @@ export async function closeIncident(
   current: Incident[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<Incident | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
@@ -317,7 +333,7 @@ export async function closeIncident(
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -329,6 +345,7 @@ export async function addIncidentWorkNote(
   current: Incident[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<Incident | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
@@ -339,7 +356,7 @@ export async function addIncidentWorkNote(
     timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -349,6 +366,7 @@ export async function addIncidentComment(
   current: Incident[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<Incident | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
@@ -359,7 +377,7 @@ export async function addIncidentComment(
     timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -371,6 +389,7 @@ export async function linkCRToIncident(
   current: Incident[],
   actorId: string,
   actorName: string,
+  orgId: string,
 ): Promise<Incident | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
@@ -384,7 +403,7 @@ export async function linkCRToIncident(
     }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -427,6 +446,7 @@ export async function removeIncidentAttachment(
   id: string,
   attachmentId: string,
   current: Incident[],
+  orgId: string,
 ): Promise<Incident | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
@@ -436,7 +456,7 @@ export async function removeIncidentAttachment(
     attachments: (existing.attachments ?? []).filter((a) => a.id !== attachmentId),
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated);
+  await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
 
@@ -444,4 +464,278 @@ export async function removeIncidentAttachment(
 
 export async function deleteIncident(id: string): Promise<void> {
   await dbDelete(TABLE, id);
+}
+
+// ─── L2 Workbench: Convert & Merge ───────────────────────────────────────────
+
+/**
+ * INC'in resolve edilebilir duruma getirilmesini sağlar.
+ * New veya Assigned ise önce In Progress'e alır.
+ */
+async function ensureResolvable(
+  id: string,
+  current: Incident[],
+  actorId: string,
+  actorName: string,
+  orgId: string,
+): Promise<Incident[]> {
+  const inc = current.find((i) => i.id === id);
+  if (!inc) return current;
+  if (inc.state === IncidentState.NEW || inc.state === IncidentState.ASSIGNED) {
+    const updated = await changeIncidentState(
+      id,
+      { state: IncidentState.IN_PROGRESS },
+      current,
+      actorId,
+      actorName,
+      orgId,
+    );
+    if (updated) {
+      return current.map((i) => (i.id === id ? updated : i));
+    }
+  }
+  return current;
+}
+
+/**
+ * Bir Incident'ı Service Request'e dönüştürür.
+ * INC → Resolved (Converted) olarak kapatılır, yeni SR oluşturulur.
+ * Çağıran: L2 workbench Convert Modal
+ */
+export async function convertIncidentToSR(
+  incId: string,
+  dto: {
+    requestType: string;
+    category: string;
+    impact: import('@/lib/itsm/types/enums').Impact;
+    urgency: import('@/lib/itsm/types/enums').Urgency;
+    note: string;
+  },
+  current: Incident[],
+  orgId: string,
+  actorId: string,
+  actorName: string,
+): Promise<{ srId: string; srNumber: string }> {
+  const inc = current.find((i) => i.id === incId);
+  if (!inc) throw new Error('Incident bulunamadı');
+
+  // 1. SR oluştur
+  const { createServiceRequest } = await import('./serviceRequestService');
+  const sr = await createServiceRequest(
+    {
+      requestedForId: inc.callerId,
+      requestedById:  actorId,
+      requestType:    dto.requestType,
+      category:       dto.category,
+      impact:         dto.impact,
+      urgency:        dto.urgency,
+      shortDescription: inc.shortDescription,
+      description:    inc.description,
+      sourceIncidentNumber: inc.number,
+    },
+    orgId,
+    actorId,
+    actorName,
+  );
+
+  // 2. INC'i resolve edilebilir duruma getir
+  const freshList = await ensureResolvable(incId, current, actorId, actorName, orgId);
+
+  // 3. INC'e work note ekle
+  await addIncidentWorkNote(
+    incId,
+    { content: `[CONVERT→SR] ${sr.number} numaralı Service Request oluşturuldu. ${dto.note}` },
+    freshList,
+    actorId,
+    actorName,
+    orgId,
+  );
+
+  // 4. INC'i resolve et
+  await resolveIncident(
+    incId,
+    {
+      resolutionCode: IncidentResolutionCode.CONVERTED,
+      resolutionNotes: `Service Request'e dönüştürüldü: ${sr.number}. ${dto.note}`,
+    },
+    freshList,
+    actorId,
+    actorName,
+    orgId,
+  );
+
+  return { srId: sr.id, srNumber: sr.number };
+}
+
+/**
+ * Bir Incident'ı Change Request'e dönüştürür.
+ * INC → Resolved (Converted), yeni CR oluşturulur.
+ */
+export async function convertIncidentToCR(
+  incId: string,
+  dto: {
+    changeType: import('@/lib/itsm/types/enums').ChangeType;
+    risk: import('@/lib/itsm/types/enums').ChangeRisk;
+    note: string;
+  },
+  current: Incident[],
+  orgId: string,
+  actorId: string,
+  actorName: string,
+): Promise<{ crId: string; crNumber: string }> {
+  const inc = current.find((i) => i.id === incId);
+  if (!inc) throw new Error('Incident bulunamadı');
+
+  const { createChangeRequest } = await import('./changeRequestService');
+  const now = new Date();
+  const plannedEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const cr = await createChangeRequest(
+    {
+      requestedById:    actorId,
+      changeManagerId:  actorId,
+      type:             dto.changeType,
+      category:         inc.category,
+      risk:             dto.risk,
+      impact:           inc.impact,
+      shortDescription: inc.shortDescription,
+      description:      inc.description,
+      justification:    dto.note,
+      plannedStartDate: now.toISOString(),
+      plannedEndDate:   plannedEnd.toISOString(),
+      implementationPlan: '',
+      backoutPlan:        '',
+      relatedIncidentIds: [incId],
+      sourceIncidentNumber: inc.number,
+    },
+    orgId,
+    actorId,
+    actorName,
+  );
+
+  const freshList = await ensureResolvable(incId, current, actorId, actorName, orgId);
+
+  await addIncidentWorkNote(
+    incId,
+    { content: `[CONVERT→CR] ${cr.number} numaralı Change Request oluşturuldu. ${dto.note}` },
+    freshList,
+    actorId,
+    actorName,
+    orgId,
+  );
+
+  await resolveIncident(
+    incId,
+    {
+      resolutionCode: IncidentResolutionCode.CONVERTED,
+      resolutionNotes: `Change Request'e dönüştürüldü: ${cr.number}. ${dto.note}`,
+    },
+    freshList,
+    actorId,
+    actorName,
+    orgId,
+  );
+
+  return { crId: cr.id, crNumber: cr.number };
+}
+
+/**
+ * Bir Incident'tan Problem kaydı açar (INC category="Problem").
+ * Orijinal INC → Resolved (Converted).
+ */
+export async function convertIncidentToProblem(
+  incId: string,
+  note: string,
+  current: Incident[],
+  orgId: string,
+  actorId: string,
+  actorName: string,
+): Promise<{ problemId: string; problemNumber: string }> {
+  const inc = current.find((i) => i.id === incId);
+  if (!inc) throw new Error('Incident bulunamadı');
+
+  const problem = await createIncident(
+    {
+      callerId:         inc.callerId,
+      reportedById:     actorId,
+      category:         'Problem',
+      subcategory:      inc.category,
+      impact:           inc.impact,
+      urgency:          inc.urgency,
+      shortDescription: `Problem: ${inc.shortDescription}`,
+      description:      `${inc.description}\n\n---\nKaynak Incident: ${inc.number}\n${note}`,
+      assignedToId:     actorId,
+    },
+    orgId,
+    actorId,
+    actorName,
+  );
+
+  const freshList = await ensureResolvable(incId, current, actorId, actorName, orgId);
+
+  await addIncidentWorkNote(
+    incId,
+    { content: `[CONVERT→PROBLEM] ${problem.number} numaralı Problem kaydı açıldı. ${note}` },
+    freshList,
+    actorId,
+    actorName,
+    orgId,
+  );
+
+  await resolveIncident(
+    incId,
+    {
+      resolutionCode: IncidentResolutionCode.CONVERTED,
+      resolutionNotes: `Problem kaydına dönüştürüldü: ${problem.number}. ${note}`,
+    },
+    freshList,
+    actorId,
+    actorName,
+    orgId,
+  );
+
+  return { problemId: problem.id, problemNumber: problem.number };
+}
+
+/**
+ * İki incident'ı birleştirir: duplicate → Resolved (Duplicate), master'a note eklenir.
+ */
+export async function mergeDuplicateIncident(
+  masterId: string,
+  duplicateId: string,
+  note: string,
+  current: Incident[],
+  orgId: string,
+  actorId: string,
+  actorName: string,
+): Promise<void> {
+  const master = current.find((i) => i.id === masterId);
+  const dup    = current.find((i) => i.id === duplicateId);
+  if (!master || !dup) throw new Error('Incident bulunamadı');
+
+  // Duplicate'i resolve edilebilir duruma getir
+  const freshList = await ensureResolvable(duplicateId, current, actorId, actorName, orgId);
+
+  // Duplicate'i resolve et (Duplicate resolution code)
+  await resolveIncident(
+    duplicateId,
+    {
+      resolutionCode: IncidentResolutionCode.DUPLICATE,
+      resolutionNotes: `${master.number} numaralı incident ile birleştirildi. ${note}`,
+    },
+    freshList,
+    actorId,
+    actorName,
+    orgId,
+  );
+
+  // Master'a birleştirme notu ekle
+  await addIncidentWorkNote(
+    masterId,
+    { content: `[MERGE] ${dup.number} numaralı incident bu kayıtla birleştirildi (duplicate olarak kapatıldı). ${note}` },
+    current,
+    actorId,
+    actorName,
+    orgId,
+  );
 }
