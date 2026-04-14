@@ -60,6 +60,7 @@ export interface ServiceRequest {
   attachments: Attachment[];
   fulfillmentNotes?: string;
   closureCode?: ServiceRequestClosureCode;
+  linkedCRIds?: string[];
   sla: ServiceRequestSLA;
   timeline: TicketEvent[];
   createdAt: string;
@@ -121,7 +122,7 @@ export type { AddWorkNoteDto, AddCommentDto } from './interfaces';
 export const SR_STATE_TRANSITIONS: Record<ServiceRequestState, ServiceRequestState[]> = {
   [ServiceRequestState.DRAFT]: [
     ServiceRequestState.SUBMITTED,
-    ServiceRequestState.PENDING_APPROVAL,
+    ServiceRequestState.APPROVED,
     ServiceRequestState.CANCELLED,
   ],
   [ServiceRequestState.SUBMITTED]: [

@@ -34,6 +34,8 @@ export enum IncidentResolutionCode {
   NOT_SOLVED_NOT_REPRODUCIBLE = 'Not Solved (Not Reproducible)',
   NOT_SOLVED_TOO_COSTLY = 'Not Solved (Too Costly)',
   CLOSED_BY_CALLER = 'Closed/Resolved by Caller',
+  DUPLICATE = 'Duplicate',
+  CONVERTED = 'Converted',
 }
 
 export enum IncidentClosureCode {
@@ -58,10 +60,11 @@ export enum ServiceRequestState {
 }
 
 export enum ApprovalState {
+  NOT_REQUIRED  = 'Not Required',
   NOT_REQUESTED = 'Not Yet Requested',
-  REQUESTED = 'Requested',
-  APPROVED = 'Approved',
-  REJECTED = 'Rejected',
+  REQUESTED     = 'Requested',
+  APPROVED      = 'Approved',
+  REJECTED      = 'Rejected',
 }
 
 export enum ChangeType {
