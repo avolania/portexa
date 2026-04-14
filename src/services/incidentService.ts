@@ -7,6 +7,7 @@ import { createIncidentSLA, checkIncidentSLABreaches, pauseIncidentSLA, resumeIn
 import { generateTicketNumber } from '@/lib/itsm/utils/ticket-number';
 import { calculatePriority, DEFAULT_BUSINESS_HOURS } from '@/lib/itsm/types/interfaces';
 import { IncidentState, TicketEventType, IncidentResolutionCode } from '@/lib/itsm/types/enums';
+import type { Impact, Urgency, ChangeType, ChangeRisk } from '@/lib/itsm/types/enums';
 import type {
   Incident,
   CreateIncidentDto,
@@ -471,6 +472,7 @@ export async function deleteIncident(id: string): Promise<void> {
 /**
  * INC'in resolve edilebilir duruma getirilmesini sağlar.
  * New veya Assigned ise önce In Progress'e alır.
+ * Not: PENDING state için ayrı geçiş gerekmez — PENDING → RESOLVED transition zaten geçerli.
  */
 async function ensureResolvable(
   id: string,
@@ -507,8 +509,8 @@ export async function convertIncidentToSR(
   dto: {
     requestType: string;
     category: string;
-    impact: import('@/lib/itsm/types/enums').Impact;
-    urgency: import('@/lib/itsm/types/enums').Urgency;
+    impact: Impact;
+    urgency: Urgency;
     note: string;
   },
   current: Incident[],
@@ -541,8 +543,8 @@ export async function convertIncidentToSR(
   // 2. INC'i resolve edilebilir duruma getir
   const freshList = await ensureResolvable(incId, current, actorId, actorName, orgId);
 
-  // 3. INC'e work note ekle
-  await addIncidentWorkNote(
+  // 3. INC'e work note ekle ve güncel Incident'ı yakala
+  const afterNote = await addIncidentWorkNote(
     incId,
     { content: `[CONVERT→SR] ${sr.number} numaralı Service Request oluşturuldu. ${dto.note}` },
     freshList,
@@ -550,15 +552,18 @@ export async function convertIncidentToSR(
     actorName,
     orgId,
   );
+  const listForResolve = afterNote
+    ? freshList.map((i) => (i.id === incId ? afterNote : i))
+    : freshList;
 
-  // 4. INC'i resolve et
+  // 4. INC'i güncel listeyle resolve et (work note korunur)
   await resolveIncident(
     incId,
     {
       resolutionCode: IncidentResolutionCode.CONVERTED,
       resolutionNotes: `Service Request'e dönüştürüldü: ${sr.number}. ${dto.note}`,
     },
-    freshList,
+    listForResolve,
     actorId,
     actorName,
     orgId,
@@ -574,8 +579,8 @@ export async function convertIncidentToSR(
 export async function convertIncidentToCR(
   incId: string,
   dto: {
-    changeType: import('@/lib/itsm/types/enums').ChangeType;
-    risk: import('@/lib/itsm/types/enums').ChangeRisk;
+    changeType: ChangeType;
+    risk: ChangeRisk;
     note: string;
   },
   current: Incident[],
@@ -615,7 +620,7 @@ export async function convertIncidentToCR(
 
   const freshList = await ensureResolvable(incId, current, actorId, actorName, orgId);
 
-  await addIncidentWorkNote(
+  const afterNote = await addIncidentWorkNote(
     incId,
     { content: `[CONVERT→CR] ${cr.number} numaralı Change Request oluşturuldu. ${dto.note}` },
     freshList,
@@ -623,6 +628,9 @@ export async function convertIncidentToCR(
     actorName,
     orgId,
   );
+  const listForResolve = afterNote
+    ? freshList.map((i) => (i.id === incId ? afterNote : i))
+    : freshList;
 
   await resolveIncident(
     incId,
@@ -630,7 +638,7 @@ export async function convertIncidentToCR(
       resolutionCode: IncidentResolutionCode.CONVERTED,
       resolutionNotes: `Change Request'e dönüştürüldü: ${cr.number}. ${dto.note}`,
     },
-    freshList,
+    listForResolve,
     actorId,
     actorName,
     orgId,
@@ -673,7 +681,7 @@ export async function convertIncidentToProblem(
 
   const freshList = await ensureResolvable(incId, current, actorId, actorName, orgId);
 
-  await addIncidentWorkNote(
+  const afterNote = await addIncidentWorkNote(
     incId,
     { content: `[CONVERT→PROBLEM] ${problem.number} numaralı Problem kaydı açıldı. ${note}` },
     freshList,
@@ -681,6 +689,9 @@ export async function convertIncidentToProblem(
     actorName,
     orgId,
   );
+  const listForResolve = afterNote
+    ? freshList.map((i) => (i.id === incId ? afterNote : i))
+    : freshList;
 
   await resolveIncident(
     incId,
@@ -688,7 +699,7 @@ export async function convertIncidentToProblem(
       resolutionCode: IncidentResolutionCode.CONVERTED,
       resolutionNotes: `Problem kaydına dönüştürüldü: ${problem.number}. ${note}`,
     },
-    freshList,
+    listForResolve,
     actorId,
     actorName,
     orgId,
