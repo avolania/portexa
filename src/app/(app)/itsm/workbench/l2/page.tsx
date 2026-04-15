@@ -390,7 +390,12 @@ const CR_STATE_LABEL: Record<string, string> = {
 export default function SpecialistWorkbenchPage() {
   const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState } = useIncidentStore();
   const { user } = useAuthStore();
-  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR, changeState: changeSRState } = useServiceRequestStore();
+  const srStore = useServiceRequestStore();
+  const serviceRequests = srStore.serviceRequests;
+  const loadSR = srStore.load;
+  const addSRWorkNote = srStore.addWorkNote;
+  const fulfillSR = srStore.fulfill;
+  const changeSRState = srStore.changeState;
   const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR } = useChangeRequestStore();
 
   // Gerçek incident'ları Ticket formatına dönüştür
