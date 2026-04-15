@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
@@ -86,9 +86,9 @@ interface TicketRow {
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function L1WorkbenchPage() {
-  const { incidents, assign: assignInc, changeState: changeIncState, update: updateInc, addWorkNote, load: loadInc } = useIncidentStore();
-  const { serviceRequests, load: loadSR } = useServiceRequestStore();
-  const { changeRequests, load: loadCR } = useChangeRequestStore();
+  const { incidents, assign: assignInc, changeState: changeIncState, update: updateInc, addWorkNote, addAttachment: addIncAttachment, load: loadInc } = useIncidentStore();
+  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, addAttachment: addSRAttachment } = useServiceRequestStore();
+  const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, addAttachment: addCRAttachment } = useChangeRequestStore();
   const { user, profiles } = useAuthStore();
 
   const [search, setSearch]               = useState("");
@@ -105,6 +105,9 @@ export default function L1WorkbenchPage() {
   const [escalateId, setEscalateId]       = useState<string | null>(null);
   const [escalateNote, setEscalateNote]   = useState("");
   const [escalateLoading, setEscalateLoading] = useState(false);
+  const [noteSaving, setNoteSaving]       = useState(false);
+  const [noteError, setNoteError]         = useState<string | null>(null);
+  const [attachSaving, setAttachSaving]   = useState(false);
 
   useEffect(() => { loadInc(); loadSR(); loadCR(); }, [loadInc, loadSR, loadCR]);
 
@@ -239,6 +242,35 @@ export default function L1WorkbenchPage() {
 
   const detail = detailId ? allRows.find(t => t.id === detailId) : null;
   const escalateTicket = escalateId ? allRows.find(t => t.id === escalateId) : null;
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSaveNote = async () => {
+    if (!detail || !noteText.trim()) return;
+    setNoteSaving(true);
+    setNoteError(null);
+    try {
+      if (detail.type === "INC") await addWorkNote(detail.id, { content: noteText.trim() });
+      else if (detail.type === "SR") await addSRWorkNote(detail.id, { content: noteText.trim() });
+      else if (detail.type === "CR") await addCRWorkNote(detail.id, { content: noteText.trim() });
+      setNoteText("");
+    } catch (e) {
+      setNoteError(e instanceof Error ? e.message : 'Not kaydedilemedi');
+    } finally { setNoteSaving(false); }
+  };
+
+  const handleAttachFile = async (file: File) => {
+    if (!detail) return;
+    setAttachSaving(true);
+    setNoteError(null);
+    try {
+      if (detail.type === "INC") await addIncAttachment(detail.id, file);
+      else if (detail.type === "SR") await addSRAttachment(detail.id, file);
+      else if (detail.type === "CR") await addCRAttachment(detail.id, file);
+    } catch (e) {
+      setNoteError(e instanceof Error ? e.message : 'Dosya yüklenemedi');
+    } finally { setAttachSaving(false); }
+  };
 
   // Sort header helper
   const SortHead = ({ col, label, w }: { col: typeof sortCol; label: string; w?: string }) => (
@@ -892,15 +924,32 @@ export default function L1WorkbenchPage() {
                   onFocus={e => (e.target.style.borderColor = "#3B82F6")}
                   onBlur={e => (e.target.style.borderColor = "#E5E7EB")}
                 />
+                {noteError && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: "#DC2626", fontFamily: "monospace", background: "#FEF2F2", padding: "4px 8px", borderRadius: 4 }}>{noteError}</div>
+                )}
                 <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                  <button onClick={() => setNoteText("")} style={{
-                    padding: "7px 18px", borderRadius: 6, border: "none",
-                    background: "#3B82F6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  }}>Kaydet</button>
-                  <button style={{
-                    padding: "7px 14px", borderRadius: 6, border: "1px solid #E5E7EB",
-                    background: "#fff", color: "#6B7280", fontSize: 11, cursor: "pointer",
-                  }}>📎 Dosya Ekle</button>
+                  <button
+                    onClick={handleSaveNote}
+                    disabled={noteSaving || !noteText.trim() || !detail}
+                    style={{
+                      padding: "7px 18px", borderRadius: 6, border: "none",
+                      background: "#3B82F6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      opacity: (noteSaving || !noteText.trim() || !detail) ? 0.5 : 1,
+                    }}>{noteSaving ? "Kaydediliyor..." : "Kaydet"}</button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={attachSaving || !detail}
+                    style={{
+                      padding: "7px 14px", borderRadius: 6, border: "1px solid #E5E7EB",
+                      background: "#fff", color: "#6B7280", fontSize: 11, cursor: "pointer",
+                      opacity: (attachSaving || !detail) ? 0.5 : 1,
+                    }}>{attachSaving ? "Yükleniyor..." : "📎 Dosya Ekle"}</button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    style={{ display: "none" }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleAttachFile(f); e.target.value = ""; }}
+                  />
                 </div>
               </div>
             </div>

@@ -596,8 +596,15 @@ export default function SpecialistWorkbenchPage() {
 
   const selected = (displayTickets.find(t => t.id === selectedId) ?? displayTickets[0])!;
 
-  // Seçili ticket'ın gerçek incident store ID'si
-  const selectedStoreId = selected?.storeId ?? null;
+  // Seçili ticket'ın store UUID'si — storeId alanı yoksa ticket numarasından fallback lookup
+  const selectedStoreId: string | null = (() => {
+    if (!selected) return null;
+    if (selected.storeId) return selected.storeId;
+    if (selected.type === "INC") return incidents.find(i => i.number === selected.id)?.id ?? null;
+    if (selected.type === "SR") return serviceRequests.find(s => s.number === selected.id)?.id ?? null;
+    if (selected.type === "CR") return changeRequests.find(c => c.number === selected.id)?.id ?? null;
+    return null;
+  })();
   const selectedStoreType = selected?.type ?? null; // "INC" | "SR" | "CR" | null
 
   const dispatchWorkNote = async (content: string): Promise<void> => {
