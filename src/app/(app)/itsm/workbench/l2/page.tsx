@@ -555,6 +555,7 @@ export default function SpecialistWorkbenchPage() {
   const [noteText, setNoteText]             = useState("");
   const [timelineNoteText, setTimelineNoteText] = useState("");
   const [saving, setSaving]                 = useState(false);
+  const [errorMsg, setErrorMsg]             = useState<string | null>(null);
   const [showEscalateMenu, setShowEscalateMenu] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolveNotes, setResolveNotes]     = useState("");
@@ -613,6 +614,7 @@ export default function SpecialistWorkbenchPage() {
   const handleResolve = async () => {
     if (!selectedStoreId || !resolveNotes.trim()) return;
     setSaving(true);
+    setErrorMsg(null);
     try {
       await resolveInc(selectedStoreId, {
         resolutionCode: IncidentResolutionCode.SOLVED_PERMANENTLY,
@@ -620,12 +622,15 @@ export default function SpecialistWorkbenchPage() {
       });
       setShowResolveModal(false);
       setResolveNotes("");
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Kayıt sırasında hata oluştu');
     } finally { setSaving(false); }
   };
 
   const handleFulfill = async () => {
     if (!selectedStoreId || !fulfillNotes.trim()) return;
     setSaving(true);
+    setErrorMsg(null);
     try {
       await fulfillSR(selectedStoreId, {
         fulfillmentNotes: fulfillNotes,
@@ -633,12 +638,15 @@ export default function SpecialistWorkbenchPage() {
       });
       setShowFulfillModal(false);
       setFulfillNotes("");
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Kayıt sırasında hata oluştu');
     } finally { setSaving(false); }
   };
 
   const handleConvert = async () => {
     if (!selectedStoreId || !convertNote.trim() || !user) return;
     setSaving(true);
+    setErrorMsg(null);
     try {
       if (convertTarget === "SR") {
         await convertIncidentToSR(
@@ -662,12 +670,15 @@ export default function SpecialistWorkbenchPage() {
       }
       setShowConvertModal(false);
       setConvertNote("");
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Dönüştürme sırasında hata oluştu');
     } finally { setSaving(false); }
   };
 
   const handleMerge = async () => {
     if (!selectedStoreId || !mergeTargetTicket?.storeId || !mergeNote.trim() || !user) return;
     setSaving(true);
+    setErrorMsg(null);
     try {
       await mergeDuplicateIncident(selectedStoreId, mergeTargetTicket.storeId, mergeNote, incidents, user.orgId, user.id, user.name);
       await loadInc();
@@ -675,12 +686,15 @@ export default function SpecialistWorkbenchPage() {
       setMergeNote("");
       setMergeTargetTicket(null);
       setMergeSearchQ("");
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Birleştirme sırasında hata oluştu');
     } finally { setSaving(false); }
   };
 
   const handleLinkCR = async () => {
     if (!selectedStoreId || !linkCRTargetTicket?.storeId || !user) return;
     setSaving(true);
+    setErrorMsg(null);
     try {
       await linkCRToSR(selectedStoreId, linkCRTargetTicket.storeId, linkCRTargetTicket.id, linkCRNote, serviceRequests, user.orgId, user.id, user.name);
       await loadSR();
@@ -688,24 +702,32 @@ export default function SpecialistWorkbenchPage() {
       setLinkCRNote("");
       setLinkCRTargetTicket(null);
       setLinkCRSearchQ("");
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'CR bağlama sırasında hata oluştu');
     } finally { setSaving(false); }
   };
 
   const handleSaveTechNote = async () => {
     if (!selectedStoreId || !noteText.trim()) return;
     setSaving(true);
+    setErrorMsg(null);
     try {
       await dispatchWorkNote(`[TEKNİK] ${noteText}`);
       setNoteText("");
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Teknik not kaydedilemedi');
     } finally { setSaving(false); }
   };
 
   const handleSaveRootCause = async () => {
     if (!selectedStoreId || !rootCauseText.trim()) return;
     setSaving(true);
+    setErrorMsg(null);
     try {
       await dispatchWorkNote(`[ROOT CAUSE] ${rootCauseText}`);
       setRootCauseText("");
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Root cause kaydedilemedi');
     } finally { setSaving(false); }
   };
 
@@ -714,6 +736,7 @@ export default function SpecialistWorkbenchPage() {
     const rca = getRca();
     if (!rca) return;
     setSaving(true);
+    setErrorMsg(null);
     try {
       const whyLines = ([1,2,3,4,5] as const)
         .map(n => {
@@ -723,13 +746,15 @@ export default function SpecialistWorkbenchPage() {
         .filter(Boolean)
         .join("\n");
       if (whyLines) {
-        await addWorkNote(selectedStoreId, { content: `[RCA 5-WHY]\n${whyLines}` });
+        await dispatchWorkNote(`[RCA 5-WHY]\n${whyLines}`);
       }
       if (rca.rootCause?.trim()) {
-        await addWorkNote(selectedStoreId, { content: `[ROOT CAUSE] ${rca.rootCause.trim()}` });
+        await dispatchWorkNote(`[ROOT CAUSE] ${rca.rootCause.trim()}`);
       }
       // Kaydedilen RCA'yı local state'den temizle
       setRcaLocal(prev => { const n = { ...prev }; delete n[selected.id]; return n; });
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'RCA kaydedilemedi');
     } finally { setSaving(false); }
   };
 
@@ -737,6 +762,7 @@ export default function SpecialistWorkbenchPage() {
     setShowEscalateMenu(false);
     if (!selectedStoreId || !selectedStoreType || !user) return;
     setSaving(true);
+    setErrorMsg(null);
     try {
       if (selectedStoreType === "INC") {
         await assignInc(selectedStoreId, { assignedToId: user.id, assignmentGroupId: group });
@@ -746,6 +772,8 @@ export default function SpecialistWorkbenchPage() {
         }
       }
       await dispatchWorkNote(`[ESKALASYoN] ${group} grubuna eskalasyon yapıldı`);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Eskalasyon sırasında hata oluştu');
     } finally { setSaving(false); }
   };
 
@@ -851,6 +879,15 @@ export default function SpecialistWorkbenchPage() {
     <div className="wb-root" style={{ fontFamily: "'IBM Plex Sans',sans-serif", background: "#F1F5F9", height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", color: "#0F172A" }}>
       <style>{css}</style>
 
+      {/* Error Banner */}
+      {errorMsg && (
+        <div style={{ background: "#FEF2F2", borderBottom: "1px solid #FECACA", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 14, color: "#DC2626" }}>⚠</span>
+          <span style={{ flex: 1, fontSize: 12, color: "#991B1B", fontFamily: "'IBM Plex Mono',monospace" }}>{errorMsg}</span>
+          <button onClick={() => setErrorMsg(null)} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: "0 4px" }}>✕</button>
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div style={{ height: 46, background: "#fff", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", padding: "0 16px", gap: 10, flexShrink: 0 }}>
         {[
@@ -948,8 +985,11 @@ export default function SpecialistWorkbenchPage() {
                           onClick={async () => {
                             if (!selectedStoreId) return;
                             setSaving(true);
+                            setErrorMsg(null);
                             try {
                               await transitionCR(selectedStoreId, ChangeRequestState.REVIEW);
+                            } catch (e) {
+                              setErrorMsg(e instanceof Error ? e.message : 'Durum güncellenemedi');
                             } finally { setSaving(false); }
                           }}
                           disabled={saving}
@@ -1167,9 +1207,12 @@ export default function SpecialistWorkbenchPage() {
                         onClick={async () => {
                           if (!selectedStoreId || !timelineNoteText.trim()) return;
                           setSaving(true);
+                          setErrorMsg(null);
                           try {
                             await dispatchWorkNote(timelineNoteText.trim());
                             setTimelineNoteText("");
+                          } catch (e) {
+                            setErrorMsg(e instanceof Error ? e.message : 'Not kaydedilemedi');
                           } finally { setSaving(false); }
                         }}
                         disabled={saving || !timelineNoteText.trim() || !selectedStoreId}
