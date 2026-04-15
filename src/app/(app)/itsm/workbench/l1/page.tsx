@@ -87,9 +87,9 @@ interface TicketRow {
 
 export default function L1WorkbenchPage() {
   const { incidents, assign: assignInc, changeState: changeIncState, update: updateInc, addWorkNote, addAttachment: addIncAttachment, load: loadInc } = useIncidentStore();
-  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, addAttachment: addSRAttachment } = useServiceRequestStore();
-  const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, addAttachment: addCRAttachment } = useChangeRequestStore();
-  const { user, profiles } = useAuthStore();
+  const { serviceRequests, load: loadSR, update: updateSR, addWorkNote: addSRWorkNote, addAttachment: addSRAttachment } = useServiceRequestStore();
+  const { changeRequests, load: loadCR, update: updateCR, addWorkNote: addCRWorkNote, addAttachment: addCRAttachment } = useChangeRequestStore();
+  const { user, profiles, loadProfiles } = useAuthStore();
 
   const [search, setSearch]               = useState("");
   const [filterType, setFilterType]       = useState<"all" | "INC" | "SR" | "CR">("all");
@@ -108,8 +108,11 @@ export default function L1WorkbenchPage() {
   const [noteSaving, setNoteSaving]       = useState(false);
   const [noteError, setNoteError]         = useState<string | null>(null);
   const [attachSaving, setAttachSaving]   = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState<string | null>(null); // ticket id
+  const [assignSearch, setAssignSearch]   = useState("");
+  const [assignSaving, setAssignSaving]   = useState(false);
 
-  useEffect(() => { loadInc(); loadSR(); loadCR(); }, [loadInc, loadSR, loadCR]);
+  useEffect(() => { loadInc(); loadSR(); loadCR(); loadProfiles(); }, [loadInc, loadSR, loadCR, loadProfiles]);
 
   // Tüm ticket'ları birleştir
   const allRows: TicketRow[] = [
@@ -202,7 +205,20 @@ export default function L1WorkbenchPage() {
   const handleAssignToMe = async (ticketId: string, type: TicketRow["type"]) => {
     if (!user) return;
     if (type === "INC") await assignInc(ticketId, { assignedToId: user.id });
+    else if (type === "SR") await updateSR(ticketId, { assignedToId: user.id });
+    else if (type === "CR") await updateCR(ticketId, { assignedToId: user.id });
     setAssignOpen(null);
+  };
+
+  const handleAssignTo = async (ticketId: string, type: TicketRow["type"], targetId: string) => {
+    setAssignSaving(true);
+    try {
+      if (type === "INC") await assignInc(ticketId, { assignedToId: targetId });
+      else if (type === "SR") await updateSR(ticketId, { assignedToId: targetId });
+      else if (type === "CR") await updateCR(ticketId, { assignedToId: targetId });
+      setShowAssignModal(null);
+      setAssignSearch("");
+    } finally { setAssignSaving(false); }
   };
 
   const handleStateChange = async (ticketId: string, type: TicketRow["type"], newState: string) => {
@@ -661,34 +677,40 @@ export default function L1WorkbenchPage() {
                   {/* İşlemler */}
                   <td style={{ padding: "8px 6px", textAlign: "center" }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
-                      {/* Bana ata */}
-                      {!t.assignedToId && (
-                        <div style={{ position: "relative" }}>
-                          <button
-                            onClick={() => setAssignOpen(assignOpen === t.id ? null : t.id)}
-                            title="Ata"
-                            style={{
-                              width: 26, height: 26, borderRadius: 5, border: "1px solid #E5E7EB",
-                              background: "#fff", cursor: "pointer", fontSize: 11, color: "#2563EB",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>👤</button>
-                          {assignOpen === t.id && (
-                            <div style={{
-                              position: "absolute", bottom: "100%", right: 0, marginBottom: 4,
-                              background: "#fff", border: "1px solid #E5E7EB",
-                              borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.1)",
-                              overflow: "hidden", zIndex: 50, minWidth: 140,
-                            }}>
-                              <button
-                                onClick={() => handleAssignToMe(t.id, t.type)}
-                                style={{
-                                  width: "100%", padding: "7px 10px", border: "none", cursor: "pointer",
-                                  background: "#EFF6FF", color: "#2563EB", fontSize: 11, fontWeight: 600, textAlign: "left",
-                                }}>👤 Bana Ata</button>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      {/* Ata */}
+                      <div style={{ position: "relative" }}>
+                        <button
+                          onClick={() => setAssignOpen(assignOpen === t.id ? null : t.id)}
+                          title="Ata"
+                          style={{
+                            width: 26, height: 26, borderRadius: 5,
+                            border: t.assignedToId ? "1px solid #DBEAFE" : "1px solid #E5E7EB",
+                            background: t.assignedToId ? "#EFF6FF" : "#fff",
+                            cursor: "pointer", fontSize: 11, color: "#2563EB",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>👤</button>
+                        {assignOpen === t.id && (
+                          <div style={{
+                            position: "absolute", bottom: "100%", right: 0, marginBottom: 4,
+                            background: "#fff", border: "1px solid #E5E7EB",
+                            borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.1)",
+                            overflow: "hidden", zIndex: 50, minWidth: 160,
+                          }}>
+                            <button
+                              onClick={() => handleAssignToMe(t.id, t.type)}
+                              style={{
+                                width: "100%", padding: "7px 10px", border: "none", cursor: "pointer",
+                                background: "#EFF6FF", color: "#2563EB", fontSize: 11, fontWeight: 600, textAlign: "left",
+                              }}>👤 Bana Ata</button>
+                            <button
+                              onClick={() => { setAssignOpen(null); setShowAssignModal(t.id); }}
+                              style={{
+                                width: "100%", padding: "7px 10px", border: "none", borderTop: "1px solid #F3F4F6",
+                                cursor: "pointer", background: "#fff", color: "#374151", fontSize: 11, fontWeight: 600, textAlign: "left",
+                              }}>👥 Başkasına Ata</button>
+                          </div>
+                        )}
+                      </div>
                       {/* İşleme al */}
                       {(t.state === IncidentState.NEW || t.state === IncidentState.ASSIGNED) && (
                         <button
@@ -896,15 +918,24 @@ export default function L1WorkbenchPage() {
                 ))}
               </div>
 
-              {/* Bana ata */}
-              {!detail.assignedToId && (
-                <div style={{ marginBottom: 18 }}>
+              {/* Atama */}
+              {detail.state !== IncidentState.RESOLVED && detail.state !== IncidentState.CLOSED &&
+               detail.state !== ServiceRequestState.FULFILLED && detail.state !== ServiceRequestState.CLOSED &&
+               detail.state !== ChangeRequestState.CLOSED && (
+                <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
                   <button
                     onClick={() => handleAssignToMe(detail.id, detail.type)}
                     style={{
-                      width: "100%", padding: "10px 14px", borderRadius: 8, border: "none",
-                      background: "#EFF6FF", color: "#2563EB", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                      flex: 1, padding: "9px 12px", borderRadius: 8, border: "none",
+                      background: "#EFF6FF", color: "#2563EB", fontSize: 12, fontWeight: 600, cursor: "pointer",
                     }}>👤 Bana Ata</button>
+                  <button
+                    onClick={() => setShowAssignModal(detail.id)}
+                    style={{
+                      flex: 1, padding: "9px 12px", borderRadius: 8,
+                      border: "1px solid #E5E7EB",
+                      background: "#fff", color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    }}>👥 Başkasına Ata</button>
                 </div>
               )}
 
@@ -956,6 +987,118 @@ export default function L1WorkbenchPage() {
           </div>
         </>
       )}
+
+      {/* ── Atama Modal ── */}
+      {showAssignModal && (() => {
+        const ticket = allRows.find(t => t.id === showAssignModal);
+        if (!ticket) return null;
+        const q = assignSearch.toLowerCase();
+        const profileList = Object.values(profiles).filter(p =>
+          !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || (p.department ?? "").toLowerCase().includes(q)
+        );
+        return (
+          <>
+            <div
+              onClick={() => { setShowAssignModal(null); setAssignSearch(""); }}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 300, animation: "fadeIn .15s ease" }}
+            />
+            <div style={{
+              position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+              background: "#fff", borderRadius: 12, padding: 24, width: 420,
+              boxShadow: "0 20px 60px rgba(0,0,0,.18)", zIndex: 301,
+              animation: "scaleIn .2s ease", display: "flex", flexDirection: "column", maxHeight: "80vh",
+            }}>
+              {/* Başlık */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 8, background: "#EFF6FF",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+                }}>👥</div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>Atama</div>
+                  <div style={{ fontSize: 11, color: "#6B7280", fontFamily: "'JetBrains Mono', monospace" }}>
+                    {ticket.number} — {ticket.title.slice(0, 38)}{ticket.title.length > 38 ? "…" : ""}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowAssignModal(null); setAssignSearch(""); }}
+                  style={{ marginLeft: "auto", width: 28, height: 28, borderRadius: 6, border: "1px solid #E5E7EB", background: "#F9FAFB", color: "#6B7280", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+              </div>
+
+              {/* Mevcut atanan */}
+              {ticket.assignedToName && (
+                <div style={{ padding: "8px 10px", borderRadius: 6, background: "#F9FAFB", border: "1px solid #E5E7EB", marginBottom: 12, fontSize: 12, color: "#374151" }}>
+                  <span style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 700, textTransform: "uppercase", marginRight: 6 }}>Mevcut:</span>
+                  {ticket.assignedToName}
+                </div>
+              )}
+
+              {/* Bana ata kısayolu */}
+              <button
+                onClick={() => handleAssignTo(ticket.id, ticket.type, user!.id)}
+                disabled={assignSaving}
+                style={{
+                  width: "100%", padding: "9px 14px", borderRadius: 8, border: "none", marginBottom: 12,
+                  background: "#EFF6FF", color: "#2563EB", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left",
+                  opacity: assignSaving ? 0.6 : 1,
+                }}>👤 Bana Ata ({user?.name})</button>
+
+              {/* Arama */}
+              <input
+                value={assignSearch}
+                onChange={e => setAssignSearch(e.target.value)}
+                placeholder="İsim, e-posta veya departman ile ara..."
+                style={{
+                  width: "100%", padding: "8px 12px", border: "1.5px solid #E5E7EB", borderRadius: 8,
+                  fontSize: 13, outline: "none", boxSizing: "border-box", marginBottom: 8,
+                }}
+                onFocus={e => (e.target.style.borderColor = "#3B82F6")}
+                onBlur={e => (e.target.style.borderColor = "#E5E7EB")}
+                autoFocus
+              />
+
+              {/* Profil listesi */}
+              <div style={{ overflowY: "auto", flex: 1, borderRadius: 8, border: "1px solid #E5E7EB" }}>
+                {profileList.length === 0 ? (
+                  <div style={{ padding: 20, textAlign: "center", color: "#9CA3AF", fontSize: 12 }}>Sonuç bulunamadı</div>
+                ) : profileList.map(p => {
+                  const initials = p.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                  const isCurrentAssignee = p.id === ticket.assignedToId;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => handleAssignTo(ticket.id, ticket.type, p.id)}
+                      disabled={assignSaving}
+                      style={{
+                        width: "100%", padding: "10px 12px", border: "none", borderBottom: "1px solid #F3F4F6",
+                        background: isCurrentAssignee ? "#EFF6FF" : "#fff", cursor: assignSaving ? "not-allowed" : "pointer",
+                        display: "flex", alignItems: "center", gap: 10, textAlign: "left",
+                        opacity: assignSaving ? 0.6 : 1,
+                      }}
+                      onMouseEnter={e => { if (!assignSaving) e.currentTarget.style.background = "#F9FAFB"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = isCurrentAssignee ? "#EFF6FF" : "#fff"; }}
+                    >
+                      <div style={{
+                        width: 30, height: 30, borderRadius: "50%", background: isCurrentAssignee ? "#3B82F6" : "#E2E8F0",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, fontWeight: 700, color: isCurrentAssignee ? "#fff" : "#475569",
+                        flexShrink: 0,
+                      }}>{initials}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#111827", display: "flex", alignItems: "center", gap: 6 }}>
+                          {p.name}
+                          {isCurrentAssignee && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: "#DBEAFE", color: "#2563EB" }}>Atanmış</span>}
+                        </div>
+                        <div style={{ fontSize: 10, color: "#9CA3AF" }}>{p.department ? `${p.department} · ` : ""}{p.email}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── Eskalasyon Modal ── */}
       {escalateId && (
