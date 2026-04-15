@@ -5,7 +5,8 @@ import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Priority, IncidentState, IncidentResolutionCode } from "@/lib/itsm/types/enums";
+import { Priority, IncidentState, IncidentResolutionCode, ServiceRequestState, ChangeRequestState } from "@/lib/itsm/types/enums";
+import { ServiceRequestClosureCode } from "@/lib/itsm/types/service-request.types";
 
 // ─── Diagnostic Command Palette ───────────────────────────────────────────────
 interface DiagCmd {
@@ -555,6 +556,8 @@ export default function SpecialistWorkbenchPage() {
   const [showEscalateMenu, setShowEscalateMenu] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolveNotes, setResolveNotes]     = useState("");
+  const [showFulfillModal, setShowFulfillModal] = useState(false);
+  const [fulfillNotes, setFulfillNotes]         = useState("");
 
   // Store'dan yükle; selectedId'yi ilk gerçek ticket'a senkronize et
   useEffect(() => { loadInc(); loadSR(); loadCR(); }, [loadInc, loadSR, loadCR]);
@@ -578,6 +581,18 @@ export default function SpecialistWorkbenchPage() {
 
   // Seçili ticket'ın gerçek incident store ID'si
   const selectedStoreId = selected?.storeId ?? null;
+  const selectedStoreType = selected?.type ?? null; // "INC" | "SR" | "CR" | null
+
+  const dispatchWorkNote = async (content: string): Promise<void> => {
+    if (!selectedStoreId || !selectedStoreType) return;
+    if (selectedStoreType === "INC") {
+      await addWorkNote(selectedStoreId, { content });
+    } else if (selectedStoreType === "SR") {
+      await addSRWorkNote(selectedStoreId, { content });
+    } else if (selectedStoreType === "CR") {
+      await addCRWorkNote(selectedStoreId, { content });
+    }
+  };
 
   const handleResolve = async () => {
     if (!selectedStoreId || !resolveNotes.trim()) return;
@@ -592,11 +607,24 @@ export default function SpecialistWorkbenchPage() {
     } finally { setSaving(false); }
   };
 
+  const handleFulfill = async () => {
+    if (!selectedStoreId || !fulfillNotes.trim()) return;
+    setSaving(true);
+    try {
+      await fulfillSR(selectedStoreId, {
+        fulfillmentNotes: fulfillNotes,
+        closureCode: ServiceRequestClosureCode.FULFILLED,
+      });
+      setShowFulfillModal(false);
+      setFulfillNotes("");
+    } finally { setSaving(false); }
+  };
+
   const handleSaveTechNote = async () => {
     if (!selectedStoreId || !noteText.trim()) return;
     setSaving(true);
     try {
-      await addWorkNote(selectedStoreId, { content: `[TEKNİK] ${noteText}` });
+      await dispatchWorkNote(`[TEKNİK] ${noteText}`);
       setNoteText("");
     } finally { setSaving(false); }
   };
@@ -605,7 +633,7 @@ export default function SpecialistWorkbenchPage() {
     if (!selectedStoreId || !rootCauseText.trim()) return;
     setSaving(true);
     try {
-      await addWorkNote(selectedStoreId, { content: `[ROOT CAUSE] ${rootCauseText}` });
+      await dispatchWorkNote(`[ROOT CAUSE] ${rootCauseText}`);
       setRootCauseText("");
     } finally { setSaving(false); }
   };
@@ -636,18 +664,22 @@ export default function SpecialistWorkbenchPage() {
 
   const handleEscalate = async (group: string) => {
     setShowEscalateMenu(false);
-    if (!selectedStoreId || !user) return;
+    if (!selectedStoreId || !selectedStoreType || !user) return;
     setSaving(true);
     try {
-      // Assignment grubunu güncelle
-      await assignInc(selectedStoreId, { assignedToId: user.id, assignmentGroupId: group });
-      // State'i IN_PROGRESS'e al (NEW veya ASSIGNED ise)
-      const inc = incidents.find(i => i.id === selectedStoreId);
-      if (inc && (inc.state === IncidentState.NEW || inc.state === IncidentState.ASSIGNED)) {
-        await changeState(selectedStoreId, { state: IncidentState.IN_PROGRESS });
+      if (selectedStoreType === "INC") {
+        await assignInc(selectedStoreId, { assignedToId: user.id, assignmentGroupId: group });
+        const inc = incidents.find(i => i.id === selectedStoreId);
+        if (inc && (inc.state === IncidentState.NEW || inc.state === IncidentState.ASSIGNED)) {
+          await changeState(selectedStoreId, { state: IncidentState.IN_PROGRESS });
+        }
+      } else if (selectedStoreType === "SR") {
+        const sr = serviceRequests.find(s => s.id === selectedStoreId);
+        if (sr && sr.state !== "In Progress") {
+          await changeSRState(selectedStoreId, ServiceRequestState.IN_PROGRESS);
+        }
       }
-      // Eskalasyon notu
-      await addWorkNote(selectedStoreId, { content: `[ESKALASYoN] ${group} grubuna eskalasyon yapıldı` });
+      await dispatchWorkNote(`[ESKALASYoN] ${group} grubuna eskalasyon yapıldı`);
     } finally { setSaving(false); }
   };
 
@@ -832,18 +864,49 @@ export default function SpecialistWorkbenchPage() {
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                   {selected.state !== "Resolved" && selected.state !== "Closed" && selectedStoreId && (
-                    <button onClick={() => setShowResolveModal(true)} disabled={saving}
-                      style={{ padding: "7px 14px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>✓ Çözüldü</button>
+                    <>
+                      {selectedStoreType === "INC" && (
+                        <button onClick={() => setShowResolveModal(true)} disabled={saving}
+                          style={{ padding: "7px 14px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+                          ✓ Çözüldü
+                        </button>
+                      )}
+                      {selectedStoreType === "SR" && (
+                        <button onClick={() => setShowFulfillModal(true)} disabled={saving}
+                          style={{ padding: "7px 14px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+                          ✓ Karşılandı
+                        </button>
+                      )}
+                      {selectedStoreType === "CR" && selected.state === "In Progress" && (
+                        <button
+                          onClick={async () => {
+                            if (!selectedStoreId) return;
+                            setSaving(true);
+                            try {
+                              await transitionCR(selectedStoreId, ChangeRequestState.REVIEW);
+                            } finally { setSaving(false); }
+                          }}
+                          disabled={saving}
+                          style={{ padding: "7px 14px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+                          ✓ Tamamlandı
+                        </button>
+                      )}
+                    </>
                   )}
                   <div style={{ position: "relative" }}>
-                    <button onClick={() => setShowEscalateMenu(!showEscalateMenu)} style={{ padding: "7px 14px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#DC2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>⬆ L3 Eskalasyon</button>
+                    <button onClick={() => setShowEscalateMenu(!showEscalateMenu)}
+                      style={{ padding: "7px 14px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#DC2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                      ⬆ L3 Eskalasyon
+                    </button>
                     {showEscalateMenu && (
                       <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, background: "#fff", border: "1px solid #E2E8F0", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.1)", overflow: "hidden", zIndex: 50, minWidth: 180, animation: "slideUp .15s ease" }}>
                         {["Security - L3", "DBA - L3", "Network - L3", "Vendor Support"].map(g => (
-                          <button key={g} onClick={() => handleEscalate(g)} style={{ width: "100%", padding: "8px 12px", border: "none", cursor: "pointer", background: "#fff", color: "#1E293B", fontSize: 12, textAlign: "left" }}
+                          <button key={g} onClick={() => handleEscalate(g)}
+                            style={{ width: "100%", padding: "8px 12px", border: "none", cursor: "pointer", background: "#fff", color: "#1E293B", fontSize: 12, textAlign: "left" }}
                             onMouseEnter={e => (e.currentTarget.style.background = "#F8FAFC")}
-                            onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
-                          >⬆ {g}</button>
+                            onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
+                            ⬆ {g}
+                          </button>
                         ))}
                       </div>
                     )}
@@ -1024,7 +1087,7 @@ export default function SpecialistWorkbenchPage() {
                           if (!selectedStoreId || !timelineNoteText.trim()) return;
                           setSaving(true);
                           try {
-                            await addWorkNote(selectedStoreId, { content: timelineNoteText.trim() });
+                            await dispatchWorkNote(timelineNoteText.trim());
                             setTimelineNoteText("");
                           } finally { setSaving(false); }
                         }}
@@ -1395,6 +1458,27 @@ export default function SpecialistWorkbenchPage() {
           </div>
         )}
       </div>
+
+      {/* Karşılandı Modal */}
+      {showFulfillModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 24, width: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", marginBottom: 4 }}>✓ Hizmet Talebi Karşılandı</h3>
+            <p style={{ fontSize: 12, color: "#64748B", marginBottom: 16 }}>{selected?.id} — {selected?.title}</p>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>Karşılama Notu *</label>
+            <textarea value={fulfillNotes} onChange={e => setFulfillNotes(e.target.value)} rows={4} placeholder="Talebi nasıl karşıladığınızı açıklayın..."
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              <button onClick={() => { setShowFulfillModal(false); setFulfillNotes(""); }}
+                style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>İptal</button>
+              <button onClick={handleFulfill} disabled={saving || !fulfillNotes.trim()}
+                style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: (saving || !fulfillNotes.trim()) ? 0.5 : 1 }}>
+                {saving ? "Kaydediliyor..." : "Karşılandı Olarak İşaretle"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Çözüldü Modal */}
       {showResolveModal && (
