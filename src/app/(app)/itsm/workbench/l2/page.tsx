@@ -5,7 +5,7 @@ import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Priority, IncidentState, IncidentResolutionCode, ServiceRequestState, ChangeRequestState, Impact, Urgency, ChangeType, ChangeRisk } from "@/lib/itsm/types/enums";
+import { Priority, IncidentState, IncidentResolutionCode, ChangeRequestState, Impact, Urgency, ChangeType, ChangeRisk } from "@/lib/itsm/types/enums";
 import { ServiceRequestClosureCode } from "@/lib/itsm/types/service-request.types";
 import { convertIncidentToSR, convertIncidentToCR, convertIncidentToProblem, mergeDuplicateIncident } from "@/services/incidentService";
 import { linkCRToSR } from "@/services/serviceRequestService";
@@ -743,11 +743,6 @@ export default function SpecialistWorkbenchPage() {
         const inc = incidents.find(i => i.id === selectedStoreId);
         if (inc && (inc.state === IncidentState.NEW || inc.state === IncidentState.ASSIGNED)) {
           await changeState(selectedStoreId, { state: IncidentState.IN_PROGRESS });
-        }
-      } else if (selectedStoreType === "SR") {
-        const sr = serviceRequests.find(s => s.id === selectedStoreId);
-        if (sr && sr.state !== "In Progress") {
-          await useServiceRequestStore.getState().changeState(selectedStoreId, ServiceRequestState.IN_PROGRESS);
         }
       }
       await dispatchWorkNote(`[ESKALASYoN] ${group} grubuna eskalasyon yapıldı`);
