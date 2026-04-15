@@ -75,8 +75,9 @@ export const CHANGE_TYPE_MAP: Record<ChangeType, { label: string; badge: string 
 // ─── Approval State ───────────────────────────────────────────────────────────
 
 export const APPROVAL_STATE_MAP: Record<ApprovalState, { label: string; badge: string }> = {
-  [ApprovalState.NOT_REQUESTED]: { label: 'Onay Gerekmez', badge: 'bg-gray-100 text-gray-500'       },
-  [ApprovalState.REQUESTED]:     { label: 'Onay Bekliyor', badge: 'bg-amber-100 text-amber-700'     },
-  [ApprovalState.APPROVED]:      { label: 'Onaylandı',     badge: 'bg-emerald-100 text-emerald-700' },
-  [ApprovalState.REJECTED]:      { label: 'Reddedildi',    badge: 'bg-red-100 text-red-700'         },
+  [ApprovalState.NOT_REQUIRED]:  { label: 'Onay Gerekmiyor', badge: 'bg-gray-100 text-gray-400'       },
+  [ApprovalState.NOT_REQUESTED]: { label: 'Onay Gerekmez',   badge: 'bg-gray-100 text-gray-500'       },
+  [ApprovalState.REQUESTED]:     { label: 'Onay Bekliyor',   badge: 'bg-amber-100 text-amber-700'     },
+  [ApprovalState.APPROVED]:      { label: 'Onaylandı',       badge: 'bg-emerald-100 text-emerald-700' },
+  [ApprovalState.REJECTED]:      { label: 'Reddedildi',      badge: 'bg-red-100 text-red-700'         },
 };
