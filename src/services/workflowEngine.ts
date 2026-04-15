@@ -362,19 +362,27 @@ export async function submitDecision(
   if (stepCompleted && stepOutcome === 'approved' && !isLastStep) {
     const nextStep = updatedInstance.steps[stepIdx + 1];
     if (nextStep) {
-      await notifyApprovers(nextStep, instance.ticketType, instance.ticketId, instance.orgId);
+      try {
+        await notifyApprovers(nextStep, instance.ticketType, instance.ticketId, instance.orgId);
+      } catch (err) {
+        console.error('[workflowEngine] notifyApprovers failed (non-fatal):', err);
+      }
     }
   }
 
   // Instance kapandıysa ticket sahibine sonuç bildirimi gönder
   if (instanceCompleted && instance.ticketOwnerId) {
-    await notifyOutcome(
-      updatedInstance.status as 'completed' | 'rejected',
-      instance.ticketType,
-      instance.ticketId,
-      instance.ticketOwnerId,
-      instance.orgId,
-    );
+    try {
+      await notifyOutcome(
+        updatedInstance.status as 'completed' | 'rejected',
+        instance.ticketType,
+        instance.ticketId,
+        instance.ticketOwnerId,
+        instance.orgId,
+      );
+    } catch (err) {
+      console.error('[workflowEngine] notifyOutcome failed (non-fatal):', err);
+    }
   }
 
   return {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Plus, Search, ClipboardList, Clock, XCircle, AlertTriangle,
   CheckCircle, Paperclip, X as XIcon, PanelLeftClose, PanelLeftOpen,
@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useWorkflowInstanceStore } from "@/store/useWorkflowInstanceStore";
 import { ServiceRequestState, Impact, Urgency, ApprovalState } from "@/lib/itsm/types/enums";
 import { ServiceRequestClosureCode, isValidSRTransition } from "@/lib/itsm/types/service-request.types";
 import { ITSM_PRIORITY_MAP, SR_STATE_MAP, APPROVAL_STATE_MAP } from "@/lib/itsm/ui-maps";
@@ -163,10 +164,7 @@ function NewSRModal({ onClose }: { onClose: () => void }) {
             <label className="block text-sm font-medium text-gray-700 mb-1">Gerekçe</label>
             <textarea className="input w-full min-h-[60px] resize-none" placeholder="Neden bu talep gerekli?" value={form.justification} onChange={(e) => f("justification", e.target.value)} />
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-            <input type="checkbox" checked={form.approvalRequired} onChange={(e) => f("approvalRequired", e.target.checked)} className="rounded border-gray-300 text-indigo-600" />
-            Onay gerekiyor
-          </label>
+          {/* approvalRequired config'den otomatik belirleniyor */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Ekler</label>
             {pendingFiles.length > 0 && (
@@ -305,15 +303,19 @@ function SRAttachments({ attachments, onAdd, onRemove }: {
 type Tab = "details" | "approvals" | "worknotes" | "comments" | "timeline" | "attachments";
 
 function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
-  const { serviceRequests, submit, approve, reject, fulfill, close, addWorkNote, addComment, addAttachment, removeAttachment } = useServiceRequestStore();
-  const { profiles } = useAuthStore();
+  const { serviceRequests, submit, approve, reject, fulfill, close, changeState, addWorkNote, addComment, addAttachment, removeAttachment } = useServiceRequestStore();
+  const { profiles, user } = useAuthStore();
+  const { getForTicket, decide, load: loadInstances } = useWorkflowInstanceStore();
   const sr = serviceRequests.find((s) => s.id === srId);
+
+  useEffect(() => { loadInstances(); }, [loadInstances]);
 
   const [tab, setTab] = useState<Tab>("details");
   const [noteText, setNoteText] = useState("");
   const [commentText, setCommentText] = useState("");
   const [saving, setSaving] = useState(false);
   const [showStateMenu, setShowStateMenu] = useState(false);
+  const [transitionError, setTransitionError] = useState<string | null>(null);
   const [pendingState, setPendingState] = useState<ServiceRequestState | null>(null);
   const [fulfillNotes, setFulfillNotes] = useState("");
   const [fulfillCode, setFulfillCode] = useState(ServiceRequestClosureCode.FULFILLED);
@@ -338,18 +340,42 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
 
   const handleTransition = async (targetState: ServiceRequestState) => {
     setShowStateMenu(false);
+    setTransitionError(null);
     if (targetState === ServiceRequestState.FULFILLED || targetState === ServiceRequestState.REJECTED) {
       setPendingState(targetState);
       return;
     }
     setSaving(true);
-    if (targetState === ServiceRequestState.SUBMITTED) await submit(sr.id);
-    else if (targetState === ServiceRequestState.APPROVED) await approve(sr.id, {});
-    else if (targetState === ServiceRequestState.CLOSED) await close(sr.id);
-    else if (targetState === ServiceRequestState.IN_PROGRESS || targetState === ServiceRequestState.PENDING) {
-      // Generic transition — use submit as fallback if no direct store action
+    try {
+      if (targetState === ServiceRequestState.SUBMITTED) {
+        await submit(sr.id);
+      } else if (targetState === ServiceRequestState.APPROVED) {
+        // Aktif workflow instance varsa önce decide() çağır
+        const instance = getForTicket('service_request', sr.id);
+        if (instance) {
+          const currentStep = instance.steps[instance.currentStepIndex];
+          if (currentStep) {
+            const result = await decide(instance.id, currentStep.stepDefId, 'approved');
+            // Tüm workflow tamamlandıysa SR'ı da approve et
+            if (result?.instanceCompleted && result.outcome === 'approved') {
+              await approve(sr.id, {});
+            }
+          }
+        } else {
+          // Workflow yoksa direkt approve
+          await approve(sr.id, {});
+        }
+      } else if (targetState === ServiceRequestState.CLOSED) {
+        await close(sr.id);
+      } else {
+        // IN_PROGRESS, PENDING, CANCELLED ve diğer geçişler
+        await changeState(sr.id, targetState);
+      }
+    } catch (err) {
+      setTransitionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const doFulfill = async () => {
@@ -503,10 +529,14 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
             )}
 
             {/* Approvals */}
-            {tab === "approvals" && (
+            {tab === "approvals" && (() => {
+              const wfInstance = getForTicket('service_request', sr.id);
+              const currentStep = wfInstance ? wfInstance.steps[wfInstance.currentStepIndex] : null;
+              const canDecide = currentStep && sr.state === ServiceRequestState.PENDING_APPROVAL;
+              return (
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-gray-800">Onay Süreci</h3>
-                {sr.approvers.length === 0 ? (
+                {sr.approvers.length === 0 && !wfInstance ? (
                   <p className="text-sm text-gray-400 text-center py-8">Onaylayıcı atanmamış.</p>
                 ) : (
                   <div className="flex gap-3 flex-wrap">
@@ -539,13 +569,51 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
                     })}
                   </div>
                 )}
-                {sr.approvalRequired && (
+                {canDecide && (
+                  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-3">
+                    <p className="text-xs font-semibold text-amber-800">Bu talep onay bekliyor. Kararınızı bildirin:</p>
+                    <div className="flex gap-2">
+                      <button
+                        disabled={saving}
+                        onClick={async () => {
+                          setSaving(true);
+                          try {
+                            const result = await decide(wfInstance!.id, currentStep!.stepDefId, 'approved');
+                            if (result?.instanceCompleted && result.outcome === 'approved') {
+                              await approve(sr.id, {});
+                            }
+                          } finally { setSaving(false); }
+                        }}
+                        className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        ✓ Onayla
+                      </button>
+                      <button
+                        disabled={saving}
+                        onClick={async () => {
+                          setSaving(true);
+                          try {
+                            const result = await decide(wfInstance!.id, currentStep!.stepDefId, 'rejected');
+                            if (result?.instanceCompleted) {
+                              await reject(sr.id, { comments: 'Onay reddedildi.' });
+                            }
+                          } finally { setSaving(false); }
+                        }}
+                        className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50"
+                      >
+                        ✗ Reddet
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {sr.approvalRequired && !canDecide && sr.state === ServiceRequestState.PENDING_APPROVAL && (
                   <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
                     <p className="text-xs text-amber-800">Bu talep için onay gereklidir. Tüm onaylar tamamlanmadan karşılama süreci başlamaz.</p>
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             {/* Attachments */}
             {tab === "attachments" && (
@@ -638,6 +706,13 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
                   </div>
                 )}
               </div>
+
+              {/* Transition error */}
+              {transitionError && (
+                <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 break-words">
+                  <span className="font-semibold">Hata: </span>{transitionError}
+                </div>
+              )}
 
               {/* Fulfill form */}
               {pendingState === ServiceRequestState.FULFILLED && (

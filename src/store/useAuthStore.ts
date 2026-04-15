@@ -67,8 +67,6 @@ async function buildAndSaveProfile(
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-let _signingOut = false;
-
 export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   isAuthenticated: false,
@@ -94,7 +92,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
 
     supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user && !_signingOut) {
+      if (event === "SIGNED_IN" && session?.user) {
         const existing = await dbLoadProfile(session.user.id);
         if (existing) {
           set({ user: existing, isAuthenticated: true, loading: false });
@@ -107,7 +105,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           set({ user: profile, isAuthenticated: true, loading: false });
         }
       } else if (event === "SIGNED_OUT") {
-        _signingOut = false;
         set({ user: null, isAuthenticated: false, loading: false, profiles: {} });
       }
     });
@@ -168,14 +165,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signOut: async () => {
-    _signingOut = true;
-    await Promise.race([
-      supabase.auth.signOut(),
-      new Promise((resolve) => setTimeout(resolve, 3000)),
-    ]);
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // signOut hatası local state'i temizlememizi engellememeli
+    }
     if (typeof window !== "undefined") sessionStorage.clear();
     set({ user: null, isAuthenticated: false, profiles: {} });
-    _signingOut = false;
   },
 
   resetPassword: async (email) => {

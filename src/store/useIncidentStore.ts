@@ -73,70 +73,70 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
   update: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await updateIncident(id, dto, get().incidents, user.id, user.name);
+    const updated = await updateIncident(id, dto, get().incidents, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
   assign: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await assignIncident(id, dto, get().incidents, user.id, user.name);
+    const updated = await assignIncident(id, dto, get().incidents, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
   changeState: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await changeIncidentState(id, dto, get().incidents, user.id, user.name);
+    const updated = await changeIncidentState(id, dto, get().incidents, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
   resolve: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await resolveIncident(id, dto, get().incidents, user.id, user.name);
+    const updated = await resolveIncident(id, dto, get().incidents, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
   close: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await closeIncident(id, dto, get().incidents, user.id, user.name);
+    const updated = await closeIncident(id, dto, get().incidents, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
   addWorkNote: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addIncidentWorkNote(id, dto, get().incidents, user.id, user.name);
+    const updated = await addIncidentWorkNote(id, dto, get().incidents, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
   addComment: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addIncidentComment(id, dto, get().incidents, user.id, user.name);
+    const updated = await addIncidentComment(id, dto, get().incidents, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
   linkCR: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await linkCRToIncident(id, dto, get().incidents, user.id, user.name);
+    const updated = await linkCRToIncident(id, dto, get().incidents, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
   addAttachment: async (id, file) => {
     const user = useAuthStore.getState().user;
     if (!user) throw new Error("Kullanıcı oturumu bulunamadı.");
-    const incident = get().incidents.find((i) => i.id === id);
-    if (!incident) throw new Error(`Incident bulunamadı: ${id}`);
     const updated = await addIncidentAttachment(id, file, user.name, get().incidents, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 
   removeAttachment: async (id, attachmentId) => {
-    const updated = await removeIncidentAttachment(id, attachmentId, get().incidents);
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const updated = await removeIncidentAttachment(id, attachmentId, get().incidents, user.orgId);
     if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
   },
 

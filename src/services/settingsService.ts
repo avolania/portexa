@@ -14,11 +14,16 @@ export const SETTINGS_DEFAULTS: OrgSettings = {
 };
 
 export async function loadOrgSettings(orgId: string): Promise<OrgSettings> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("org_settings")
     .select("data")
     .eq("id", orgId)
     .single();
+  if (error) {
+    // PGRST116 = no rows found → org has no settings yet, use defaults
+    if (error.code === 'PGRST116') return SETTINGS_DEFAULTS;
+    throw new Error(`loadOrgSettings failed: ${error.message}`);
+  }
   if (data?.data) {
     return { ...SETTINGS_DEFAULTS, ...(data.data as Partial<OrgSettings>) };
   }

@@ -3,6 +3,7 @@ import { useAuthStore } from './useAuthStore';
 import { useITSMConfigStore } from './useITSMConfigStore';
 import { useWorkflowInstanceStore } from './useWorkflowInstanceStore';
 import { triggerWorkflow } from '@/services/workflowEngine';
+import { ServiceRequestState } from '@/lib/itsm/types/enums';
 import {
   loadServiceRequests,
   createServiceRequest,
@@ -12,6 +13,7 @@ import {
   rejectServiceRequest,
   fulfillServiceRequest,
   closeServiceRequest,
+  changeServiceRequestState,
   addSRWorkNote,
   addSRComment,
   deleteServiceRequest,
@@ -29,7 +31,7 @@ import type {
   AddCommentDto,
 } from '@/lib/itsm/types/service-request.types';
 
-interface ServiceRequestState {
+interface SRStoreState {
   serviceRequests: ServiceRequest[];
   loading: boolean;
   error: string | null;
@@ -41,6 +43,7 @@ interface ServiceRequestState {
   reject: (id: string, dto: RejectServiceRequestDto) => Promise<void>;
   fulfill: (id: string, dto: FulfillServiceRequestDto) => Promise<void>;
   close: (id: string) => Promise<void>;
+  changeState: (id: string, targetState: ServiceRequestState) => Promise<void>;
   addWorkNote: (id: string, dto: AddWorkNoteDto) => Promise<void>;
   addComment: (id: string, dto: AddCommentDto) => Promise<void>;
   addAttachment: (id: string, file: File) => Promise<void>;
@@ -48,7 +51,7 @@ interface ServiceRequestState {
   remove: (id: string) => Promise<void>;
 }
 
-export const useServiceRequestStore = create<ServiceRequestState>()((set, get) => ({
+export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
   serviceRequests: [],
   loading: false,
   error: null,
@@ -66,7 +69,14 @@ export const useServiceRequestStore = create<ServiceRequestState>()((set, get) =
   create: async (dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return null;
-    const sr = await createServiceRequest(dto, user.orgId, user.id, user.name);
+
+    // Config'den onay zorunluluğunu otomatik belirle — her zaman taze yükle
+    const configStore = useITSMConfigStore.getState();
+    if (!configStore.loading) await configStore.load();
+    const { config } = useITSMConfigStore.getState();
+    const approvalRequired = config.srApprovalConfig.requireApproval && !!config.srApprovalConfig.workflowId;
+
+    const sr = await createServiceRequest({ ...dto, approvalRequired }, user.orgId, user.id, user.name);
     set((s) => ({ serviceRequests: [...s.serviceRequests, sr] }));
     return sr;
   },
@@ -74,25 +84,32 @@ export const useServiceRequestStore = create<ServiceRequestState>()((set, get) =
   update: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await updateServiceRequest(id, dto, get().serviceRequests, user.id, user.name);
+    const updated = await updateServiceRequest(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 
   submit: async (id) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await submitServiceRequest(id, get().serviceRequests, user.id, user.name);
+
+    // Her zaman güncel config'i yükle — eski SR'lardaki yanlış approvalRequired değerini düzelt
+    const configStore = useITSMConfigStore.getState();
+    if (!configStore.loading) await configStore.load();
+    const { config } = useITSMConfigStore.getState();
+    const approvalRequiredFromConfig = config.srApprovalConfig.requireApproval && !!config.srApprovalConfig.workflowId;
+
+    // Eğer SR'daki approvalRequired config ile uyuşmuyorsa, yerel listeyi düzelt
+    const currentList = get().serviceRequests.map((sr) =>
+      sr.id === id ? { ...sr, approvalRequired: approvalRequiredFromConfig } : sr
+    );
+
+    const updated = await submitServiceRequest(id, currentList, user.id, user.name, user.orgId);
     if (!updated) return;
     set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
 
-    // Onay gerekiyorsa ve bir workflow tanımlanmışsa engine'i tetikle
+    // Onay gerekiyorsa workflow engine'i tetikle
     if (updated.approvalRequired) {
       try {
-        const configStore = useITSMConfigStore.getState();
-        if (!configStore.config.approvalWorkflows.length && !configStore.loading) {
-          await configStore.load();
-        }
-        const { config } = useITSMConfigStore.getState();
         const workflowId = config.srApprovalConfig.workflowId;
         const definition = workflowId
           ? config.approvalWorkflows.find((w) => w.id === workflowId)
@@ -117,42 +134,49 @@ export const useServiceRequestStore = create<ServiceRequestState>()((set, get) =
   approve: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await approveServiceRequest(id, dto, get().serviceRequests, user.id, user.name);
+    const updated = await approveServiceRequest(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 
   reject: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await rejectServiceRequest(id, dto, get().serviceRequests, user.id, user.name);
+    const updated = await rejectServiceRequest(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 
   fulfill: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await fulfillServiceRequest(id, dto, get().serviceRequests, user.id, user.name);
+    const updated = await fulfillServiceRequest(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 
   close: async (id) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await closeServiceRequest(id, get().serviceRequests, user.id, user.name);
+    const updated = await closeServiceRequest(id, get().serviceRequests, user.id, user.name, user.orgId);
+    if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
+  },
+
+  changeState: async (id, targetState) => {
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const updated = await changeServiceRequestState(id, targetState, get().serviceRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 
   addWorkNote: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addSRWorkNote(id, dto, get().serviceRequests, user.id, user.name);
+    const updated = await addSRWorkNote(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 
   addComment: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addSRComment(id, dto, get().serviceRequests, user.id, user.name);
+    const updated = await addSRComment(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 
@@ -164,7 +188,9 @@ export const useServiceRequestStore = create<ServiceRequestState>()((set, get) =
   },
 
   removeAttachment: async (id, attachmentId) => {
-    const updated = await removeServiceRequestAttachment(id, attachmentId, get().serviceRequests);
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const updated = await removeServiceRequestAttachment(id, attachmentId, get().serviceRequests, user.orgId);
     if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
   },
 

@@ -261,12 +261,12 @@ export default function L1WorkbenchPage() {
 
   return (
     <div
-      className="-m-3 md:-m-6 -mb-20 md:-mb-6"
       style={{
         fontFamily: "'DM Sans', sans-serif",
         background: "#F3F4F6", color: "#111827",
-        height: "calc(100vh - 3.5rem)",
-        display: "flex", flexDirection: "column", overflow: "hidden",
+        height: "100%",
+        display: "flex", flexDirection: "column",
+        overflow: "hidden",
       }}
     >
       <style>{`
@@ -280,60 +280,6 @@ export default function L1WorkbenchPage() {
         ::-webkit-scrollbar-track { background: #F3F4F6; }
         ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
       `}</style>
-
-      {/* ── Top Bar ── */}
-      <header style={{
-        height: 48, background: "#fff", borderBottom: "1px solid #E5E7EB",
-        display: "flex", alignItems: "center", padding: "0 16px", gap: 12, flexShrink: 0,
-        boxShadow: "0 1px 3px rgba(0,0,0,.06)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 6,
-            background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 11, fontWeight: 800, color: "#fff",
-          }}>Px</div>
-          <span style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>Agent Workbench</span>
-          <span style={{
-            fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 4,
-            background: "#F3F4F6", color: "#6B7280", border: "1px solid #E5E7EB",
-            fontFamily: "'JetBrains Mono', monospace",
-          }}>L1 Service Desk</span>
-        </div>
-        <div style={{ flex: 1 }} />
-        {/* Search */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 6,
-          background: "#F9FAFB", border: "1px solid #E5E7EB",
-          borderRadius: 6, padding: "5px 12px", width: 280,
-        }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Ticket, kişi veya anahtar kelime..."
-            style={{
-              flex: 1, background: "transparent", border: "none", outline: "none",
-              color: "#111827", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
-            }}
-          />
-          {search && (
-            <button onClick={() => setSearch("")} style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 14 }}>×</button>
-          )}
-        </div>
-        {/* Avatar */}
-        <div style={{
-          width: 30, height: 30, borderRadius: "50%",
-          background: "linear-gradient(135deg,#3B82F6,#8B5CF6)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 10, fontWeight: 800, color: "#fff",
-        }}>
-          {user?.name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() ?? "??"}
-        </div>
-      </header>
 
       {/* ── Stats + Filter Bar ── */}
       <div style={{
@@ -417,6 +363,29 @@ export default function L1WorkbenchPage() {
         }}>👤 Benim ({myOpen})</button>
 
         <div style={{ flex: 1 }} />
+
+        {/* Search */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: "#F9FAFB", border: "1px solid #E5E7EB",
+          borderRadius: 6, padding: "5px 10px", width: 220,
+        }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Ticket, kişi veya kelime..."
+            style={{
+              flex: 1, background: "transparent", border: "none", outline: "none",
+              color: "#111827", fontSize: 11, fontFamily: "'DM Sans', sans-serif",
+            }}
+          />
+          {search && (
+            <button onClick={() => setSearch("")} style={{ background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
+          )}
+        </div>
 
         {/* Bulk action */}
         {selected.size > 0 && (

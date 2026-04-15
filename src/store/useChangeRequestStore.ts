@@ -103,7 +103,7 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
   update: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await updateChangeRequest(id, dto, get().changeRequests, user.orgId);
+    const updated = await updateChangeRequest(id, dto, get().changeRequests, user.id, user.name, user.orgId);
     if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
   },
 

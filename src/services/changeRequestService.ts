@@ -124,12 +124,32 @@ export async function updateChangeRequest(
   id: string,
   dto: UpdateChangeRequestDto,
   current: ChangeRequest[],
+  actorId: string,
+  actorName: string,
   orgId: string,
 ): Promise<ChangeRequest | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
   const now = new Date().toISOString();
-  const updated: ChangeRequest = { ...existing, ...dto, updatedAt: now };
+
+  // Recalculate priority if risk or impact changed
+  let priority = existing.priority;
+  if (dto.risk !== undefined || dto.impact !== undefined) {
+    const newRisk   = dto.risk   ?? existing.risk;
+    const newImpact = dto.impact ?? existing.impact;
+    priority = calculatePriority(newImpact, riskToUrgency(newRisk));
+  }
+
+  const updated: ChangeRequest = {
+    ...existing,
+    ...dto,
+    priority,
+    timeline: [
+      ...existing.timeline,
+      { id: uuid(), type: TicketEventType.UPDATED, actorId, actorName, timestamp: now },
+    ],
+    updatedAt: now,
+  };
   await dbUpsert(TABLE, id, updated, orgId);
   return updated;
 }
