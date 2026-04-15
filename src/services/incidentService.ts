@@ -172,6 +172,7 @@ export async function updateIncident(
     priorityOverride:       dto.priorityOverride !== undefined ? true : existing.priorityOverride,
     priorityOverrideReason: dto.priorityOverrideReason ?? existing.priorityOverrideReason,
     priority,
+    rcaData:   dto.rcaData   ?? existing.rcaData,
     updatedAt: now,
     timeline: [...existing.timeline, ...events],
   };

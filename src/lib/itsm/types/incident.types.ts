@@ -56,6 +56,7 @@ export interface Incident {
   updatedAt: string;
   resolvedAt?: string;
   closedAt?: string;
+  rcaData?: Record<string, unknown>;
 }
 
 export interface CreateIncidentDto {
@@ -90,6 +91,7 @@ export interface UpdateIncidentDto {
   assignmentGroupId?: string;
   shortDescription?: string;
   description?: string;
+  rcaData?: Record<string, unknown>;
 }
 
 export interface AssignIncidentDto {

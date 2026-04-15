@@ -388,7 +388,7 @@ const CR_STATE_LABEL: Record<string, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SpecialistWorkbenchPage() {
-  const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState } = useIncidentStore();
+  const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState, update: updateInc } = useIncidentStore();
   const { user } = useAuthStore();
   const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR } = useServiceRequestStore();
   const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR } = useChangeRequestStore();
@@ -424,7 +424,9 @@ export default function SpecialistWorkbenchPage() {
     timeline: inc.timeline.map(e => ({ time: new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }), who: e.actorName, text: (e.note ?? e.type) })),
     kbArticles: [],
     diagHistory: [],
-    rcaData: { why1: "", why2: "", why3: "", why4: "", why5: "", rootCause: "", contributingFactors: [], preventiveActions: [] },
+    rcaData: inc.rcaData
+      ? (inc.rcaData as unknown as RCAData)
+      : { why1: "", why2: "", why3: "", why4: "", why5: "", rootCause: "", contributingFactors: [], preventiveActions: [] },
   }));
 
   const srTickets: Ticket[] = serviceRequests.map((sr) => {
@@ -753,12 +755,16 @@ export default function SpecialistWorkbenchPage() {
   };
 
   const handleSaveRCA = async () => {
-    if (!selectedStoreId) return;
+    if (!selectedStoreId || !user) return;
     const rca = getRca();
     if (!rca) return;
     setSaving(true);
     setErrorMsg(null);
     try {
+      // 1. RCA verisini incident'a persist et (Supabase'e yazar, reload'da geri gelir)
+      await updateInc(selectedStoreId, { rcaData: rca as unknown as Record<string, unknown> });
+
+      // 2. Human-readable work note (timeline'da görünmesi için)
       const whyLines = ([1,2,3,4,5] as const)
         .map(n => {
           const v = (rca[`why${n}` as keyof RCAData] as string) || "";
@@ -772,7 +778,8 @@ export default function SpecialistWorkbenchPage() {
       if (rca.rootCause?.trim()) {
         await dispatchWorkNote(`[ROOT CAUSE] ${rca.rootCause.trim()}`);
       }
-      // Kaydedilen RCA'yı local state'den temizle
+
+      // 3. Kaydedilen RCA'yı local state'den temizle
       setRcaLocal(prev => { const n = { ...prev }; delete n[selected.id]; return n; });
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'RCA kaydedilemedi');
@@ -1430,16 +1437,33 @@ export default function SpecialistWorkbenchPage() {
                       <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "18px 20px" }}>
                         <h4 style={{ fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 14 }}>Katkıda Bulunan Faktörler</h4>
                         {rca.contributingFactors.map((cf, i) => (
-                          <label key={cf.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10, cursor: "pointer" }}>
-                            <input type="checkbox" defaultChecked={cf.checked} style={{ marginTop: 2, accentColor: "#DC2626", flexShrink: 0 }}
+                          <div key={cf.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+                            <input type="checkbox" checked={cf.checked} style={{ marginTop: 6, accentColor: "#DC2626", flexShrink: 0, cursor: "pointer" }}
                               onChange={e => {
                                 const updated = rca.contributingFactors.map((f, fi) => fi === i ? { ...f, checked: e.target.checked } : f);
                                 setRca("contributingFactors", updated);
                               }} />
-                            <span style={{ fontSize: 12, color: "#334155", lineHeight: 1.4 }}>{cf.label}</span>
-                          </label>
+                            <input
+                              value={cf.label}
+                              onChange={e => {
+                                const updated = rca.contributingFactors.map((f, fi) => fi === i ? { ...f, label: e.target.value } : f);
+                                setRca("contributingFactors", updated);
+                              }}
+                              placeholder="Faktör açıklaması..."
+                              style={{ flex: 1, fontSize: 12, color: "#334155", border: "1px solid #E2E8F0", borderRadius: 4, padding: "4px 8px", outline: "none" }}
+                              onFocus={e => (e.target.style.borderColor = "#3B82F6")}
+                              onBlur={e => (e.target.style.borderColor = "#E2E8F0")}
+                            />
+                            <button onClick={() => setRca("contributingFactors", rca.contributingFactors.filter((_, fi) => fi !== i))}
+                              style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: 13, padding: "2px 4px", flexShrink: 0, marginTop: 2 }}>×</button>
+                          </div>
                         ))}
-                        <button style={{ marginTop: 6, fontSize: 11, color: "#3B82F6", background: "transparent", border: "1px dashed #BFDBFE", borderRadius: 6, padding: "5px 10px", cursor: "pointer", width: "100%" }}>+ Faktör Ekle</button>
+                        <button
+                          onClick={() => {
+                            const newFactor = { id: `cf-${Date.now()}`, label: "", checked: true };
+                            setRca("contributingFactors", [...rca.contributingFactors, newFactor]);
+                          }}
+                          style={{ marginTop: 6, fontSize: 11, color: "#3B82F6", background: "transparent", border: "1px dashed #BFDBFE", borderRadius: 6, padding: "5px 10px", cursor: "pointer", width: "100%" }}>+ Faktör Ekle</button>
                       </div>
                       {/* Root Cause Summary */}
                       <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #FCA5A5", padding: "18px 20px" }}>
@@ -1456,27 +1480,58 @@ export default function SpecialistWorkbenchPage() {
                       <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
                         <h4 style={{ fontSize: 12, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em" }}>Önleyici Aksiyonlar</h4>
                         <div style={{ flex: 1 }} />
-                        <button style={{ fontSize: 11, color: "#059669", background: "#D1FAE5", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>+ Aksiyon Ekle</button>
+                        <button
+                          onClick={() => {
+                            const newAction = { id: `pa-${Date.now()}`, action: "", owner: "", due: "", status: "Planned" };
+                            setRca("preventiveActions", [...rca.preventiveActions, newAction]);
+                          }}
+                          style={{ fontSize: 11, color: "#059669", background: "#D1FAE5", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>+ Aksiyon Ekle</button>
                       </div>
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                           <tr style={{ background: "#F8FAFC" }}>
-                            {["Aksiyon","Sorumlu","Bitiş Tarihi","Durum"].map(h => (
+                            {["Aksiyon","Sorumlu","Bitiş Tarihi","Durum",""].map(h => (
                               <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em", borderBottom: "1px solid #E2E8F0" }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {rca.preventiveActions.map(pa => (
+                          {rca.preventiveActions.map((pa, pi) => {
+                            const updatePA = (field: string, val: string) => {
+                              setRca("preventiveActions", rca.preventiveActions.map((p, pj) => pj === pi ? { ...p, [field]: val } : p));
+                            };
+                            return (
                             <tr key={pa.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
-                              <td style={{ padding: "10px 12px", fontSize: 12, color: "#334155" }}>{pa.action}</td>
-                              <td style={{ padding: "10px 12px", fontSize: 12, color: "#64748B", fontWeight: 500 }}>{pa.owner}</td>
-                              <td style={{ padding: "10px 12px", fontSize: 11, fontFamily: "'IBM Plex Mono',monospace", color: "#475569" }}>{pa.due}</td>
-                              <td style={{ padding: "10px 12px" }}>
-                                <Badge bg={pa.status === "Done" ? "#D1FAE5" : pa.status === "In Progress" ? "#FEF3C7" : "#F1F5F9"} color={pa.status === "Done" ? "#059669" : pa.status === "In Progress" ? "#D97706" : "#64748B"} mono={false}>{pa.status}</Badge>
+                              <td style={{ padding: "6px 8px" }}>
+                                <input value={pa.action} onChange={e => updatePA("action", e.target.value)} placeholder="Aksiyon..."
+                                  style={{ width: "100%", fontSize: 12, color: "#334155", border: "1px solid #E2E8F0", borderRadius: 4, padding: "4px 8px", outline: "none", boxSizing: "border-box" }}
+                                  onFocus={e => (e.target.style.borderColor = "#3B82F6")} onBlur={e => (e.target.style.borderColor = "#E2E8F0")} />
+                              </td>
+                              <td style={{ padding: "6px 8px" }}>
+                                <input value={pa.owner} onChange={e => updatePA("owner", e.target.value)} placeholder="Sorumlu..."
+                                  style={{ width: "100%", fontSize: 12, color: "#64748B", border: "1px solid #E2E8F0", borderRadius: 4, padding: "4px 8px", outline: "none", boxSizing: "border-box" }}
+                                  onFocus={e => (e.target.style.borderColor = "#3B82F6")} onBlur={e => (e.target.style.borderColor = "#E2E8F0")} />
+                              </td>
+                              <td style={{ padding: "6px 8px" }}>
+                                <input value={pa.due} onChange={e => updatePA("due", e.target.value)} placeholder="YYYY-AA-GG" type="date"
+                                  style={{ fontSize: 11, fontFamily: "'IBM Plex Mono',monospace", color: "#475569", border: "1px solid #E2E8F0", borderRadius: 4, padding: "4px 6px", outline: "none" }}
+                                  onFocus={e => (e.target.style.borderColor = "#3B82F6")} onBlur={e => (e.target.style.borderColor = "#E2E8F0")} />
+                              </td>
+                              <td style={{ padding: "6px 8px" }}>
+                                <select value={pa.status} onChange={e => updatePA("status", e.target.value)}
+                                  style={{ fontSize: 11, color: "#334155", border: "1px solid #E2E8F0", borderRadius: 4, padding: "4px 6px", outline: "none", background: "#fff" }}>
+                                  <option value="Planned">Planned</option>
+                                  <option value="In Progress">In Progress</option>
+                                  <option value="Done">Done</option>
+                                </select>
+                              </td>
+                              <td style={{ padding: "6px 4px" }}>
+                                <button onClick={() => setRca("preventiveActions", rca.preventiveActions.filter((_, pj) => pj !== pi))}
+                                  style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: 13, padding: "2px 4px" }}>×</button>
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
