@@ -5,8 +5,10 @@ import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Priority, IncidentState, IncidentResolutionCode, ServiceRequestState, ChangeRequestState } from "@/lib/itsm/types/enums";
+import { Priority, IncidentState, IncidentResolutionCode, ServiceRequestState, ChangeRequestState, Impact, Urgency, ChangeType, ChangeRisk } from "@/lib/itsm/types/enums";
 import { ServiceRequestClosureCode } from "@/lib/itsm/types/service-request.types";
+import { convertIncidentToSR, convertIncidentToCR, convertIncidentToProblem, mergeDuplicateIncident } from "@/services/incidentService";
+import { linkCRToSR } from "@/services/serviceRequestService";
 
 // ─── Diagnostic Command Palette ───────────────────────────────────────────────
 interface DiagCmd {
@@ -558,6 +560,20 @@ export default function SpecialistWorkbenchPage() {
   const [resolveNotes, setResolveNotes]     = useState("");
   const [showFulfillModal, setShowFulfillModal] = useState(false);
   const [fulfillNotes, setFulfillNotes]         = useState("");
+  const [showConvertModal, setShowConvertModal]       = useState(false);
+  const [convertTarget, setConvertTarget]             = useState<"SR" | "CR" | "Problem">("SR");
+  const [convertNote, setConvertNote]                 = useState("");
+  const [convertCategory, setConvertCategory]         = useState("General");
+  const [convertChangeType, setConvertChangeType]     = useState<"Standard" | "Normal" | "Emergency">("Normal");
+  const [convertRisk, setConvertRisk]                 = useState<"1-Critical" | "2-High" | "3-Moderate" | "4-Low">("3-Moderate");
+  const [showMergeModal, setShowMergeModal]               = useState(false);
+  const [mergeSearchQ, setMergeSearchQ]                   = useState("");
+  const [mergeTargetTicket, setMergeTargetTicket]         = useState<Ticket | null>(null);
+  const [mergeNote, setMergeNote]                         = useState("");
+  const [showLinkCRModal, setShowLinkCRModal]             = useState(false);
+  const [linkCRSearchQ, setLinkCRSearchQ]                 = useState("");
+  const [linkCRTargetTicket, setLinkCRTargetTicket]       = useState<Ticket | null>(null);
+  const [linkCRNote, setLinkCRNote]                       = useState("");
 
   // Store'dan yükle; selectedId'yi ilk gerçek ticket'a senkronize et
   useEffect(() => { loadInc(); loadSR(); loadCR(); }, [loadInc, loadSR, loadCR]);
@@ -617,6 +633,61 @@ export default function SpecialistWorkbenchPage() {
       });
       setShowFulfillModal(false);
       setFulfillNotes("");
+    } finally { setSaving(false); }
+  };
+
+  const handleConvert = async () => {
+    if (!selectedStoreId || !convertNote.trim() || !user) return;
+    setSaving(true);
+    try {
+      if (convertTarget === "SR") {
+        await convertIncidentToSR(
+          selectedStoreId,
+          { requestType: "Service Request", category: convertCategory, impact: Impact.MEDIUM, urgency: Urgency.MEDIUM, note: convertNote },
+          incidents, user.orgId, user.id, user.name,
+        );
+        await loadInc();
+        await loadSR();
+      } else if (convertTarget === "CR") {
+        await convertIncidentToCR(
+          selectedStoreId,
+          { changeType: convertChangeType as ChangeType, risk: convertRisk as ChangeRisk, note: convertNote },
+          incidents, user.orgId, user.id, user.name,
+        );
+        await loadInc();
+        await loadCR();
+      } else {
+        await convertIncidentToProblem(selectedStoreId, convertNote, incidents, user.orgId, user.id, user.name);
+        await loadInc();
+      }
+      setShowConvertModal(false);
+      setConvertNote("");
+    } finally { setSaving(false); }
+  };
+
+  const handleMerge = async () => {
+    if (!selectedStoreId || !mergeTargetTicket?.storeId || !mergeNote.trim() || !user) return;
+    setSaving(true);
+    try {
+      await mergeDuplicateIncident(selectedStoreId, mergeTargetTicket.storeId, mergeNote, incidents, user.orgId, user.id, user.name);
+      await loadInc();
+      setShowMergeModal(false);
+      setMergeNote("");
+      setMergeTargetTicket(null);
+      setMergeSearchQ("");
+    } finally { setSaving(false); }
+  };
+
+  const handleLinkCR = async () => {
+    if (!selectedStoreId || !linkCRTargetTicket?.storeId || !user) return;
+    setSaving(true);
+    try {
+      await linkCRToSR(selectedStoreId, linkCRTargetTicket.storeId, linkCRTargetTicket.id, linkCRNote, serviceRequests, user.orgId, user.id, user.name);
+      await loadSR();
+      setShowLinkCRModal(false);
+      setLinkCRNote("");
+      setLinkCRTargetTicket(null);
+      setLinkCRSearchQ("");
     } finally { setSaving(false); }
   };
 
@@ -1014,13 +1085,28 @@ export default function SpecialistWorkbenchPage() {
                     <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "14px 16px" }}>
                       <h4 style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Araçlar</h4>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        {[{ l: "🎯 Root Cause Analizi", c: "#2563EB", tab: "rca" }, { l: "📖 KB Makalesi Oluştur", c: "#059669" }, { l: "📌 Problem Kaydı Aç", c: "#7C3AED" }, { l: "🔗 Merge / İlişkilendir", c: "#D97706" }].map(tool => (
-                          <button key={tool.l} onClick={() => tool.tab && setActiveTab(tool.tab)}
+                        {selected.type === "INC" && ([
+                          { l: "🎯 Root Cause Analizi",  c: "#2563EB", action: () => setActiveTab("rca") },
+                          { l: "📌 Problem Kaydı Aç",    c: "#7C3AED", action: () => { setConvertTarget("Problem"); setShowConvertModal(true); } },
+                          { l: "🔄 SR'a Dönüştür",       c: "#059669", action: () => { setConvertTarget("SR");      setShowConvertModal(true); } },
+                          { l: "🔄 CR'a Dönüştür",       c: "#0891B2", action: () => { setConvertTarget("CR");      setShowConvertModal(true); } },
+                          { l: "🔗 Merge / Duplicate",   c: "#D97706", action: () => setShowMergeModal(true) },
+                        ] as { l: string; c: string; action: () => void }[]).map(tool => (
+                          <button key={tool.l} onClick={tool.action}
                             style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: tool.c, fontSize: 11, fontWeight: 600, cursor: "pointer", textAlign: "left", transition: "all .15s" }}
                             onMouseEnter={e => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = tool.c; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#E2E8F0"; }}
-                          >{tool.l}</button>
+                            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#E2E8F0"; }}>
+                            {tool.l}
+                          </button>
                         ))}
+                        {selected.type === "SR" && (
+                          <button onClick={() => setShowLinkCRModal(true)}
+                            style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#7C3AED", fontSize: 11, fontWeight: 600, cursor: "pointer", textAlign: "left", transition: "all .15s" }}
+                            onMouseEnter={e => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = "#7C3AED"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#E2E8F0"; }}>
+                            🔗 CR Bağla
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1474,6 +1560,183 @@ export default function SpecialistWorkbenchPage() {
               <button onClick={handleFulfill} disabled={saving || !fulfillNotes.trim()}
                 style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: (saving || !fulfillNotes.trim()) ? 0.5 : 1 }}>
                 {saving ? "Kaydediliyor..." : "Karşılandı Olarak İşaretle"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Convert Modal (INC → SR / CR / Problem) ── */}
+      {showConvertModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "28px 32px", width: 500, boxShadow: "0 20px 60px rgba(0,0,0,.2)", animation: "scaleIn .2s ease" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>🔄 Belge Dönüştür</h3>
+            <p style={{ fontSize: 12, color: "#64748B", marginBottom: 20 }}>{selected.id} — {selected.title}</p>
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              {(["SR", "CR", "Problem"] as const).map(t => (
+                <button key={t} onClick={() => setConvertTarget(t)}
+                  style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: convertTarget === t ? "2px solid #3B82F6" : "1px solid #E2E8F0", background: convertTarget === t ? "#EFF6FF" : "#fff", color: convertTarget === t ? "#2563EB" : "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  {t === "SR" ? "🎫 Service Request" : t === "CR" ? "🔧 Change Request" : "⚠️ Problem Kaydı"}
+                </button>
+              ))}
+            </div>
+            {convertTarget === "SR" && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 4 }}>Kategori</label>
+                <input value={convertCategory} onChange={e => setConvertCategory(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+            )}
+            {convertTarget === "CR" && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 4 }}>Değişiklik Tipi</label>
+                  <select value={convertChangeType} onChange={e => setConvertChangeType(e.target.value as typeof convertChangeType)}
+                    style={{ width: "100%", padding: "8px 12px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 13, outline: "none" }}>
+                    <option value="Standard">Standard</option>
+                    <option value="Normal">Normal</option>
+                    <option value="Emergency">Emergency</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 4 }}>Risk</label>
+                  <select value={convertRisk} onChange={e => setConvertRisk(e.target.value as typeof convertRisk)}
+                    style={{ width: "100%", padding: "8px 12px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 13, outline: "none" }}>
+                    <option value="4-Low">Low</option>
+                    <option value="3-Moderate">Moderate</option>
+                    <option value="2-High">High</option>
+                    <option value="1-Critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+            )}
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>Dönüştürme Notu <span style={{ color: "#DC2626" }}>*</span></label>
+            <textarea value={convertNote} onChange={e => setConvertNote(e.target.value)}
+              placeholder="Dönüştürme gerekçesini yazın..." rows={3}
+              style={{ width: "100%", padding: "10px 14px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", resize: "vertical", boxSizing: "border-box" }}
+              onFocus={e => { e.target.style.borderColor = "#3B82F6"; }}
+              onBlur={e => { e.target.style.borderColor = "#E2E8F0"; }} />
+            <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 11, color: "#92400E" }}>
+              ℹ️ INC açıklaması ve notları yeni kayda kopyalanır. INC → Resolved (Converted) olarak kapatılır.
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
+              <button onClick={() => { setShowConvertModal(false); setConvertNote(""); }}
+                style={{ padding: "8px 18px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                İptal
+              </button>
+              <button onClick={handleConvert} disabled={saving || !convertNote.trim()}
+                style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: (saving || !convertNote.trim()) ? 0.6 : 1 }}>
+                {saving ? "Dönüştürülüyor..." : `🔄 ${convertTarget === "SR" ? "SR" : convertTarget === "CR" ? "CR" : "Problem"} Oluştur`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Merge Modal ── */}
+      {showMergeModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "28px 32px", width: 520, boxShadow: "0 20px 60px rgba(0,0,0,.2)", animation: "scaleIn .2s ease" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>🔗 Incident Birleştir</h3>
+            <p style={{ fontSize: 12, color: "#64748B", marginBottom: 18 }}>Duplicate incident&apos;ı kapatıp bu kayıtla birleştir.</p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 6 }}>Master (bu kalır)</label>
+              <div style={{ padding: "10px 14px", borderRadius: 8, background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", color: "#059669" }}>{selected.id}</span>
+                <span style={{ fontSize: 12, color: "#334155", marginLeft: 8 }}>{selected.title}</span>
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 6 }}>Duplicate (kapatılacak)</label>
+              <input value={mergeSearchQ}
+                onChange={e => {
+                  setMergeSearchQ(e.target.value);
+                  const q = e.target.value.toLowerCase();
+                  const found = q.length >= 3 ? displayTickets.find(t => t.type === "INC" && t.id !== selected.id && (t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q))) ?? null : null;
+                  setMergeTargetTicket(found);
+                }}
+                placeholder="INC no veya başlık ile ara (min. 3 karakter)..."
+                style={{ width: "100%", padding: "9px 14px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                onFocus={e => { e.target.style.borderColor = "#3B82F6"; }}
+                onBlur={e => { e.target.style.borderColor = "#E2E8F0"; }}
+              />
+              {mergeTargetTicket && (
+                <div style={{ marginTop: 8, padding: "10px 14px", borderRadius: 8, background: "#FFF7ED", border: "1px solid #FED7AA" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", color: "#D97706" }}>{mergeTargetTicket.id}</span>
+                  <span style={{ fontSize: 12, color: "#334155", marginLeft: 8 }}>{mergeTargetTicket.title}</span>
+                </div>
+              )}
+              {mergeSearchQ.length >= 3 && !mergeTargetTicket && (
+                <div style={{ marginTop: 6, fontSize: 11, color: "#94A3B8", fontStyle: "italic" }}>Eşleşen INC bulunamadı.</div>
+              )}
+            </div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>Birleştirme Notu <span style={{ color: "#DC2626" }}>*</span></label>
+            <textarea value={mergeNote} onChange={e => setMergeNote(e.target.value)}
+              placeholder="Neden birleştiriliyor?" rows={3}
+              style={{ width: "100%", padding: "10px 14px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", resize: "vertical", boxSizing: "border-box" }}
+              onFocus={e => { e.target.style.borderColor = "#3B82F6"; }}
+              onBlur={e => { e.target.style.borderColor = "#E2E8F0"; }} />
+            {mergeTargetTicket && (
+              <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#FEF2F2", border: "1px solid #FECACA", fontSize: 11, color: "#991B1B" }}>
+                ⚠️ {mergeTargetTicket.id} → &quot;Resolved (Duplicate)&quot; olarak kapatılır. Bu işlem geri alınamaz.
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
+              <button onClick={() => { setShowMergeModal(false); setMergeNote(""); setMergeTargetTicket(null); setMergeSearchQ(""); }}
+                style={{ padding: "8px 18px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                İptal
+              </button>
+              <button onClick={handleMerge} disabled={saving || !mergeTargetTicket || !mergeNote.trim()}
+                style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: "#DC2626", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: (saving || !mergeTargetTicket || !mergeNote.trim()) ? 0.6 : 1 }}>
+                {saving ? "Birleştiriliyor..." : "🔗 Birleştir"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Link CR Modal (SR → CR) ── */}
+      {showLinkCRModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "28px 32px", width: 480, boxShadow: "0 20px 60px rgba(0,0,0,.2)", animation: "scaleIn .2s ease" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>🔗 Change Request Bağla</h3>
+            <p style={{ fontSize: 12, color: "#64748B", marginBottom: 18 }}>{selected.id} — {selected.title}</p>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: 6 }}>Change Request Ara</label>
+            <input value={linkCRSearchQ}
+              onChange={e => {
+                setLinkCRSearchQ(e.target.value);
+                const q = e.target.value.toLowerCase();
+                const found = q.length >= 3 ? displayTickets.find(t => t.type === "CR" && (t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q))) ?? null : null;
+                setLinkCRTargetTicket(found);
+              }}
+              placeholder="CR no veya başlık ile ara (min. 3 karakter)..."
+              style={{ width: "100%", padding: "9px 14px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+              onFocus={e => { e.target.style.borderColor = "#7C3AED"; }}
+              onBlur={e => { e.target.style.borderColor = "#E2E8F0"; }}
+            />
+            {linkCRTargetTicket && (
+              <div style={{ marginTop: 8, padding: "10px 14px", borderRadius: 8, background: "#F5F3FF", border: "1px solid #DDD6FE" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", color: "#7C3AED" }}>{linkCRTargetTicket.id}</span>
+                <span style={{ fontSize: 12, color: "#334155", marginLeft: 8 }}>{linkCRTargetTicket.title}</span>
+              </div>
+            )}
+            {linkCRSearchQ.length >= 3 && !linkCRTargetTicket && (
+              <div style={{ marginTop: 6, fontSize: 11, color: "#94A3B8", fontStyle: "italic" }}>Eşleşen CR bulunamadı.</div>
+            )}
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6, marginTop: 16 }}>Not (opsiyonel)</label>
+            <textarea value={linkCRNote} onChange={e => setLinkCRNote(e.target.value)}
+              placeholder="Bağlantı gerekçesi..." rows={2}
+              style={{ width: "100%", padding: "8px 12px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 13, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", resize: "vertical", boxSizing: "border-box" }}
+              onFocus={e => { e.target.style.borderColor = "#7C3AED"; }}
+              onBlur={e => { e.target.style.borderColor = "#E2E8F0"; }} />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
+              <button onClick={() => { setShowLinkCRModal(false); setLinkCRNote(""); setLinkCRTargetTicket(null); setLinkCRSearchQ(""); }}
+                style={{ padding: "8px 18px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                İptal
+              </button>
+              <button onClick={handleLinkCR} disabled={saving || !linkCRTargetTicket}
+                style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: "#7C3AED", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: (saving || !linkCRTargetTicket) ? 0.6 : 1 }}>
+                {saving ? "Bağlanıyor..." : "🔗 Bağla"}
               </button>
             </div>
           </div>
