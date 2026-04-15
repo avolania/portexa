@@ -556,6 +556,7 @@ export default function SpecialistWorkbenchPage() {
   const [timelineNoteText, setTimelineNoteText] = useState("");
   const [saving, setSaving]                 = useState(false);
   const [errorMsg, setErrorMsg]             = useState<string | null>(null);
+  const [convertSuccessMsg, setConvertSuccessMsg] = useState<string | null>(null);
   const [showEscalateMenu, setShowEscalateMenu] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolveNotes, setResolveNotes]     = useState("");
@@ -656,27 +657,40 @@ export default function SpecialistWorkbenchPage() {
     setErrorMsg(null);
     try {
       if (convertTarget === "SR") {
-        await convertIncidentToSR(
+        const { srNumber } = await convertIncidentToSR(
           selectedStoreId,
           { requestType: "Service Request", category: convertCategory, impact: Impact.MEDIUM, urgency: Urgency.MEDIUM, note: convertNote },
           incidents, user.orgId, user.id, user.name,
         );
         await loadInc();
         await loadSR();
+        setShowConvertModal(false);
+        setConvertNote("");
+        setFilterType("SR");
+        setSelectedId(srNumber);
+        setConvertSuccessMsg(`✓ ${srNumber} numaralı Service Request oluşturuldu ve listeye eklendi.`);
       } else if (convertTarget === "CR") {
-        await convertIncidentToCR(
+        const { crNumber } = await convertIncidentToCR(
           selectedStoreId,
           { changeType: convertChangeType as ChangeType, risk: convertRisk as ChangeRisk, note: convertNote },
           incidents, user.orgId, user.id, user.name,
         );
         await loadInc();
         await loadCR();
+        setShowConvertModal(false);
+        setConvertNote("");
+        setFilterType("CR");
+        setSelectedId(crNumber);
+        setConvertSuccessMsg(`✓ ${crNumber} numaralı Change Request oluşturuldu ve listeye eklendi.`);
       } else {
-        await convertIncidentToProblem(selectedStoreId, convertNote, incidents, user.orgId, user.id, user.name);
+        const { problemNumber } = await convertIncidentToProblem(selectedStoreId, convertNote, incidents, user.orgId, user.id, user.name);
         await loadInc();
+        setShowConvertModal(false);
+        setConvertNote("");
+        setFilterType("INC");
+        setSelectedId(problemNumber);
+        setConvertSuccessMsg(`✓ ${problemNumber} numaralı Problem kaydı oluşturuldu.`);
       }
-      setShowConvertModal(false);
-      setConvertNote("");
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'Dönüştürme sırasında hata oluştu');
     } finally { setSaving(false); }
@@ -892,6 +906,14 @@ export default function SpecialistWorkbenchPage() {
           <span style={{ fontSize: 14, color: "#DC2626" }}>⚠</span>
           <span style={{ flex: 1, fontSize: 12, color: "#991B1B", fontFamily: "'IBM Plex Mono',monospace" }}>{errorMsg}</span>
           <button onClick={() => setErrorMsg(null)} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: "0 4px" }}>✕</button>
+        </div>
+      )}
+
+      {/* Convert Success Banner */}
+      {convertSuccessMsg && (
+        <div style={{ background: "#ECFDF5", borderBottom: "1px solid #6EE7B7", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ flex: 1, fontSize: 12, color: "#065F46", fontFamily: "'IBM Plex Mono',monospace" }}>{convertSuccessMsg}</span>
+          <button onClick={() => setConvertSuccessMsg(null)} style={{ background: "none", border: "none", color: "#059669", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: "0 4px" }}>✕</button>
         </div>
       )}
 
