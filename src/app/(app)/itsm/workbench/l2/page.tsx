@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useIncidentStore } from "@/store/useIncidentStore";
+import { useServiceRequestStore } from "@/store/useServiceRequestStore";
+import { useChangeRequestStore } from "@/store/useChangeRequestStore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { Priority, IncidentState, IncidentResolutionCode } from "@/lib/itsm/types/enums";
 
 // ─── Diagnostic Command Palette ───────────────────────────────────────────────
 interface DiagCmd {
@@ -75,7 +80,7 @@ interface ChangeDetails {
   preChecks: PreCheck[];
 }
 interface Ticket {
-  id: string; type: "INC" | "SR" | "CR"; title: string;
+  id: string; storeId?: string; type: "INC" | "SR" | "CR"; title: string;
   priority: string; state: string; slaMin: number; slaTotal: number;
   category: string; subcategory: string;
   caller: string; dept: string; assignedTo: string; group: string;
@@ -340,17 +345,225 @@ const APPROVER_STATUS = {
   Rejected: { c: "#DC2626", bg: "#FEE2E2", i: "✗" },
 } as const;
 
+// ─── Priority / State mapping helpers ────────────────────────────────────────
+const PRIO_NUM: Record<Priority, string> = {
+  [Priority.CRITICAL]: "1",
+  [Priority.HIGH]: "2",
+  [Priority.MEDIUM]: "3",
+  [Priority.LOW]: "4",
+};
+const INC_STATE_LABEL: Record<IncidentState, string> = {
+  [IncidentState.NEW]: "New",
+  [IncidentState.ASSIGNED]: "Assigned",
+  [IncidentState.IN_PROGRESS]: "In Progress",
+  [IncidentState.PENDING]: "Pending",
+  [IncidentState.RESOLVED]: "Resolved",
+  [IncidentState.CLOSED]: "Closed",
+};
+
+const SR_STATE_LABEL: Record<string, string> = {
+  Draft:                "Draft",
+  Submitted:            "Submitted",
+  "Pending Approval":   "Pending",
+  Approved:             "Approved",
+  "In Progress":        "In Progress",
+  Pending:              "Pending",
+  Fulfilled:            "Resolved",
+  Closed:               "Closed",
+  Rejected:             "Closed",
+  Cancelled:            "Closed",
+};
+
+const CR_STATE_LABEL: Record<string, string> = {
+  "Pending Approval":   "Pending",
+  Scheduled:            "Scheduled",
+  Implement:            "In Progress",
+  Review:               "Pending",
+  Closed:               "Closed",
+  Cancelled:            "Closed",
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SpecialistWorkbenchPage() {
-  const [tickets]                           = useState<Ticket[]>(TICKETS);
-  const [selectedId, setSelectedId]         = useState("INC0011042");
+  const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState } = useIncidentStore();
+  const { user } = useAuthStore();
+  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR, changeState: changeSRState } = useServiceRequestStore();
+  const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR } = useChangeRequestStore();
+
+  // Gerçek incident'ları Ticket formatına dönüştür
+  const realTickets: Ticket[] = incidents.map((inc) => ({
+    storeId: inc.id,
+    id: inc.number,
+    type: "INC" as const,
+    title: inc.shortDescription,
+    priority: PRIO_NUM[inc.priority] ?? "3",
+    state: INC_STATE_LABEL[inc.state] ?? inc.state,
+    slaMin: Math.floor((new Date(inc.sla.resolutionDeadline).getTime() - Date.now()) / 60000),
+    slaTotal: 240,
+    category: inc.category,
+    subcategory: inc.subcategory ?? "",
+    caller: inc.callerId,
+    dept: "",
+    assignedTo: inc.assignedToId === user?.id ? "Ben" : (inc.assignedToId ?? "—"),
+    group: inc.assignmentGroupName ?? "",
+    escalatedFrom: "",
+    escalatedBy: "",
+    escalatedAt: "",
+    created: inc.createdAt,
+    updated: inc.updatedAt,
+    breached: inc.sla.resolutionBreached,
+    configItem: { name: "", type: "", os: "", ip: "", env: "" },
+    description: inc.description,
+    technicalNotes: inc.workNotes.filter(n => n.content.startsWith("[TEKNİK]")).map(n => n.content.replace("[TEKNİK] ", "")).join("\n---\n"),
+    rootCause: inc.workNotes.filter(n => n.content.startsWith("[ROOT CAUSE]")).map(n => n.content.replace("[ROOT CAUSE] ", "")).join("\n---\n"),
+    workaround: "",
+    relatedCIs: [],
+    timeline: inc.timeline.map(e => ({ time: new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }), who: e.actorName, text: (e.note ?? e.type) })),
+    kbArticles: [],
+    diagHistory: [],
+    rcaData: { why1: "", why2: "", why3: "", why4: "", why5: "", rootCause: "", contributingFactors: [], preventiveActions: [] },
+  }));
+
+  const srTickets: Ticket[] = serviceRequests.map((sr) => {
+    const slaDeadline = sr.sla?.fulfillmentDeadline ?? new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+    return {
+      storeId: sr.id,
+      id: sr.number,
+      type: "SR" as const,
+      title: sr.shortDescription,
+      priority: (() => {
+        if (sr.priority === Priority.HIGH)   return "2";
+        if (sr.priority === Priority.MEDIUM) return "3";
+        return "4";
+      })(),
+      state: SR_STATE_LABEL[sr.state] ?? sr.state,
+      slaMin: Math.floor((new Date(slaDeadline).getTime() - Date.now()) / 60000),
+      slaTotal: 480,
+      category: sr.category,
+      subcategory: sr.subcategory ?? "",
+      caller: sr.requestedFor?.fullName ?? sr.requestedForId,
+      dept: "",
+      assignedTo: sr.assignedToId === user?.id ? "Ben" : (sr.assignedTo?.fullName ?? "—"),
+      group: sr.assignmentGroupName ?? "",
+      escalatedFrom: "", escalatedBy: "", escalatedAt: "",
+      created: sr.createdAt,
+      updated: sr.updatedAt,
+      breached: sr.sla?.slaBreached ?? false,
+      configItem: { name: "", type: "", os: "", ip: "", env: "" },
+      description: sr.description,
+      technicalNotes: sr.workNotes
+        .filter((n) => n.content.startsWith("[TEKNİK]"))
+        .map((n) => n.content.replace("[TEKNİK] ", ""))
+        .join("\n---\n"),
+      rootCause: "",
+      workaround: "",
+      relatedCIs: [],
+      timeline: sr.timeline.map((e) => ({
+        time: new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+        who: e.actorName,
+        text: e.note ?? e.type,
+      })),
+      kbArticles: [],
+      diagHistory: [],
+      rcaData: null,
+      pendingReason:
+        sr.state === "Pending Approval" ? "Onay bekleniyor" :
+        sr.state === "Pending"          ? "Bekleniyor" : undefined,
+    };
+  });
+
+  const crTickets: Ticket[] = changeRequests.map((cr) => ({
+    storeId: cr.id,
+    id: cr.number,
+    type: "CR" as const,
+    title: cr.shortDescription,
+    priority: (() => {
+      if (cr.priority === Priority.CRITICAL) return "1";
+      if (cr.priority === Priority.HIGH)     return "2";
+      if (cr.priority === Priority.MEDIUM)   return "3";
+      return "4";
+    })(),
+    state: CR_STATE_LABEL[cr.state] ?? cr.state,
+    slaMin: Math.floor((new Date(cr.plannedEndDate).getTime() - Date.now()) / 60000),
+    slaTotal: 4320,
+    category: cr.category,
+    subcategory: cr.subcategory ?? "",
+    caller: cr.requestedBy?.fullName ?? cr.requestedById,
+    dept: "",
+    assignedTo: cr.assignedToId === user?.id ? "Ben" : (cr.assignedTo?.fullName ?? "—"),
+    group: cr.assignmentGroupName ?? "",
+    escalatedFrom: "", escalatedBy: "", escalatedAt: "",
+    created: cr.createdAt,
+    updated: cr.updatedAt,
+    breached: false,
+    configItem: { name: "", type: "", os: "", ip: "", env: "" },
+    description: cr.description,
+    technicalNotes: cr.workNotes
+      .filter((n) => n.content.startsWith("[TEKNİK]"))
+      .map((n) => n.content.replace("[TEKNİK] ", ""))
+      .join("\n---\n"),
+    rootCause: "",
+    workaround: "",
+    relatedCIs: [],
+    timeline: cr.timeline.map((e) => ({
+      time: new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+      who: e.actorName,
+      text: e.note ?? e.type,
+    })),
+    kbArticles: [],
+    diagHistory: [],
+    rcaData: null,
+    changeDetails: {
+      type: cr.type,
+      risk: cr.risk,
+      impact: cr.impact,
+      implementationWindow: `${cr.plannedStartDate} – ${cr.plannedEndDate}`,
+      cabDate: "",
+      businessJustification: cr.justification,
+      approvers: cr.approvers.map((a) => ({
+        name: a.approverName,
+        role: "",
+        status: a.approvalState === "Approved" ? "Approved" :
+                a.approvalState === "Rejected"  ? "Rejected" : "Pending",
+        at: a.decidedAt ?? null,
+      })),
+      implementationSteps: cr.implementationPlan
+        ? [{ step: cr.implementationPlan, done: false }]
+        : [],
+      rollbackPlan: cr.backoutPlan ?? "",
+      testResults: cr.testPlan ?? "",
+      preChecks: [],
+    },
+  }));
+
+  // Unified sorted list: breached first, then by priority
+  const PRIORITY_WEIGHT: Record<string, number> = { "1": 0, "2": 1, "3": 2, "4": 3, H: 1 };
+  const displayTickets = [...realTickets, ...srTickets, ...crTickets].sort((a, b) => {
+    if (a.breached !== b.breached) return a.breached ? -1 : 1;
+    return (PRIORITY_WEIGHT[a.priority] ?? 9) - (PRIORITY_WEIGHT[b.priority] ?? 9);
+  });
+
+  const [selectedId, setSelectedId]         = useState<string>("");
   const [activeTab, setActiveTab]           = useState("technical");
   const [filterType, setFilterType]         = useState<"all" | "INC" | "SR" | "CR">("all");
   const [filterMine, setFilterMine]         = useState(false);
   const [searchQ, setSearchQ]               = useState("");
   const [rootCauseText, setRootCauseText]   = useState("");
   const [noteText, setNoteText]             = useState("");
+  const [timelineNoteText, setTimelineNoteText] = useState("");
+  const [saving, setSaving]                 = useState(false);
   const [showEscalateMenu, setShowEscalateMenu] = useState(false);
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolveNotes, setResolveNotes]     = useState("");
+
+  // Store'dan yükle; selectedId'yi ilk gerçek ticket'a senkronize et
+  useEffect(() => { loadInc(); loadSR(); loadCR(); }, [loadInc, loadSR, loadCR]);
+  useEffect(() => {
+    if (displayTickets.length > 0 && !displayTickets.find(t => t.id === selectedId)) {
+      setSelectedId(displayTickets[0].id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incidents, serviceRequests, changeRequests]);
 
   const [diagRunning, setDiagRunning]       = useState(false);
   const [diagSelected, setDiagSelected]     = useState<string | null>(null);
@@ -361,14 +574,90 @@ export default function SpecialistWorkbenchPage() {
   const [cabSteps, setCabSteps]             = useState<Record<string, Record<number, boolean>>>({});
   const [cabChecks, setCabChecks]           = useState<Record<string, Record<number, boolean>>>({});
 
-  const selected = tickets.find(t => t.id === selectedId)!;
-  const filtered = tickets
+  const selected = (displayTickets.find(t => t.id === selectedId) ?? displayTickets[0])!;
+
+  // Seçili ticket'ın gerçek incident store ID'si
+  const selectedStoreId = selected?.storeId ?? null;
+
+  const handleResolve = async () => {
+    if (!selectedStoreId || !resolveNotes.trim()) return;
+    setSaving(true);
+    try {
+      await resolveInc(selectedStoreId, {
+        resolutionCode: IncidentResolutionCode.SOLVED_PERMANENTLY,
+        resolutionNotes: resolveNotes,
+      });
+      setShowResolveModal(false);
+      setResolveNotes("");
+    } finally { setSaving(false); }
+  };
+
+  const handleSaveTechNote = async () => {
+    if (!selectedStoreId || !noteText.trim()) return;
+    setSaving(true);
+    try {
+      await addWorkNote(selectedStoreId, { content: `[TEKNİK] ${noteText}` });
+      setNoteText("");
+    } finally { setSaving(false); }
+  };
+
+  const handleSaveRootCause = async () => {
+    if (!selectedStoreId || !rootCauseText.trim()) return;
+    setSaving(true);
+    try {
+      await addWorkNote(selectedStoreId, { content: `[ROOT CAUSE] ${rootCauseText}` });
+      setRootCauseText("");
+    } finally { setSaving(false); }
+  };
+
+  const handleSaveRCA = async () => {
+    if (!selectedStoreId) return;
+    const rca = getRca();
+    if (!rca) return;
+    setSaving(true);
+    try {
+      const whyLines = ([1,2,3,4,5] as const)
+        .map(n => {
+          const v = (rca[`why${n}` as keyof RCAData] as string) || "";
+          return v.trim() ? `Why ${n}: ${v.trim()}` : null;
+        })
+        .filter(Boolean)
+        .join("\n");
+      if (whyLines) {
+        await addWorkNote(selectedStoreId, { content: `[RCA 5-WHY]\n${whyLines}` });
+      }
+      if (rca.rootCause?.trim()) {
+        await addWorkNote(selectedStoreId, { content: `[ROOT CAUSE] ${rca.rootCause.trim()}` });
+      }
+      // Kaydedilen RCA'yı local state'den temizle
+      setRcaLocal(prev => { const n = { ...prev }; delete n[selected.id]; return n; });
+    } finally { setSaving(false); }
+  };
+
+  const handleEscalate = async (group: string) => {
+    setShowEscalateMenu(false);
+    if (!selectedStoreId || !user) return;
+    setSaving(true);
+    try {
+      // Assignment grubunu güncelle
+      await assignInc(selectedStoreId, { assignedToId: user.id, assignmentGroupId: group });
+      // State'i IN_PROGRESS'e al (NEW veya ASSIGNED ise)
+      const inc = incidents.find(i => i.id === selectedStoreId);
+      if (inc && (inc.state === IncidentState.NEW || inc.state === IncidentState.ASSIGNED)) {
+        await changeState(selectedStoreId, { state: IncidentState.IN_PROGRESS });
+      }
+      // Eskalasyon notu
+      await addWorkNote(selectedStoreId, { content: `[ESKALASYoN] ${group} grubuna eskalasyon yapıldı` });
+    } finally { setSaving(false); }
+  };
+
+  const filtered = displayTickets
     .filter(t => filterType === "all" || t.type === filterType)
     .filter(t => !filterMine || t.assignedTo === "Ben")
     .filter(t => !searchQ || t.id.toLowerCase().includes(searchQ.toLowerCase()) || t.title.toLowerCase().includes(searchQ.toLowerCase()));
 
-  const myCount      = tickets.filter(t => t.assignedTo === "Ben" && t.state !== "Resolved").length;
-  const breachedCount = tickets.filter(t => t.breached).length;
+  const myCount      = displayTickets.filter(t => t.assignedTo === "Ben" && t.state !== "Resolved").length;
+  const breachedCount = displayTickets.filter(t => t.breached).length;
 
   const fmtSla = (m: number) => {
     if (m <= 0) return { t: `${Math.abs(m)}dk aşıldı`, c: "#DC2626", b: true };
@@ -502,7 +791,7 @@ export default function SpecialistWorkbenchPage() {
             const tc = TYPE_C[t.type]; const pc = PRIO_C[t.priority]; const sc = STATE_C[t.state] || { c: "#94A3B8", i: "○" };
             const sla = fmtSla(t.slaMin);
             return (
-              <div key={t.id} onClick={() => { setSelectedId(t.id); setActiveTab("technical"); setDiagSession([]); }}
+              <div key={t.id} onClick={() => { setSelectedId(t.id); setActiveTab("technical"); setDiagSession([]); setRootCauseText(""); setNoteText(""); setTimelineNoteText(""); }}
                 style={{ padding: "12px 16px", cursor: "pointer", borderBottom: "1px solid #F1F5F9", borderLeft: `3px solid ${isSel ? tc.c : "transparent"}`, background: isSel ? "#F8FAFC" : t.breached ? "#FFFBFB" : "#fff", transition: "all .12s", animation: `slideUp .2s ease ${i * 0.03}s both` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
                   <Badge bg={tc.bg} color={tc.c}>{tc.l}</Badge>
@@ -542,13 +831,16 @@ export default function SpecialistWorkbenchPage() {
                   <h2 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", lineHeight: 1.35 }}>{selected.title}</h2>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <button style={{ padding: "7px 14px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>✓ Çözüldü</button>
+                  {selected.state !== "Resolved" && selected.state !== "Closed" && selectedStoreId && (
+                    <button onClick={() => setShowResolveModal(true)} disabled={saving}
+                      style={{ padding: "7px 14px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>✓ Çözüldü</button>
+                  )}
                   <div style={{ position: "relative" }}>
                     <button onClick={() => setShowEscalateMenu(!showEscalateMenu)} style={{ padding: "7px 14px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#DC2626", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>⬆ L3 Eskalasyon</button>
                     {showEscalateMenu && (
                       <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, background: "#fff", border: "1px solid #E2E8F0", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.1)", overflow: "hidden", zIndex: 50, minWidth: 180, animation: "slideUp .15s ease" }}>
                         {["Security - L3", "DBA - L3", "Network - L3", "Vendor Support"].map(g => (
-                          <button key={g} onClick={() => setShowEscalateMenu(false)} style={{ width: "100%", padding: "8px 12px", border: "none", cursor: "pointer", background: "#fff", color: "#1E293B", fontSize: 12, textAlign: "left" }}
+                          <button key={g} onClick={() => handleEscalate(g)} style={{ width: "100%", padding: "8px 12px", border: "none", cursor: "pointer", background: "#fff", color: "#1E293B", fontSize: 12, textAlign: "left" }}
                             onMouseEnter={e => (e.currentTarget.style.background = "#F8FAFC")}
                             onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
                           >⬆ {g}</button>
@@ -606,15 +898,18 @@ export default function SpecialistWorkbenchPage() {
                         style={{ width: "100%", padding: "10px 14px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 13, fontFamily: "'IBM Plex Sans',sans-serif", color: "#1E293B", outline: "none", resize: "vertical" }}
                         onFocus={e => { e.target.style.borderColor = "#3B82F6"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,.08)"; }}
                         onBlur={e => { e.target.style.borderColor = "#E2E8F0"; e.target.style.boxShadow = "none"; }} />
-                      <button style={{ marginTop: 6, padding: "6px 14px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Root Cause Kaydet</button>
+                      <button onClick={handleSaveRootCause} disabled={saving || !rootCauseText.trim() || !selectedStoreId}
+                        style={{ marginTop: 6, padding: "6px 14px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: (saving || !rootCauseText.trim() || !selectedStoreId) ? 0.5 : 1 }}>Root Cause Kaydet</button>
                     </div>
                     <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "16px 20px" }}>
                       <h4 style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>Teknik Not Ekle</h4>
                       <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Teknik çalışma notunu ekleyin..." rows={3}
                         style={{ width: "100%", padding: "10px 14px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 13, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", resize: "vertical" }} />
                       <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                        <button style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Kaydet</button>
-                        <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#64748B", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>📎 Log Dosyası Ekle</button>
+                        <button onClick={handleSaveTechNote} disabled={saving || !noteText.trim() || !selectedStoreId}
+                          style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: (saving || !noteText.trim() || !selectedStoreId) ? 0.5 : 1 }}>
+                          {saving ? "Kaydediliyor..." : "Kaydet"}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -714,9 +1009,29 @@ export default function SpecialistWorkbenchPage() {
               {activeTab === "timeline" && (
                 <div style={{ maxWidth: 680 }}>
                   <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "14px 18px", marginBottom: 18 }}>
-                    <textarea placeholder="Teknik not ekleyin..." rows={2} style={{ width: "100%", padding: "8px 12px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 12, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", resize: "vertical" }} />
+                    <textarea
+                      value={timelineNoteText}
+                      onChange={e => setTimelineNoteText(e.target.value)}
+                      placeholder="Teknik not ekleyin..."
+                      rows={2}
+                      style={{ width: "100%", padding: "8px 12px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 12, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", resize: "vertical" }}
+                      onFocus={e => { e.target.style.borderColor = "#3B82F6"; }}
+                      onBlur={e => { e.target.style.borderColor = "#E2E8F0"; }}
+                    />
                     <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-                      <button style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Kaydet</button>
+                      <button
+                        onClick={async () => {
+                          if (!selectedStoreId || !timelineNoteText.trim()) return;
+                          setSaving(true);
+                          try {
+                            await addWorkNote(selectedStoreId, { content: timelineNoteText.trim() });
+                            setTimelineNoteText("");
+                          } finally { setSaving(false); }
+                        }}
+                        disabled={saving || !timelineNoteText.trim() || !selectedStoreId}
+                        style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: (saving || !timelineNoteText.trim() || !selectedStoreId) ? 0.5 : 1 }}>
+                        {saving ? "Kaydediliyor..." : "Kaydet"}
+                      </button>
                     </div>
                   </div>
                   {selected.timeline.map((ev, i) => (
@@ -860,7 +1175,10 @@ export default function SpecialistWorkbenchPage() {
                       <h3 style={{ fontSize: 15, fontWeight: 700 }}>🎯 Root Cause Analysis — 5-Why</h3>
                       <Badge bg="#FEF3C7" color="#D97706" mono={false}>{selected.id}</Badge>
                       <div style={{ flex: 1 }} />
-                      <button style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>RCA Kaydet & PIR Oluştur</button>
+                      <button onClick={handleSaveRCA} disabled={saving || !selectedStoreId}
+                        style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: (saving || !selectedStoreId) ? 0.5 : 1 }}>
+                        {saving ? "Kaydediliyor..." : "RCA Kaydet"}
+                      </button>
                     </div>
                     {/* 5-Why */}
                     <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "20px 24px", marginBottom: 16 }}>
@@ -1077,6 +1395,27 @@ export default function SpecialistWorkbenchPage() {
           </div>
         )}
       </div>
+
+      {/* Çözüldü Modal */}
+      {showResolveModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 24, width: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", marginBottom: 4 }}>✓ Incident Çözüldü</h3>
+            <p style={{ fontSize: 12, color: "#64748B", marginBottom: 16 }}>{selected?.id} — {selected?.title}</p>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>Çözüm Notu *</label>
+            <textarea value={resolveNotes} onChange={e => setResolveNotes(e.target.value)} rows={4} placeholder="Sorunu nasıl çözdüğünüzü açıklayın..."
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontFamily: "'IBM Plex Sans',sans-serif", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              <button onClick={() => { setShowResolveModal(false); setResolveNotes(""); }}
+                style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #E2E8F0", background: "#fff", color: "#64748B", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>İptal</button>
+              <button onClick={handleResolve} disabled={saving || !resolveNotes.trim()}
+                style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: (saving || !resolveNotes.trim()) ? 0.5 : 1 }}>
+                {saving ? "Kaydediliyor..." : "Çözüldü Olarak İşaretle"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
