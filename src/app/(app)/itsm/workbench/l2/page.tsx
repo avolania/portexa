@@ -390,12 +390,7 @@ const CR_STATE_LABEL: Record<string, string> = {
 export default function SpecialistWorkbenchPage() {
   const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState } = useIncidentStore();
   const { user } = useAuthStore();
-  const srStore = useServiceRequestStore();
-  const serviceRequests = srStore.serviceRequests;
-  const loadSR = srStore.load;
-  const addSRWorkNote = srStore.addWorkNote;
-  const fulfillSR = srStore.fulfill;
-  const changeSRState = srStore.changeState;
+  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR } = useServiceRequestStore();
   const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR } = useChangeRequestStore();
 
   // Gerçek incident'ları Ticket formatına dönüştür
@@ -752,7 +747,7 @@ export default function SpecialistWorkbenchPage() {
       } else if (selectedStoreType === "SR") {
         const sr = serviceRequests.find(s => s.id === selectedStoreId);
         if (sr && sr.state !== "In Progress") {
-          await changeSRState(selectedStoreId, ServiceRequestState.IN_PROGRESS);
+          await useServiceRequestStore.getState().changeState(selectedStoreId, ServiceRequestState.IN_PROGRESS);
         }
       }
       await dispatchWorkNote(`[ESKALASYoN] ${group} grubuna eskalasyon yapıldı`);
