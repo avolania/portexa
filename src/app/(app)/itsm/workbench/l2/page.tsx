@@ -1097,15 +1097,6 @@ export default function SpecialistWorkbenchPage() {
                         <p style={{ fontSize: 13, color: "#92400E", lineHeight: 1.5 }}>{selected.workaround}</p>
                       </div>
                     )}
-                    <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "16px 20px", marginBottom: 14 }}>
-                      <h4 style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>🎯 Root Cause Analizi</h4>
-                      <textarea value={rootCauseText} onChange={e => setRootCauseText(e.target.value)} placeholder="Root cause analiz sonucunu buraya yazın..." rows={3}
-                        style={{ width: "100%", padding: "10px 14px", border: "1px solid #E2E8F0", borderRadius: 6, fontSize: 13, fontFamily: "'IBM Plex Sans',sans-serif", color: "#1E293B", outline: "none", resize: "vertical" }}
-                        onFocus={e => { e.target.style.borderColor = "#3B82F6"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,.08)"; }}
-                        onBlur={e => { e.target.style.borderColor = "#E2E8F0"; e.target.style.boxShadow = "none"; }} />
-                      <button onClick={handleSaveRootCause} disabled={saving || !rootCauseText.trim() || !selectedStoreId}
-                        style={{ marginTop: 6, padding: "6px 14px", borderRadius: 6, border: "none", background: "#3B82F6", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: (saving || !rootCauseText.trim() || !selectedStoreId) ? 0.5 : 1 }}>Root Cause Kaydet</button>
-                    </div>
                     <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "16px 20px" }}>
                       <h4 style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>Teknik Not Ekle</h4>
                       <textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Teknik çalışma notunu ekleyin..." rows={3}
