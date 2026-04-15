@@ -119,7 +119,34 @@ create policy "itsm_config_org" on itsm_config for all
   using  (itsm_config.org_id = get_my_org_id())
   with check (itsm_config.org_id = get_my_org_id());
 
--- ── 7. DOĞRULAMA ─────────────────────────────────────────────
+-- ── 7. MEVCUT VERİ DÜZELTMESİ (org_id backfill) ────────────────────────────
+-- Eğer tablolarda org_id = '' olan mevcut kayıtlar varsa (migration öncesi
+-- eklenenler), bunları kullanıcının auth profili üzerinden düzeltir.
+-- NOT: Bu işlem yalnızca tek org'lu kurulumlar için güvenlidir.
+--      Birden fazla org varsa her org için ayrıca çalıştırın.
+
+do $$
+declare
+  target_org_id text;
+begin
+  -- Auth profiles'daki ilk org_id'yi al
+  select data->>'orgId' into target_org_id
+  from public.auth_profiles
+  where data->>'orgId' is not null and data->>'orgId' != ''
+  limit 1;
+
+  if target_org_id is not null then
+    update itsm_incidents        set org_id = target_org_id where org_id = '';
+    update itsm_service_requests set org_id = target_org_id where org_id = '';
+    update itsm_change_requests  set org_id = target_org_id where org_id = '';
+    update itsm_config           set org_id = target_org_id where org_id = '';
+    raise notice 'org_id backfill tamamlandı: %', target_org_id;
+  else
+    raise notice 'Uyarı: auth_profiles içinde org_id bulunamadı, backfill atlandı.';
+  end if;
+end $$;
+
+-- ── 8. DOĞRULAMA ─────────────────────────────────────────────
 -- Aşağıdaki sorgu tablolar ve politikaların doğru oluşturulduğunu gösterir:
 --
 -- select tablename, rowsecurity
@@ -129,3 +156,8 @@ create policy "itsm_config_org" on itsm_config for all
 -- select tablename, policyname
 -- from pg_policies
 -- where tablename in ('itsm_incidents','itsm_service_requests','itsm_change_requests','itsm_config');
+--
+-- Mevcut kayıtların org_id kontrolü:
+-- select id, org_id from itsm_incidents limit 10;
+-- select id, org_id from itsm_service_requests limit 10;
+-- select id, org_id from itsm_change_requests limit 10;
