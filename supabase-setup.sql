@@ -310,3 +310,34 @@ create index if not exists idx_project_files_org       on project_files       (o
 create index if not exists idx_workflow_requests_org   on workflow_requests   (org_id);
 create index if not exists idx_workflow_templates_org  on workflow_templates  (org_id);
 create index if not exists idx_org_invitations_org     on org_invitations     (org_id);
+
+-- ── 7. ACTIVITY ENTRIES — OTOMATİK TEMİZLİK ────────────────────────────────
+-- approved veya rejected durumundaki ve 90 günden eski kayıtları siler.
+-- pending ve submitted kayıtlara dokunmaz.
+
+create or replace function cleanup_old_activities()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer;
+begin
+  delete from activity_entries
+  where
+    (data->>'status') in ('approved', 'rejected')
+    and (data->>'updatedAt')::timestamptz < now() - interval '90 days';
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+-- pg_cron aktifse (Dashboard → Database → Extensions → pg_cron: ON):
+-- create extension if not exists pg_cron;
+-- select cron.schedule(
+--   'cleanup-activity-entries',
+--   '0 3 * * 0',
+--   'select cleanup_old_activities()'
+-- );

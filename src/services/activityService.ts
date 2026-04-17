@@ -1,8 +1,9 @@
 import type { ActivityEntry } from "@/types";
-import { dbLoadAll, dbUpsert, dbDelete } from "@/lib/db";
+import { dbLoadAll, dbLoadFiltered, dbUpsert, dbDelete } from "@/lib/db";
 
-export async function loadActivities(): Promise<ActivityEntry[]> {
-  return dbLoadAll<ActivityEntry>("activity_entries");
+export async function loadActivities(orgId?: string): Promise<ActivityEntry[]> {
+  if (!orgId) return dbLoadAll<ActivityEntry>("activity_entries");
+  return dbLoadFiltered<ActivityEntry>("activity_entries", orgId);
 }
 
 export async function createActivity(entry: ActivityEntry, orgId: string): Promise<void> {

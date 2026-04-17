@@ -32,9 +32,10 @@ export const useActivityStore = create<ActivityState>()((set, get) => ({
   error: null,
 
   load: async () => {
+    const orgId = useAuthStore.getState().user?.orgId;
     set({ loading: true, error: null });
     try {
-      const entries = await loadActivities();
+      const entries = await loadActivities(orgId);
       set({ entries, loading: false });
     } catch (err) {
       set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
