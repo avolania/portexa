@@ -15,6 +15,7 @@ import {
   addIncidentAttachment,
   removeIncidentAttachment,
 } from '@/services/incidentService';
+import { dbLoadNotes, dbLoadEvents } from '@/lib/db';
 import type {
   Incident,
   CreateIncidentDto,
@@ -27,12 +28,20 @@ import type {
   AddCommentDto,
   LinkCRDto,
 } from '@/lib/itsm/types/incident.types';
+import type { WorkNote, TicketComment, TicketEvent } from '@/lib/itsm/types/interfaces';
 
 interface IncidentState {
   incidents: Incident[];
   loading: boolean;
   error: string | null;
+  // P1: Aktif ticket'ın notları ve event'ları ayrı yüklenir
+  activeTicketId: string | null;
+  activeWorkNotes: WorkNote[];
+  activeComments: TicketComment[];
+  activeEvents: TicketEvent[];
+  activityLoading: boolean;
   load: () => Promise<void>;
+  loadTicketActivity: (ticketId: string) => Promise<void>;
   create: (dto: CreateIncidentDto) => Promise<Incident | null>;
   update: (id: string, dto: UpdateIncidentDto) => Promise<void>;
   assign: (id: string, dto: AssignIncidentDto) => Promise<void>;
@@ -51,11 +60,34 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
   incidents: [],
   loading: false,
   error: null,
+  activeTicketId: null,
+  activeWorkNotes: [],
+  activeComments: [],
+  activeEvents: [],
+  activityLoading: false,
+
+  loadTicketActivity: async (ticketId) => {
+    const orgId = useAuthStore.getState().user?.orgId;
+    if (!orgId) return;
+    set({ activityLoading: true, activeTicketId: ticketId });
+    try {
+      const [noteRows, events] = await Promise.all([
+        dbLoadNotes<WorkNote>(ticketId, orgId),
+        dbLoadEvents<TicketEvent>(ticketId, orgId),
+      ]);
+      const workNotes = noteRows.filter((r) => r.noteType === 'work_note').map((r) => r.data);
+      const comments  = noteRows.filter((r) => r.noteType === 'comment').map((r) => r.data);
+      set({ activeWorkNotes: workNotes, activeComments: comments, activeEvents: events, activityLoading: false });
+    } catch {
+      set({ activityLoading: false });
+    }
+  },
 
   load: async () => {
     set({ loading: true, error: null });
     try {
-      const incidents = await loadIncidents();
+      const orgId = useAuthStore.getState().user?.orgId;
+      const incidents = await loadIncidents(undefined, orgId);
       set({ incidents, loading: false });
     } catch (err) {
       set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
@@ -108,15 +140,25 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
   addWorkNote: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addIncidentWorkNote(id, dto, get().incidents, user.id, user.name, user.orgId);
-    if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
+    const note = await addIncidentWorkNote(id, dto, get().incidents, user.id, user.name, user.orgId);
+    if (note) {
+      set((s) => ({
+        activeWorkNotes: [...s.activeWorkNotes, note],
+        incidents: s.incidents.map((i) => i.id === id ? { ...i, updatedAt: note.createdAt } : i),
+      }));
+    }
   },
 
   addComment: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addIncidentComment(id, dto, get().incidents, user.id, user.name, user.orgId);
-    if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
+    const comment = await addIncidentComment(id, dto, get().incidents, user.id, user.name, user.orgId);
+    if (comment) {
+      set((s) => ({
+        activeComments: [...s.activeComments, comment],
+        incidents: s.incidents.map((i) => i.id === id ? { ...i, updatedAt: comment.createdAt } : i),
+      }));
+    }
   },
 
   linkCR: async (id, dto) => {

@@ -1,4 +1,4 @@
-import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl, dbLoadOne } from '@/lib/db';
+import { dbLoadFiltered, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl, dbLoadOne, dbInsertNote, dbInsertEvent } from '@/lib/db';
 import type { Attachment } from '@/types';
 const uuid = () => crypto.randomUUID();
 const makeNote = (authorId: string, authorName: string, content: string, now: string) =>
@@ -28,19 +28,30 @@ const TABLE = 'itsm_incidents';
 
 // ─── Load ─────────────────────────────────────────────────────────────────────
 
-export async function loadIncidents(filters?: IncidentFilters): Promise<Incident[]> {
-  const all = await dbLoadAll<Incident>(TABLE);
+export async function loadIncidents(filters?: IncidentFilters, orgId?: string): Promise<Incident[]> {
+  // P7: Kapalı ticket'ları varsayılan olarak dışla; filtre açıkça CLOSED içeriyorsa dahil et
+  const includesClosed = filters?.state?.includes(IncidentState.CLOSED) ?? false;
+
+  // P8: Basit scalar filtreler DB tarafında
+  const scalarFilters: Record<string, string> = {};
+  if (filters?.assignedToId)      scalarFilters['assignedToId']      = filters.assignedToId;
+  if (filters?.callerId)          scalarFilters['callerId']           = filters.callerId;
+  if (filters?.assignmentGroupId) scalarFilters['assignmentGroupId'] = filters.assignmentGroupId;
+
+  const all = await dbLoadFiltered<Incident>(TABLE, orgId ?? '', {
+    excludeStates: includesClosed ? [] : [IncidentState.CLOSED],
+    scalarFilters,
+  });
+
   if (!filters) return all;
 
+  // JS-side: çok-değerli ve metin filtreleri
   return all.filter((inc) => {
-    if (filters.state?.length      && !filters.state.includes(inc.state))          return false;
-    if (filters.priority?.length   && !filters.priority.includes(inc.priority))    return false;
-    if (filters.assignedToId       && inc.assignedToId !== filters.assignedToId)   return false;
-    if (filters.assignmentGroupId  && inc.assignmentGroupId !== filters.assignmentGroupId) return false;
-    if (filters.callerId           && inc.callerId !== filters.callerId)            return false;
-    if (filters.slaBreached        && !inc.sla.resolutionBreached)                 return false;
-    if (filters.createdAfter       && inc.createdAt < filters.createdAfter)        return false;
-    if (filters.createdBefore      && inc.createdAt > filters.createdBefore)       return false;
+    if (filters.state?.length    && !filters.state.includes(inc.state))        return false;
+    if (filters.priority?.length && !filters.priority.includes(inc.priority))  return false;
+    if (filters.slaBreached      && !inc.sla.resolutionBreached)               return false;
+    if (filters.createdAfter     && inc.createdAt < filters.createdAfter)      return false;
+    if (filters.createdBefore    && inc.createdAt > filters.createdBefore)     return false;
     if (filters.search) {
       const q = filters.search.toLowerCase();
       if (!inc.shortDescription.toLowerCase().includes(q) && !inc.number.toLowerCase().includes(q)) return false;
@@ -63,7 +74,7 @@ export async function createIncident(
 ): Promise<Incident> {
   const now = new Date().toISOString();
   const id  = uuid();
-  const number = await generateTicketNumber('INC');
+  const number = await generateTicketNumber('INC', orgId);
 
   const priority = dto.priorityOverride
     ?? calculatePriority(dto.impact, dto.urgency);
@@ -90,26 +101,19 @@ export async function createIncident(
     assignmentGroupName: dto.assignmentGroupName,
     shortDescription: dto.shortDescription,
     description:   dto.description,
-    workNotes:     [],
-    comments:      [],
     attachments:   [],
     relatedCRId:   undefined,
     parentIncidentId: undefined,
     sla,
-    timeline:      [
-      {
-        id:        uuid(),
-        type:      TicketEventType.CREATED,
-        actorId,
-        actorName,
-        timestamp: now,
-      },
-    ],
     createdAt:  now,
     updatedAt:  now,
   };
 
-  await dbUpsert(TABLE, id, incident, orgId);
+  const createdEvent = { id: uuid(), type: TicketEventType.CREATED, actorId, actorName, timestamp: now };
+  await Promise.all([
+    dbUpsert(TABLE, id, incident, orgId),
+    dbInsertEvent(id, 'incident', orgId, createdEvent),
+  ]);
   return incident;
 }
 
@@ -174,10 +178,12 @@ export async function updateIncident(
     priority,
     rcaData:   dto.rcaData   ?? existing.rcaData,
     updatedAt: now,
-    timeline: [...existing.timeline, ...events],
   };
 
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    ...events.map((e) => dbInsertEvent(id, 'incident', orgId, e)),
+  ]);
   return updated;
 }
 
@@ -203,21 +209,23 @@ export async function assignIncident(
     timestamp: now,
   };
 
-  const workNotes = dto.workNote
-    ? [...existing.workNotes, makeNote(actorId, actorName, dto.workNote, now)]
-    : existing.workNotes;
-
   const updated: Incident = {
     ...existing,
     assignedToId:      dto.assignedToId,
     assignmentGroupId: dto.assignmentGroupId ?? existing.assignmentGroupId,
     state: existing.state === IncidentState.NEW ? IncidentState.ASSIGNED : existing.state,
-    workNotes,
-    timeline:  [...existing.timeline, event],
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated, orgId);
+  const writes: Promise<void>[] = [
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'incident', orgId, event),
+  ];
+  if (dto.workNote) {
+    const note = makeNote(actorId, actorName, dto.workNote, now);
+    writes.push(dbInsertNote(id, 'incident', 'work_note', orgId, note));
+  }
+  await Promise.all(writes);
   return updated;
 }
 
@@ -264,11 +272,13 @@ export async function changeIncidentState(
     ...existing,
     state: dto.state,
     sla,
-    timeline:  [...existing.timeline, event],
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'incident', orgId, event),
+  ]);
   return updated;
 }
 
@@ -296,14 +306,13 @@ export async function resolveIncident(
     resolutionNotes: dto.resolutionNotes,
     resolvedAt:      now,
     sla: { ...existing.sla, ...breaches },
-    timeline: [
-      ...existing.timeline,
-      { id: uuid(), type: TicketEventType.RESOLVED, actorId, actorName, timestamp: now },
-    ],
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'incident', orgId, { id: uuid(), type: TicketEventType.RESOLVED, actorId, actorName, timestamp: now }),
+  ]);
   return updated;
 }
 
@@ -328,19 +337,19 @@ export async function closeIncident(
     closureCode:  dto.closureCode,
     closureNotes: dto.closureNotes,
     closedAt:     now,
-    timeline: [
-      ...existing.timeline,
-      { id: uuid(), type: TicketEventType.CLOSED, actorId, actorName, timestamp: now },
-    ],
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'incident', orgId, { id: uuid(), type: TicketEventType.CLOSED, actorId, actorName, timestamp: now }),
+  ]);
   return updated;
 }
 
 // ─── Notes & comments ─────────────────────────────────────────────────────────
 
+/** P1: Not ayrı tabloya yazılır, blob güncellenmez. Yeni WorkNote döner. */
 export async function addIncidentWorkNote(
   id: string,
   dto: AddWorkNoteDto,
@@ -348,20 +357,20 @@ export async function addIncidentWorkNote(
   actorId: string,
   actorName: string,
   orgId: string,
-): Promise<Incident | null> {
+): Promise<import('@/lib/itsm/types/interfaces').WorkNote | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
   const now = new Date().toISOString();
-  const updated: Incident = {
-    ...existing,
-    workNotes: [...existing.workNotes, makeNote(actorId, actorName, dto.content, now)],
-    timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }],
-    updatedAt: now,
-  };
-  await dbUpsert(TABLE, id, updated, orgId);
-  return updated;
+  const note = makeNote(actorId, actorName, dto.content, now);
+  await Promise.all([
+    dbInsertNote(id, 'incident', 'work_note', orgId, note),
+    dbInsertEvent(id, 'incident', orgId, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }),
+    dbUpsert(TABLE, id, { ...existing, updatedAt: now }, orgId),
+  ]);
+  return note;
 }
 
+/** P1: Yorum ayrı tabloya yazılır. Yeni TicketComment döner. */
 export async function addIncidentComment(
   id: string,
   dto: AddCommentDto,
@@ -369,18 +378,17 @@ export async function addIncidentComment(
   actorId: string,
   actorName: string,
   orgId: string,
-): Promise<Incident | null> {
+): Promise<import('@/lib/itsm/types/interfaces').TicketComment | null> {
   const existing = current.find((i) => i.id === id);
   if (!existing) return null;
   const now = new Date().toISOString();
-  const updated: Incident = {
-    ...existing,
-    comments: [...existing.comments, makeNote(actorId, actorName, dto.content, now)],
-    timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }],
-    updatedAt: now,
-  };
-  await dbUpsert(TABLE, id, updated, orgId);
-  return updated;
+  const comment = makeNote(actorId, actorName, dto.content, now);
+  await Promise.all([
+    dbInsertNote(id, 'incident', 'comment', orgId, comment),
+    dbInsertEvent(id, 'incident', orgId, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }),
+    dbUpsert(TABLE, id, { ...existing, updatedAt: now }, orgId),
+  ]);
+  return comment;
 }
 
 // ─── Link CR ──────────────────────────────────────────────────────────────────
@@ -399,13 +407,12 @@ export async function linkCRToIncident(
   const updated: Incident = {
     ...existing,
     relatedCRId: dto.changeRequestId,
-    timeline: [...existing.timeline, {
-      id: uuid(), type: TicketEventType.RELATED_CR_LINKED,
-      actorId, actorName, newValue: dto.changeRequestId, timestamp: now,
-    }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'incident', orgId, { id: uuid(), type: TicketEventType.RELATED_CR_LINKED, actorId, actorName, newValue: dto.changeRequestId, timestamp: now }),
+  ]);
   return updated;
 }
 
@@ -422,7 +429,7 @@ export async function addIncidentAttachment(
   if (!existing) return null;
   const fileId = uuid();
   const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
-  const path = `itsm/${id}/${fileId}${ext ? '.' + ext : ''}`;
+  const path = `${orgId}/itsm/${id}/${fileId}${ext ? '.' + ext : ''}`;
   await dbUploadFile(path, file);
   const url = await dbGetFileUrl(path);
   const attachment: Attachment = {
@@ -544,8 +551,8 @@ export async function convertIncidentToSR(
   // 2. INC'i resolve edilebilir duruma getir
   const freshList = await ensureResolvable(incId, current, actorId, actorName, orgId);
 
-  // 3. INC'e work note ekle ve güncel Incident'ı yakala
-  const afterNote = await addIncidentWorkNote(
+  // 3. INC'e work note ekle (P1: ayrı tabloya yazılır, freshList değişmez)
+  await addIncidentWorkNote(
     incId,
     { content: `[CONVERT→SR] ${sr.number} numaralı Service Request oluşturuldu. ${dto.note}` },
     freshList,
@@ -553,18 +560,15 @@ export async function convertIncidentToSR(
     actorName,
     orgId,
   );
-  const listForResolve = afterNote
-    ? freshList.map((i) => (i.id === incId ? afterNote : i))
-    : freshList;
 
-  // 4. INC'i güncel listeyle resolve et (work note korunur)
+  // 4. INC'i resolve et
   await resolveIncident(
     incId,
     {
       resolutionCode: IncidentResolutionCode.CONVERTED,
       resolutionNotes: `Service Request'e dönüştürüldü: ${sr.number}. ${dto.note}`,
     },
-    listForResolve,
+    freshList,
     actorId,
     actorName,
     orgId,
@@ -621,7 +625,7 @@ export async function convertIncidentToCR(
 
   const freshList = await ensureResolvable(incId, current, actorId, actorName, orgId);
 
-  const afterNote = await addIncidentWorkNote(
+  await addIncidentWorkNote(
     incId,
     { content: `[CONVERT→CR] ${cr.number} numaralı Change Request oluşturuldu. ${dto.note}` },
     freshList,
@@ -629,9 +633,6 @@ export async function convertIncidentToCR(
     actorName,
     orgId,
   );
-  const listForResolve = afterNote
-    ? freshList.map((i) => (i.id === incId ? afterNote : i))
-    : freshList;
 
   await resolveIncident(
     incId,
@@ -639,7 +640,7 @@ export async function convertIncidentToCR(
       resolutionCode: IncidentResolutionCode.CONVERTED,
       resolutionNotes: `Change Request'e dönüştürüldü: ${cr.number}. ${dto.note}`,
     },
-    listForResolve,
+    freshList,
     actorId,
     actorName,
     orgId,
@@ -682,7 +683,7 @@ export async function convertIncidentToProblem(
 
   const freshList = await ensureResolvable(incId, current, actorId, actorName, orgId);
 
-  const afterNote = await addIncidentWorkNote(
+  await addIncidentWorkNote(
     incId,
     { content: `[CONVERT→PROBLEM] ${problem.number} numaralı Problem kaydı açıldı. ${note}` },
     freshList,
@@ -690,9 +691,6 @@ export async function convertIncidentToProblem(
     actorName,
     orgId,
   );
-  const listForResolve = afterNote
-    ? freshList.map((i) => (i.id === incId ? afterNote : i))
-    : freshList;
 
   await resolveIncident(
     incId,
@@ -700,7 +698,7 @@ export async function convertIncidentToProblem(
       resolutionCode: IncidentResolutionCode.CONVERTED,
       resolutionNotes: `Problem kaydına dönüştürüldü: ${problem.number}. ${note}`,
     },
-    listForResolve,
+    freshList,
     actorId,
     actorName,
     orgId,

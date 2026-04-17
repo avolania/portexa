@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Plus, Search, GitPullRequest, Calendar, CheckCircle,
   Paperclip, X as XIcon, PanelLeftClose, PanelLeftOpen,
   ArrowLeft, ChevronDown, File, FileText, FileArchive, Image as ImageIcon,
-  ArrowRight,
+  ArrowRight, UserCheck,
 } from "lucide-react";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { ChangeRequestState, ChangeType, ChangeRisk, Impact, ChangeCloseCode, SapModule, SapCategory } from "@/lib/itsm/types/enums";
+import { ChangeRequestState, ChangeType, ChangeRisk, Impact, ChangeCloseCode, SapModule, SapCategory, ApprovalState } from "@/lib/itsm/types/enums";
 import { isValidCRTransition } from "@/lib/itsm/types/change-request.types";
 import { ITSM_PRIORITY_MAP, CR_STATE_MAP, CHANGE_TYPE_MAP, CHANGE_RISK_MAP, APPROVAL_STATE_MAP } from "@/lib/itsm/ui-maps";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ import { tr } from "date-fns/locale";
 import type { CreateChangeRequestDto } from "@/lib/itsm/types/change-request.types";
 import type { Attachment } from "@/types";
 import TicketTimeline from "@/components/itsm/TicketTimeline";
+import TicketTasks from "@/components/itsm/TicketTasks";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -327,12 +328,17 @@ function CRAttachments({ attachments, onAdd, onRemove }: {
 
 // ─── CR Detail Panel ──────────────────────────────────────────────────────────
 
-type Tab = "details" | "cab" | "plans" | "worknotes" | "comments" | "timeline" | "attachments";
+type Tab = "details" | "cab" | "plans" | "tasks" | "worknotes" | "comments" | "timeline" | "attachments";
 
 function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
-  const { changeRequests, transition, close, approve, addWorkNote, addComment, addAttachment, removeAttachment } = useChangeRequestStore();
+  const { changeRequests, transition, close, approve, addWorkNote, addComment, addAttachment, removeAttachment, addTask, updateTask, deleteTask,
+          loadTicketActivity, activeWorkNotes, activeComments, activeEvents, activeTicketId } = useChangeRequestStore();
   const { profiles } = useAuthStore();
   const cr = changeRequests.find((c) => c.id === crId);
+
+  useEffect(() => {
+    if (crId && crId !== activeTicketId) loadTicketActivity(crId);
+  }, [crId]);
 
   const [tab, setTab] = useState<Tab>("details");
   const [noteText, setNoteText] = useState("");
@@ -410,10 +416,11 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
     { key: "details",     label: "Detaylar"    },
     { key: "cab",         label: "CAB",        count: cr.approvers.length },
     { key: "plans",       label: "Planlar"     },
+    { key: "tasks",       label: "Görevler",   count: (cr.tasks ?? []).length },
     { key: "attachments", label: "Ekler",      count: (cr.attachments ?? []).length },
-    { key: "worknotes",   label: "İş Notları", count: cr.workNotes.length           },
-    { key: "comments",    label: "Yorumlar",   count: cr.comments.length            },
-    { key: "timeline",    label: "Zaman",      count: cr.timeline.length            },
+    { key: "worknotes",   label: "İş Notları", count: activeWorkNotes.length },
+    { key: "comments",    label: "Yorumlar",   count: activeComments.length  },
+    { key: "timeline",    label: "Zaman",      count: activeEvents.length    },
   ];
 
   // CAB vote counts
@@ -456,6 +463,24 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
 
       {/* Stepper */}
       <CRStepper state={cr.state} />
+
+      {/* Pending Approval Banner */}
+      {cr.approvers.some((a) => a.approvalState === ApprovalState.REQUESTED) && (
+        <div className="mx-4 mt-2 flex items-start gap-2 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 flex-shrink-0">
+          <UserCheck className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-semibold text-amber-800">Onay Bekleniyor: </span>
+            {cr.approvers
+              .filter((a) => a.approvalState === ApprovalState.REQUESTED)
+              .map((a, i) => (
+                <span key={a.approverId}>
+                  {i > 0 && <span className="text-amber-400">, </span>}
+                  <span className="text-xs font-medium text-amber-800">{a.approverName}</span>
+                </span>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -508,7 +533,7 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
                       ["Kategori",   cr.category],
                       ["SAP Modülü", cr.sapModule ?? "—"],
                       ["Etki",       cr.impact.replace(/^\d-/, "")],
-                      ["Atanan",     cr.assignedToId ? (Object.values(profiles).find((p) => p.id === cr.assignedToId)?.name ?? cr.assignedToId) : "—"],
+                      ["Atanan",     cr.assignedToId ? (profiles[cr.assignedToId]?.name ?? cr.assignedToId) : "—"],
                       ["Grup",       cr.assignmentGroupName ?? "—"],
                       ["Başlangıç",  format(new Date(cr.plannedStartDate), "dd MMM yyyy HH:mm", { locale: tr })],
                       ["Bitiş",      format(new Date(cr.plannedEndDate),   "dd MMM yyyy HH:mm", { locale: tr })],
@@ -657,6 +682,17 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
               </div>
             )}
 
+            {/* Tasks */}
+            {tab === "tasks" && (
+              <TicketTasks
+                tasks={cr.tasks ?? []}
+                onAdd={(task) => addTask(cr.id, task)}
+                onUpdate={(taskId, patch) => updateTask(cr.id, taskId, patch)}
+                onDelete={(taskId) => deleteTask(cr.id, taskId)}
+                readonly={isTerminal}
+              />
+            )}
+
             {/* Attachments */}
             {tab === "attachments" && (
               <CRAttachments
@@ -678,9 +714,9 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
                     </div>
                   </div>
                 )}
-                {cr.workNotes.length === 0
+                {activeWorkNotes.length === 0
                   ? <p className="text-sm text-gray-400 text-center py-6">Henüz iş notu yok.</p>
-                  : [...cr.workNotes].reverse().map((note) => (
+                  : [...activeWorkNotes].reverse().map((note) => (
                     <div key={note.id} className="p-3 bg-amber-50 rounded-lg border border-amber-100">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-medium text-gray-800">{note.authorName}</span>
@@ -705,9 +741,9 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
                     </div>
                   </div>
                 )}
-                {cr.comments.length === 0
+                {activeComments.length === 0
                   ? <p className="text-sm text-gray-400 text-center py-6">Henüz yorum yok.</p>
-                  : [...cr.comments].reverse().map((c) => (
+                  : [...activeComments].reverse().map((c) => (
                     <div key={c.id} className="p-3 bg-white rounded-lg border border-gray-200">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-medium text-gray-800">{c.authorName}</span>
@@ -721,7 +757,7 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
             )}
 
             {/* Timeline */}
-            {tab === "timeline" && <TicketTimeline timeline={cr.timeline} />}
+            {tab === "timeline" && <TicketTimeline timeline={activeEvents} />}
           </div>
         </div>
 
@@ -801,7 +837,7 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
               { label: "Tip",    value: typeInfo.label },
               { label: "Risk",   value: riskInfo.label },
               { label: "Etki",   value: cr.impact.replace(/^\d-/, "") },
-              { label: "Atanan", value: cr.assignedToId ? (Object.values(profiles).find((p) => p.id === cr.assignedToId)?.name ?? "—") : "—" },
+              { label: "Atanan", value: cr.assignedToId ? (profiles[cr.assignedToId]?.name ?? "—") : "—" },
               { label: "Grup",   value: cr.assignmentGroupName ?? "—" },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-start justify-between gap-1 text-xs">

@@ -29,13 +29,21 @@ import type {
   AddCommentDto,
   LinkIncidentDto,
 } from '@/lib/itsm/types/change-request.types';
+import { dbLoadNotes, dbLoadEvents } from '@/lib/db';
 import type { ChangeRequestState as CRState } from '@/lib/itsm/types/enums';
+import type { WorkNote, TicketComment, TicketEvent } from '@/lib/itsm/types/interfaces';
 
 interface ChangeRequestState {
   changeRequests: ChangeRequest[];
   loading: boolean;
   error: string | null;
+  activeTicketId: string | null;
+  activeWorkNotes: WorkNote[];
+  activeComments: TicketComment[];
+  activeEvents: TicketEvent[];
+  activityLoading: boolean;
   load: () => Promise<void>;
+  loadTicketActivity: (ticketId: string) => Promise<void>;
   create: (dto: CreateChangeRequestDto) => Promise<ChangeRequest | null>;
   update: (id: string, dto: UpdateChangeRequestDto) => Promise<void>;
   transition: (id: string, toState: CRState, note?: string) => Promise<void>;
@@ -48,17 +56,43 @@ interface ChangeRequestState {
   addAttachment: (id: string, file: File) => Promise<void>;
   removeAttachment: (id: string, attachmentId: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  addTask: (id: string, task: import('@/types').ItsmTask) => Promise<void>;
+  updateTask: (id: string, taskId: string, patch: Partial<import('@/types').ItsmTask>) => Promise<void>;
+  deleteTask: (id: string, taskId: string) => Promise<void>;
 }
 
 export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => ({
   changeRequests: [],
   loading: false,
   error: null,
+  activeTicketId: null,
+  activeWorkNotes: [],
+  activeComments: [],
+  activeEvents: [],
+  activityLoading: false,
+
+  loadTicketActivity: async (ticketId) => {
+    const orgId = useAuthStore.getState().user?.orgId;
+    if (!orgId) return;
+    set({ activityLoading: true, activeTicketId: ticketId });
+    try {
+      const [noteRows, events] = await Promise.all([
+        dbLoadNotes<WorkNote>(ticketId, orgId),
+        dbLoadEvents<TicketEvent>(ticketId, orgId),
+      ]);
+      const workNotes = noteRows.filter((r) => r.noteType === 'work_note').map((r) => r.data);
+      const comments  = noteRows.filter((r) => r.noteType === 'comment').map((r) => r.data);
+      set({ activeWorkNotes: workNotes, activeComments: comments, activeEvents: events, activityLoading: false });
+    } catch {
+      set({ activityLoading: false });
+    }
+  },
 
   load: async () => {
     set({ loading: true, error: null });
     try {
-      const changeRequests = await loadChangeRequests();
+      const orgId = useAuthStore.getState().user?.orgId;
+      const changeRequests = await loadChangeRequests(undefined, orgId);
       set({ changeRequests, loading: false });
     } catch (err) {
       set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
@@ -140,15 +174,25 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
   addWorkNote: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addCRWorkNote(id, dto, get().changeRequests, user.id, user.name, user.orgId);
-    if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
+    const note = await addCRWorkNote(id, dto, get().changeRequests, user.id, user.name, user.orgId);
+    if (note) {
+      set((s) => ({
+        activeWorkNotes: [...s.activeWorkNotes, note],
+        changeRequests: s.changeRequests.map((cr) => cr.id === id ? { ...cr, updatedAt: note.createdAt } : cr),
+      }));
+    }
   },
 
   addComment: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const updated = await addCRComment(id, dto, get().changeRequests, user.id, user.name, user.orgId);
-    if (updated) set((s) => ({ changeRequests: s.changeRequests.map((cr) => (cr.id === id ? updated : cr)) }));
+    const comment = await addCRComment(id, dto, get().changeRequests, user.id, user.name, user.orgId);
+    if (comment) {
+      set((s) => ({
+        activeComments: [...s.activeComments, comment],
+        changeRequests: s.changeRequests.map((cr) => cr.id === id ? { ...cr, updatedAt: comment.createdAt } : cr),
+      }));
+    }
   },
 
   linkIncident: async (id, dto) => {
@@ -181,5 +225,37 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
       if (rollback) set((s) => ({ changeRequests: [...s.changeRequests, rollback] }));
       throw err;
     }
+  },
+
+  addTask: async (id, task) => {
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const cr = get().changeRequests.find((c) => c.id === id);
+    if (!cr) return;
+    const updated = { ...cr, tasks: [...(cr.tasks ?? []), task] };
+    set((s) => ({ changeRequests: s.changeRequests.map((x) => (x.id === id ? updated : x)) }));
+    await updateChangeRequest(id, { tasks: updated.tasks }, get().changeRequests, user.id, user.name, user.orgId);
+  },
+
+  updateTask: async (id, taskId, patch) => {
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const cr = get().changeRequests.find((c) => c.id === id);
+    if (!cr) return;
+    const tasks = (cr.tasks ?? []).map((t) => (t.id === taskId ? { ...t, ...patch } : t));
+    const updated = { ...cr, tasks };
+    set((s) => ({ changeRequests: s.changeRequests.map((x) => (x.id === id ? updated : x)) }));
+    await updateChangeRequest(id, { tasks }, get().changeRequests, user.id, user.name, user.orgId);
+  },
+
+  deleteTask: async (id, taskId) => {
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    const cr = get().changeRequests.find((c) => c.id === id);
+    if (!cr) return;
+    const tasks = (cr.tasks ?? []).filter((t) => t.id !== taskId);
+    const updated = { ...cr, tasks };
+    set((s) => ({ changeRequests: s.changeRequests.map((x) => (x.id === id ? updated : x)) }));
+    await updateChangeRequest(id, { tasks }, get().changeRequests, user.id, user.name, user.orgId);
   },
 }));

@@ -41,8 +41,8 @@ export interface Incident {
   assignmentGroupName?: string;
   shortDescription: string;
   description: string;
-  workNotes: WorkNote[];
-  comments: TicketComment[];
+  workNotes?: WorkNote[];     // P1: ayrı tabloda — itsm_ticket_notes
+  comments?: TicketComment[]; // P1: ayrı tabloda — itsm_ticket_notes
   attachments: Attachment[];
   resolutionCode?: IncidentResolutionCode;
   resolutionNotes?: string;
@@ -51,7 +51,7 @@ export interface Incident {
   relatedCRId?: string;
   parentIncidentId?: string;
   sla: IncidentSLA;
-  timeline: TicketEvent[];
+  timeline?: TicketEvent[];   // P1: ayrı tabloda — itsm_ticket_events
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;

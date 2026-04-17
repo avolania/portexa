@@ -51,13 +51,14 @@ export interface ChangeRequest {
   testPlan?: string;
   approvalState: ApprovalState;
   approvers: ApproverEntry[];
-  workNotes: WorkNote[];
-  comments: TicketComment[];
+  workNotes?: WorkNote[];     // P1: ayrı tabloda
+  comments?: TicketComment[]; // P1: ayrı tabloda
   attachments: Attachment[];
   closeCode?: ChangeCloseCode;
   closureNotes?: string;
   relatedIncidentIds: string[];
-  timeline: TicketEvent[];
+  tasks?: import('@/types').ItsmTask[];
+  timeline?: TicketEvent[];   // P1: ayrı tabloda
   createdAt: string;
   updatedAt: string;
   closedAt?: string;
@@ -106,6 +107,7 @@ export interface UpdateChangeRequestDto {
   testPlan?: string;
   assignedToId?: string;
   assignmentGroupId?: string;
+  tasks?: import('@/types').ItsmTask[];
 }
 
 export interface CloseChangeRequestDto {

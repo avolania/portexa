@@ -1,4 +1,4 @@
-import { dbLoadAll, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl, dbLoadOne } from '@/lib/db';
+import { dbLoadFiltered, dbUpsert, dbDelete, dbUploadFile, dbGetFileUrl, dbLoadOne, dbInsertNote, dbInsertEvent } from '@/lib/db';
 import type { Attachment } from '@/types';
 const uuid = () => crypto.randomUUID();
 
@@ -29,23 +29,32 @@ const TABLE = 'itsm_change_requests';
 
 // ─── Load ─────────────────────────────────────────────────────────────────────
 
-export async function loadChangeRequests(filters?: ChangeRequestFilters): Promise<ChangeRequest[]> {
-  const all = await dbLoadAll<ChangeRequest>(TABLE);
+export async function loadChangeRequests(filters?: ChangeRequestFilters, orgId?: string): Promise<ChangeRequest[]> {
+  // P7: Kapalı CR'ları varsayılan dışla
+  const includesClosed = filters?.state?.includes(ChangeRequestState.CLOSED) ?? false;
+
+  const scalarFilters: Record<string, string> = {};
+  if (filters?.assignedToId)   scalarFilters['assignedToId']   = filters.assignedToId;
+  if (filters?.requestedById)  scalarFilters['requestedById']  = filters.requestedById;
+  if (filters?.changeManagerId) scalarFilters['changeManagerId'] = filters.changeManagerId;
+
+  const all = await dbLoadFiltered<ChangeRequest>(TABLE, orgId ?? '', {
+    excludeStates: includesClosed ? [] : [ChangeRequestState.CLOSED],
+    scalarFilters,
+  });
+
   if (!filters) return all;
 
   return all.filter((cr) => {
-    if (filters.state?.length          && !filters.state.includes(cr.state))             return false;
-    if (filters.type?.length           && !filters.type.includes(cr.type))               return false;
-    if (filters.risk?.length           && !filters.risk.includes(cr.risk))               return false;
-    if (filters.priority?.length       && !filters.priority.includes(cr.priority))       return false;
-    if (filters.requestedById          && cr.requestedById  !== filters.requestedById)   return false;
-    if (filters.changeManagerId        && cr.changeManagerId !== filters.changeManagerId) return false;
-    if (filters.assignedToId           && cr.assignedToId   !== filters.assignedToId)    return false;
-    if (filters.approvalState          && cr.approvalState  !== filters.approvalState)   return false;
-    if (filters.plannedStartAfter      && cr.plannedStartDate < filters.plannedStartAfter) return false;
-    if (filters.plannedStartBefore     && cr.plannedStartDate > filters.plannedStartBefore) return false;
-    if (filters.createdAfter           && cr.createdAt < filters.createdAfter)           return false;
-    if (filters.createdBefore          && cr.createdAt > filters.createdBefore)          return false;
+    if (filters.state?.length      && !filters.state.includes(cr.state))           return false;
+    if (filters.type?.length       && !filters.type.includes(cr.type))             return false;
+    if (filters.risk?.length       && !filters.risk.includes(cr.risk))             return false;
+    if (filters.priority?.length   && !filters.priority.includes(cr.priority))     return false;
+    if (filters.approvalState      && cr.approvalState !== filters.approvalState)  return false;
+    if (filters.plannedStartAfter  && cr.plannedStartDate < filters.plannedStartAfter)  return false;
+    if (filters.plannedStartBefore && cr.plannedStartDate > filters.plannedStartBefore) return false;
+    if (filters.createdAfter       && cr.createdAt < filters.createdAfter)         return false;
+    if (filters.createdBefore      && cr.createdAt > filters.createdBefore)        return false;
     if (filters.search) {
       const q = filters.search.toLowerCase();
       if (!cr.shortDescription.toLowerCase().includes(q) && !cr.number.toLowerCase().includes(q)) return false;
@@ -68,7 +77,7 @@ export async function createChangeRequest(
 ): Promise<ChangeRequest> {
   const now    = new Date().toISOString();
   const id     = uuid();
-  const number = await generateTicketNumber('CHG');
+  const number = await generateTicketNumber('CHG', orgId);
   const priority = calculatePriority(dto.impact, riskToUrgency(dto.risk));
 
   const cr: ChangeRequest = {
@@ -97,24 +106,25 @@ export async function createChangeRequest(
     testPlan:     dto.testPlan,
     approvalState: ApprovalState.REQUESTED,
     approvers:    [],
-    workNotes:    [],
-    comments:     [],
     attachments:  [],
     relatedIncidentIds: dto.relatedIncidentIds ?? [],
-    timeline:     [
-      { id: uuid(), type: TicketEventType.CREATED, actorId, actorName, timestamp: now },
-      ...(dto.sourceIncidentNumber ? [{
-        id: uuid(), type: TicketEventType.CONVERTED_FROM_INCIDENT,
-        actorId, actorName, timestamp: now,
-        note: `${dto.sourceIncidentNumber} numaralı incident'tan dönüştürüldü`,
-        newValue: dto.sourceIncidentNumber,
-      }] : []),
-    ],
     createdAt: now,
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, cr, orgId);
+  const eventWrites: Promise<void>[] = [
+    dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.CREATED, actorId, actorName, timestamp: now }),
+  ];
+  if (dto.sourceIncidentNumber) {
+    eventWrites.push(dbInsertEvent(id, 'change-request', orgId, {
+      id: uuid(), type: TicketEventType.CONVERTED_FROM_INCIDENT,
+      actorId, actorName, timestamp: now,
+      note: `${dto.sourceIncidentNumber} numaralı incident'tan dönüştürüldü`,
+      newValue: dto.sourceIncidentNumber,
+    }));
+  }
+
+  await Promise.all([dbUpsert(TABLE, id, cr, orgId), ...eventWrites]);
   return cr;
 }
 
@@ -144,13 +154,12 @@ export async function updateChangeRequest(
     ...existing,
     ...dto,
     priority,
-    timeline: [
-      ...existing.timeline,
-      { id: uuid(), type: TicketEventType.UPDATED, actorId, actorName, timestamp: now },
-    ],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.UPDATED, actorId, actorName, timestamp: now }),
+  ]);
   return updated;
 }
 
@@ -183,14 +192,13 @@ export async function changeRequestStateTransition(
     ...existing,
     state:         toState,
     approvalState,
-    timeline: [
-      ...existing.timeline,
-      { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId, actorName, previousValue: existing.state, newValue: toState, note, timestamp: now },
-    ],
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId, actorName, previousValue: existing.state, newValue: toState, note, timestamp: now }),
+  ]);
   return updated;
 }
 
@@ -220,14 +228,13 @@ export async function approveChangeRequest(
     ...existing,
     approvalState: ApprovalState.APPROVED,
     approvers: [...existing.approvers, entry],
-    timeline: [
-      ...existing.timeline,
-      { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId: approverId, actorName: approverName, newValue: 'approved', timestamp: now },
-    ],
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId: approverId, actorName: approverName, newValue: 'approved', timestamp: now }),
+  ]);
   return updated;
 }
 
@@ -255,15 +262,14 @@ export async function rejectChangeRequest(
     ...existing,
     approvalState: ApprovalState.REJECTED,
     approvers:     [...existing.approvers, entry],
-    state:         ChangeRequestState.PENDING_APPROVAL, // send back for re-approval
-    timeline: [
-      ...existing.timeline,
-      { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId: approverId, actorName: approverName, previousValue: existing.state, newValue: ChangeRequestState.PENDING_APPROVAL, note: dto.comments, timestamp: now },
-    ],
+    state:         ChangeRequestState.PENDING_APPROVAL,
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.STATE_CHANGED, actorId: approverId, actorName: approverName, previousValue: existing.state, newValue: ChangeRequestState.PENDING_APPROVAL, note: dto.comments, timestamp: now }),
+  ]);
   return updated;
 }
 
@@ -290,14 +296,13 @@ export async function closeChangeRequest(
     actualStartDate:  dto.actualStartDate,
     actualEndDate:    dto.actualEndDate,
     closedAt:         now,
-    timeline: [
-      ...existing.timeline,
-      { id: uuid(), type: TicketEventType.CLOSED, actorId, actorName, timestamp: now },
-    ],
     updatedAt: now,
   };
 
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.CLOSED, actorId, actorName, timestamp: now }),
+  ]);
   return updated;
 }
 
@@ -310,18 +315,17 @@ export async function addCRWorkNote(
   actorId: string,
   actorName: string,
   orgId: string,
-): Promise<ChangeRequest | null> {
+): Promise<import('@/lib/itsm/types/interfaces').WorkNote | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
   const now = new Date().toISOString();
-  const updated: ChangeRequest = {
-    ...existing,
-    workNotes: [...existing.workNotes, { id: uuid(), authorId: actorId, authorName: actorName, content: dto.content, createdAt: now }],
-    timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }],
-    updatedAt: now,
-  };
-  await dbUpsert(TABLE, id, updated, orgId);
-  return updated;
+  const note = { id: uuid(), authorId: actorId, authorName: actorName, content: dto.content, createdAt: now };
+  await Promise.all([
+    dbInsertNote(id, 'change-request', 'work_note', orgId, note),
+    dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }),
+    dbUpsert(TABLE, id, { ...existing, updatedAt: now }, orgId),
+  ]);
+  return note;
 }
 
 export async function addCRComment(
@@ -331,18 +335,17 @@ export async function addCRComment(
   actorId: string,
   actorName: string,
   orgId: string,
-): Promise<ChangeRequest | null> {
+): Promise<import('@/lib/itsm/types/interfaces').TicketComment | null> {
   const existing = current.find((cr) => cr.id === id);
   if (!existing) return null;
   const now = new Date().toISOString();
-  const updated: ChangeRequest = {
-    ...existing,
-    comments: [...existing.comments, { id: uuid(), authorId: actorId, authorName: actorName, content: dto.content, createdAt: now }],
-    timeline: [...existing.timeline, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }],
-    updatedAt: now,
-  };
-  await dbUpsert(TABLE, id, updated, orgId);
-  return updated;
+  const comment = { id: uuid(), authorId: actorId, authorName: actorName, content: dto.content, createdAt: now };
+  await Promise.all([
+    dbInsertNote(id, 'change-request', 'comment', orgId, comment),
+    dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }),
+    dbUpsert(TABLE, id, { ...existing, updatedAt: now }, orgId),
+  ]);
+  return comment;
 }
 
 // ─── Link incident ────────────────────────────────────────────────────────────
@@ -363,13 +366,12 @@ export async function linkIncidentToCR(
   const updated: ChangeRequest = {
     ...existing,
     relatedIncidentIds: [...existing.relatedIncidentIds, dto.incidentId],
-    timeline: [...existing.timeline, {
-      id: uuid(), type: TicketEventType.RELATED_INCIDENT_LINKED,
-      actorId, actorName, newValue: dto.incidentId, timestamp: now,
-    }],
     updatedAt: now,
   };
-  await dbUpsert(TABLE, id, updated, orgId);
+  await Promise.all([
+    dbUpsert(TABLE, id, updated, orgId),
+    dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.RELATED_INCIDENT_LINKED, actorId, actorName, newValue: dto.incidentId, timestamp: now }),
+  ]);
   return updated;
 }
 
@@ -386,7 +388,7 @@ export async function addChangeRequestAttachment(
   if (!existing) return null;
   const fileId = uuid();
   const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
-  const path = `itsm/${id}/${fileId}${ext ? '.' + ext : ''}`;
+  const path = `${orgId}/itsm/${id}/${fileId}${ext ? '.' + ext : ''}`;
   await dbUploadFile(path, file);
   const url = await dbGetFileUrl(path);
   const attachment: Attachment = {

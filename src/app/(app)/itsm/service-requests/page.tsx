@@ -5,6 +5,7 @@ import {
   Plus, Search, ClipboardList, Clock, XCircle, AlertTriangle,
   CheckCircle, Paperclip, X as XIcon, PanelLeftClose, PanelLeftOpen,
   ArrowLeft, ChevronDown, File, FileText, FileArchive, Image as ImageIcon,
+  UserCheck,
 } from "lucide-react";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -18,6 +19,7 @@ import { tr } from "date-fns/locale";
 import type { CreateServiceRequestDto } from "@/lib/itsm/types/service-request.types";
 import type { Attachment } from "@/types";
 import TicketTimeline from "@/components/itsm/TicketTimeline";
+import TicketTasks from "@/components/itsm/TicketTasks";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -300,15 +302,19 @@ function SRAttachments({ attachments, onAdd, onRemove }: {
 
 // ─── SR Detail Panel ──────────────────────────────────────────────────────────
 
-type Tab = "details" | "approvals" | "worknotes" | "comments" | "timeline" | "attachments";
+type Tab = "details" | "approvals" | "tasks" | "worknotes" | "comments" | "timeline" | "attachments";
 
 function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
-  const { serviceRequests, submit, approve, reject, fulfill, close, changeState, addWorkNote, addComment, addAttachment, removeAttachment } = useServiceRequestStore();
+  const { serviceRequests, submit, approve, reject, fulfill, close, changeState, addWorkNote, addComment, addAttachment, removeAttachment, addTask, updateTask, deleteTask,
+          loadTicketActivity, activeWorkNotes, activeComments, activeEvents, activeTicketId } = useServiceRequestStore();
   const { profiles, user } = useAuthStore();
   const { getForTicket, decide, load: loadInstances } = useWorkflowInstanceStore();
   const sr = serviceRequests.find((s) => s.id === srId);
 
   useEffect(() => { loadInstances(); }, [loadInstances]);
+  useEffect(() => {
+    if (srId && srId !== activeTicketId) loadTicketActivity(srId);
+  }, [srId]);
 
   const [tab, setTab] = useState<Tab>("details");
   const [noteText, setNoteText] = useState("");
@@ -421,10 +427,11 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: "details",     label: "Detaylar"   },
     { key: "approvals",   label: "Onaylar",   count: sr.approvers.length },
+    { key: "tasks",       label: "Görevler",  count: (sr.tasks ?? []).length },
     { key: "attachments", label: "Ekler",     count: (sr.attachments ?? []).length },
-    { key: "worknotes",   label: "İş Notları", count: sr.workNotes.length },
-    { key: "comments",    label: "Yorumlar",  count: sr.comments.length  },
-    { key: "timeline",    label: "Zaman",     count: sr.timeline.length  },
+    { key: "worknotes",   label: "İş Notları", count: activeWorkNotes.length },
+    { key: "comments",    label: "Yorumlar",  count: activeComments.length  },
+    { key: "timeline",    label: "Zaman",     count: activeEvents.length    },
   ];
 
   return (
@@ -461,6 +468,24 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
 
       {/* Stepper */}
       <SRStepper state={sr.state} />
+
+      {/* Pending Approval Banner */}
+      {sr.approvers.some((a) => a.approvalState === ApprovalState.REQUESTED) && (
+        <div className="mx-4 mt-2 flex items-start gap-2 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 flex-shrink-0">
+          <UserCheck className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-semibold text-amber-800">Onay Bekleniyor: </span>
+            {sr.approvers
+              .filter((a) => a.approvalState === ApprovalState.REQUESTED)
+              .map((a, i) => (
+                <span key={a.approverId}>
+                  {i > 0 && <span className="text-amber-400">, </span>}
+                  <span className="text-xs font-medium text-amber-800">{a.approverName}</span>
+                </span>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -514,7 +539,7 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
                       ["Kategori", sr.category],
                       ["Etki", sr.impact.replace(/^\d-/, "")],
                       ["Aciliyet", sr.urgency.replace(/^\d-/, "")],
-                      ["Atanan", sr.assignedToId ? (Object.values(profiles).find((p) => p.id === sr.assignedToId)?.name ?? sr.assignedToId) : "—"],
+                      ["Atanan", sr.assignedToId ? (profiles[sr.assignedToId]?.name ?? sr.assignedToId) : "—"],
                       ["Grup", sr.assignmentGroupName ?? "—"],
                       ["Karşılanma", sr.fulfilledAt ? format(new Date(sr.fulfilledAt), "dd MMM yyyy", { locale: tr }) : "—"],
                     ].map(([label, value], i) => (
@@ -578,10 +603,17 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
                         onClick={async () => {
                           setSaving(true);
                           try {
-                            const result = await decide(wfInstance!.id, currentStep!.stepDefId, 'approved');
-                            if (result?.instanceCompleted && result.outcome === 'approved') {
-                              await approve(sr.id, {});
+                            let shouldApprove = true;
+                            try {
+                              const result = await decide(wfInstance!.id, currentStep!.stepDefId, 'approved');
+                              // Multi-step: more steps remain, don't approve SR yet
+                              if (result && result.stepCompleted && !result.instanceCompleted) {
+                                shouldApprove = false;
+                              }
+                            } catch {
+                              // Workflow DB error — fall through to direct approve
                             }
+                            if (shouldApprove) await approve(sr.id, {});
                           } finally { setSaving(false); }
                         }}
                         className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50"
@@ -593,10 +625,12 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
                         onClick={async () => {
                           setSaving(true);
                           try {
-                            const result = await decide(wfInstance!.id, currentStep!.stepDefId, 'rejected');
-                            if (result?.instanceCompleted) {
-                              await reject(sr.id, { comments: 'Onay reddedildi.' });
+                            try {
+                              await decide(wfInstance!.id, currentStep!.stepDefId, 'rejected');
+                            } catch {
+                              // Workflow DB error — fall through to direct reject
                             }
+                            await reject(sr.id, { comments: 'Onay reddedildi.' });
                           } finally { setSaving(false); }
                         }}
                         className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50"
@@ -614,6 +648,17 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
               </div>
               );
             })()}
+
+            {/* Tasks */}
+            {tab === "tasks" && (
+              <TicketTasks
+                tasks={sr.tasks ?? []}
+                onAdd={(task) => addTask(sr.id, task)}
+                onUpdate={(taskId, patch) => updateTask(sr.id, taskId, patch)}
+                onDelete={(taskId) => deleteTask(sr.id, taskId)}
+                readonly={isTerminal}
+              />
+            )}
 
             {/* Attachments */}
             {tab === "attachments" && (
@@ -636,9 +681,9 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
                     </div>
                   </div>
                 )}
-                {sr.workNotes.length === 0
+                {activeWorkNotes.length === 0
                   ? <p className="text-sm text-gray-400 text-center py-6">Henüz iş notu yok.</p>
-                  : [...sr.workNotes].reverse().map((note) => (
+                  : [...activeWorkNotes].reverse().map((note) => (
                     <div key={note.id} className="p-3 bg-amber-50 rounded-lg border border-amber-100">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-medium text-gray-800">{note.authorName}</span>
@@ -663,9 +708,9 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
                     </div>
                   </div>
                 )}
-                {sr.comments.length === 0
+                {activeComments.length === 0
                   ? <p className="text-sm text-gray-400 text-center py-6">Henüz yorum yok.</p>
-                  : [...sr.comments].reverse().map((c) => (
+                  : [...activeComments].reverse().map((c) => (
                     <div key={c.id} className="p-3 bg-white rounded-lg border border-gray-200">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-medium text-gray-800">{c.authorName}</span>
@@ -679,7 +724,7 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
             )}
 
             {/* Timeline */}
-            {tab === "timeline" && <TicketTimeline timeline={sr.timeline} />}
+            {tab === "timeline" && <TicketTimeline timeline={activeEvents} />}
           </div>
         </div>
 
@@ -769,10 +814,10 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
           <div className="space-y-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Hızlı Bilgi</p>
             {[
-              { label: "Talep Eden", value: sr.requestedById ? (Object.values(profiles).find((p) => p.id === sr.requestedById)?.name ?? sr.requestedById) : "—" },
+              { label: "Talep Eden", value: sr.requestedById ? (profiles[sr.requestedById]?.name ?? sr.requestedById) : "—" },
               { label: "Etki",       value: sr.impact.replace(/^\d-/, "")   },
               { label: "Aciliyet",   value: sr.urgency.replace(/^\d-/, "")  },
-              { label: "Atanan",     value: sr.assignedToId ? (Object.values(profiles).find((p) => p.id === sr.assignedToId)?.name ?? "—") : "—" },
+              { label: "Atanan",     value: sr.assignedToId ? (profiles[sr.assignedToId]?.name ?? "—") : "—" },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-start justify-between gap-1 text-xs">
                 <span className="text-gray-400 shrink-0">{label}</span>

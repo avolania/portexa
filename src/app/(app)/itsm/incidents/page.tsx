@@ -90,7 +90,7 @@ function formatBytes(bytes: number) {
 
 function NewIncidentModal({ onClose }: { onClose: () => void }) {
   const { create } = useIncidentStore();
-  const { user, profiles } = useAuthStore();
+  const { user, profiles, loadProfiles } = useAuthStore();
   const { config, load: loadConfig } = useITSMConfigStore();
   const incidentCategories = config.categories.incidentCategories;
   const incidentGroups = config.groups.filter((g) => g.type === "all" || g.type === "incident");
@@ -108,7 +108,11 @@ function NewIncidentModal({ onClose }: { onClose: () => void }) {
     assignedToId: "",
   });
 
-  useEffect(() => { loadConfig(); }, [loadConfig]);
+  useEffect(() => {
+    loadConfig();
+    if (Object.keys(profiles).length === 0) loadProfiles();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleGroupChange = (groupId: string) => {
     const group = incidentGroups.find((g) => g.id === groupId);
@@ -211,7 +215,7 @@ function NewIncidentModal({ onClose }: { onClose: () => void }) {
                   disabled={!selectedGroup}>
                   <option value="">— Seçin —</option>
                   {(selectedGroup?.memberIds ?? []).map((uid) => {
-                    const p = Object.values(profiles).find((pr) => pr.id === uid);
+                    const p = profiles[uid];
                     return <option key={uid} value={uid}>{p?.name ?? uid}</option>;
                   })}
                 </select>
@@ -353,7 +357,8 @@ function IncidentAttachments({ attachments, onAdd, onRemove }: {
 type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments";
 
 function IncidentDetail({ incidentId, onClose }: { incidentId: string; onClose?: () => void }) {
-  const { incidents, addWorkNote, addComment, addAttachment, removeAttachment, changeState, resolve, close, assign } = useIncidentStore();
+  const { incidents, addWorkNote, addComment, addAttachment, removeAttachment, changeState, resolve, close, assign,
+          loadTicketActivity, activeWorkNotes, activeComments, activeEvents, activeTicketId } = useIncidentStore();
   const { create: createCR } = useChangeRequestStore();
   const { create: createSR } = useServiceRequestStore();
   const { user, profiles } = useAuthStore();
@@ -361,6 +366,12 @@ function IncidentDetail({ incidentId, onClose }: { incidentId: string; onClose?:
   const router = useRouter();
 
   const incident = incidents.find((i) => i.id === incidentId);
+
+  useEffect(() => {
+    if (incidentId && incidentId !== activeTicketId) {
+      loadTicketActivity(incidentId);
+    }
+  }, [incidentId]);
 
   const [tab, setTab] = useState<Tab>("details");
   const [noteText, setNoteText] = useState("");
@@ -512,9 +523,9 @@ function IncidentDetail({ incidentId, onClose }: { incidentId: string; onClose?:
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: "details",     label: "Detaylar"        },
     { key: "attachments", label: "Ekler",      count: (incident.attachments ?? []).length },
-    { key: "worknotes",   label: "İş Notları", count: incident.workNotes.length           },
-    { key: "comments",    label: "Yorumlar",   count: incident.comments.length            },
-    { key: "timeline",    label: "Zaman",      count: incident.timeline.length            },
+    { key: "worknotes",   label: "İş Notları", count: activeWorkNotes.length },
+    { key: "comments",    label: "Yorumlar",   count: activeComments.length  },
+    { key: "timeline",    label: "Zaman",      count: activeEvents.length    },
   ];
 
   // SLA calc
@@ -622,9 +633,9 @@ function IncidentDetail({ incidentId, onClose }: { incidentId: string; onClose?:
                     <button onClick={submitNote} disabled={saving || !noteText.trim()} className="btn-primary text-xs">Not Ekle</button>
                   </div>
                 </div>
-                {incident.workNotes.length === 0
+                {activeWorkNotes.length === 0
                   ? <p className="text-sm text-gray-400 text-center py-6">Henüz iş notu yok.</p>
-                  : [...incident.workNotes].reverse().map((note) => (
+                  : [...activeWorkNotes].reverse().map((note) => (
                     <div key={note.id} className="p-3 bg-amber-50 rounded-lg border border-amber-100">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-medium text-gray-800">{note.authorName}</span>
@@ -647,9 +658,9 @@ function IncidentDetail({ incidentId, onClose }: { incidentId: string; onClose?:
                     <button onClick={submitComment} disabled={saving || !commentText.trim()} className="btn-primary text-xs">Yorum Ekle</button>
                   </div>
                 </div>
-                {incident.comments.length === 0
+                {activeComments.length === 0
                   ? <p className="text-sm text-gray-400 text-center py-6">Henüz yorum yok.</p>
-                  : [...incident.comments].reverse().map((c) => (
+                  : [...activeComments].reverse().map((c) => (
                     <div key={c.id} className="p-3 bg-white rounded-lg border border-gray-200">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-medium text-gray-800">{c.authorName}</span>
@@ -663,7 +674,7 @@ function IncidentDetail({ incidentId, onClose }: { incidentId: string; onClose?:
             )}
 
             {/* Timeline */}
-            {tab === "timeline" && <TicketTimeline timeline={incident.timeline} />}
+            {tab === "timeline" && <TicketTimeline timeline={activeEvents} />}
           </div>
         </div>
 
@@ -813,7 +824,7 @@ function IncidentDetail({ incidentId, onClose }: { incidentId: string; onClose?:
             {[
               { label: "Etki",    value: incident.impact.replace(/^\d-/, "")   },
               { label: "Aciliyet", value: incident.urgency.replace(/^\d-/, "") },
-              { label: "Atanan",  value: incident.assignedToId ? (Object.values(profiles).find((p) => p.id === incident.assignedToId)?.name ?? incident.assignedToId) : "—" },
+              { label: "Atanan",  value: incident.assignedToId ? (profiles[incident.assignedToId]?.name ?? incident.assignedToId) : "—" },
               { label: "Grup",    value: incident.assignmentGroupName ?? "—"   },
               { label: "İlişkili CR", value: incident.relatedCRId ?? "—"      },
             ].map(({ label, value }) => (

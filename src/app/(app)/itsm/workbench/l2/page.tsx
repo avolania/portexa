@@ -82,6 +82,7 @@ interface ChangeDetails {
   rollbackPlan: string; testResults: string;
   preChecks: PreCheck[];
 }
+interface AttachmentItem { id: string; name: string; url: string; size: number; type: string; uploadedBy: string; uploadedAt: string; }
 interface Ticket {
   id: string; storeId?: string; type: "INC" | "SR" | "CR"; title: string;
   priority: string; state: string; slaMin: number; slaTotal: number;
@@ -98,6 +99,7 @@ interface Ticket {
   rcaData: RCAData | null;
   changeDetails?: ChangeDetails;
   pendingReason?: string;
+  attachments: AttachmentItem[];
 }
 
 // ─── Static Demo Data ─────────────────────────────────────────────────────────
@@ -159,6 +161,7 @@ const TICKETS: Ticket[] = [
         { id: "pa4", action: "SAN kapasite planlama toplantısı (Q2)", owner: "IT Manager", due: "2026-04-30", status: "Open" },
       ],
     },
+    attachments: [],
   },
   {
     id: "INC0011040", type: "INC",
@@ -204,6 +207,7 @@ const TICKETS: Ticket[] = [
         { id: "pa2", action: "Role değişiklik checklist oluştur", owner: "SAP Security", due: "2026-04-25", status: "Open" },
       ],
     },
+    attachments: [],
   },
   {
     id: "INC0011041", type: "INC",
@@ -238,6 +242,7 @@ const TICKETS: Ticket[] = [
       ],
       preventiveActions: [],
     },
+    attachments: [],
   },
   {
     id: "SR0002085", type: "SR",
@@ -259,6 +264,7 @@ const TICKETS: Ticket[] = [
     ],
     kbArticles: [], diagHistory: [], rcaData: null,
     pendingReason: "CR-0316 CAB onayı bekleniyor",
+    attachments: [],
   },
   {
     id: "CR0000312", type: "CR",
@@ -314,6 +320,7 @@ const TICKETS: Ticket[] = [
         { check: "Değişiklik penceresi takvime alındı", done: true },
       ],
     },
+    attachments: [],
   },
 ];
 
@@ -388,10 +395,10 @@ const CR_STATE_LABEL: Record<string, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SpecialistWorkbenchPage() {
-  const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState, update: updateInc } = useIncidentStore();
+  const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState, update: updateInc, addAttachment: addIncAttachment } = useIncidentStore();
   const { user } = useAuthStore();
-  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR } = useServiceRequestStore();
-  const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR } = useChangeRequestStore();
+  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR, addAttachment: addSRAttachment } = useServiceRequestStore();
+  const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR, addAttachment: addCRAttachment } = useChangeRequestStore();
 
   // Gerçek incident'ları Ticket formatına dönüştür
   const realTickets: Ticket[] = incidents.map((inc) => ({
@@ -417,16 +424,17 @@ export default function SpecialistWorkbenchPage() {
     breached: inc.sla.resolutionBreached,
     configItem: { name: "", type: "", os: "", ip: "", env: "" },
     description: inc.description,
-    technicalNotes: inc.workNotes.filter(n => n.content.startsWith("[TEKNİK]")).map(n => n.content.replace("[TEKNİK] ", "")).join("\n---\n"),
-    rootCause: inc.workNotes.filter(n => n.content.startsWith("[ROOT CAUSE]")).map(n => n.content.replace("[ROOT CAUSE] ", "")).join("\n---\n"),
+    technicalNotes: (inc.workNotes ?? []).filter(n => n.content.startsWith("[TEKNİK]")).map(n => n.content.replace("[TEKNİK] ", "")).join("\n---\n"),
+    rootCause: (inc.workNotes ?? []).filter(n => n.content.startsWith("[ROOT CAUSE]")).map(n => n.content.replace("[ROOT CAUSE] ", "")).join("\n---\n"),
     workaround: "",
     relatedCIs: [],
-    timeline: inc.timeline.map(e => ({ time: new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }), who: e.actorName, text: (e.note ?? e.type) })),
+    timeline: (inc.timeline ?? []).map(e => ({ time: new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }), who: e.actorName, text: (e.note ?? e.type) })),
     kbArticles: [],
     diagHistory: [],
     rcaData: inc.rcaData
       ? (inc.rcaData as unknown as RCAData)
       : { why1: "", why2: "", why3: "", why4: "", why5: "", rootCause: "", contributingFactors: [], preventiveActions: [] },
+    attachments: inc.attachments ?? [],
   }));
 
   const srTickets: Ticket[] = serviceRequests.map((sr) => {
@@ -456,14 +464,14 @@ export default function SpecialistWorkbenchPage() {
       breached: sr.sla?.slaBreached ?? false,
       configItem: { name: "", type: "", os: "", ip: "", env: "" },
       description: sr.description,
-      technicalNotes: sr.workNotes
+      technicalNotes: (sr.workNotes ?? [])
         .filter((n) => n.content.startsWith("[TEKNİK]"))
         .map((n) => n.content.replace("[TEKNİK] ", ""))
         .join("\n---\n"),
       rootCause: "",
       workaround: "",
       relatedCIs: [],
-      timeline: sr.timeline.map((e) => ({
+      timeline: (sr.timeline ?? []).map((e) => ({
         time: new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
         who: e.actorName,
         text: e.note ?? e.type,
@@ -474,6 +482,7 @@ export default function SpecialistWorkbenchPage() {
       pendingReason:
         sr.state === "Pending Approval" ? "Onay bekleniyor" :
         sr.state === "Pending"          ? "Bekleniyor" : undefined,
+      attachments: sr.attachments ?? [],
     };
   });
 
@@ -503,14 +512,14 @@ export default function SpecialistWorkbenchPage() {
     breached: false,
     configItem: { name: "", type: "", os: "", ip: "", env: "" },
     description: cr.description,
-    technicalNotes: cr.workNotes
+    technicalNotes: (cr.workNotes ?? [])
       .filter((n) => n.content.startsWith("[TEKNİK]"))
       .map((n) => n.content.replace("[TEKNİK] ", ""))
       .join("\n---\n"),
     rootCause: "",
     workaround: "",
     relatedCIs: [],
-    timeline: cr.timeline.map((e) => ({
+    timeline: (cr.timeline ?? []).map((e) => ({
       time: new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
       who: e.actorName,
       text: e.note ?? e.type,
@@ -539,6 +548,7 @@ export default function SpecialistWorkbenchPage() {
       testResults: cr.testPlan ?? "",
       preChecks: [],
     },
+    attachments: cr.attachments ?? [],
   }));
 
   // Unified sorted list: breached first, then by priority
@@ -592,6 +602,8 @@ export default function SpecialistWorkbenchPage() {
   const [diagSelected, setDiagSelected]     = useState<string | null>(null);
   const [diagSession, setDiagSession]       = useState<DiagEntry[]>([]);
   const termRef                             = useRef<HTMLDivElement>(null);
+  const [attachSaving, setAttachSaving]     = useState(false);
+  const attachFileRef                       = useRef<HTMLInputElement>(null);
 
   const [rcaLocal, setRcaLocal]             = useState<Record<string, Partial<RCAData>>>({});
   const [cabSteps, setCabSteps]             = useState<Record<string, Record<number, boolean>>>({});
@@ -742,6 +754,19 @@ export default function SpecialistWorkbenchPage() {
     } finally { setSaving(false); }
   };
 
+  const handleAddAttachment = async (file: File) => {
+    if (!selectedStoreId || !selectedStoreType) return;
+    setAttachSaving(true);
+    setErrorMsg(null);
+    try {
+      if (selectedStoreType === "INC") await addIncAttachment(selectedStoreId, file);
+      else if (selectedStoreType === "SR") await addSRAttachment(selectedStoreId, file);
+      else if (selectedStoreType === "CR") await addCRAttachment(selectedStoreId, file);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Dosya yüklenemedi');
+    } finally { setAttachSaving(false); }
+  };
+
   const handleSaveRootCause = async () => {
     if (!selectedStoreId || !rootCauseText.trim()) return;
     setSaving(true);
@@ -822,15 +847,13 @@ export default function SpecialistWorkbenchPage() {
   };
 
   const getTabs = (t: Ticket) => {
-    const base = [
-      { k: "technical",   l: "🔧 Teknik Detay" },
-      { k: "ci",          l: "🖥️ CI & Topoloji" },
-      { k: "timeline",    l: "📋 Aktivite" },
-      { k: "kb",          l: "📖 KB", count: t.kbArticles.length },
+    const base: { k: string; l: string; count?: number }[] = [
+      { k: "technical", l: "🔧 Teknik Detay" },
+      { k: "timeline",  l: "📋 Aktivite" },
+      { k: "ekler",     l: "📎 Ekler", count: t.attachments.length },
     ];
     if (t.type === "INC") {
-      base.push({ k: "diagnostics", l: "🔍 Diagnostics" });
-      base.push({ k: "rca",         l: "🎯 Root Cause" });
+      base.push({ k: "rca", l: "🎯 Root Cause" });
     }
     if (t.type === "CR") {
       base.push({ k: "cab", l: "📋 CAB / Change" });
@@ -1176,45 +1199,7 @@ export default function SpecialistWorkbenchPage() {
               )}
 
               {/* ── CI Tab ── */}
-              {activeTab === "ci" && (
-                <div>
-                  <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "20px 24px", marginBottom: 18 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Primary CI</h4>
-                    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px", borderRadius: 8, background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 10, background: "#DBEAFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🖥️</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", color: "#1E293B" }}>{selected.configItem.name}</div>
-                        <div style={{ fontSize: 12, color: "#64748B" }}>{selected.configItem.type} · {selected.configItem.os} · {selected.configItem.ip}</div>
-                      </div>
-                      <Badge bg={selected.configItem.env === "Production" ? "#FEE2E2" : "#DBEAFE"} color={selected.configItem.env === "Production" ? "#DC2626" : "#2563EB"}>{selected.configItem.env}</Badge>
-                    </div>
-                  </div>
-                  <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "20px 24px" }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>İlişkili CI&apos;lar</h4>
-                    {selected.relatedCIs.length > 0 ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {selected.relatedCIs.map((ci, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 8, border: "1px solid #E2E8F0", transition: "border-color .15s", cursor: "pointer", animation: `slideUp .2s ease ${i * 0.06}s both` }}
-                            onMouseEnter={e => (e.currentTarget.style.borderColor = "#3B82F6")}
-                            onMouseLeave={e => (e.currentTarget.style.borderColor = "#E2E8F0")}>
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: CI_STATUS_C[ci.status] || "#6B7280" }} />
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", color: "#1E293B" }}>{ci.name}</div>
-                              <div style={{ fontSize: 11, color: "#64748B" }}>{ci.type}</div>
-                            </div>
-                            <div style={{ textAlign: "right" }}>
-                              <div style={{ fontSize: 10, fontWeight: 600, color: CI_STATUS_C[ci.status], marginBottom: 2 }}>{ci.status}</div>
-                              <div style={{ fontSize: 10, color: "#94A3B8" }}>{ci.relation}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ padding: 24, textAlign: "center", color: "#94A3B8", fontSize: 12, border: "1px dashed #E2E8F0", borderRadius: 8 }}>İlişkili CI bulunamadı</div>
-                    )}
-                  </div>
-                </div>
-              )}
+              {/* CI tab removed */}
 
               {/* ── Timeline ── */}
               {activeTab === "timeline" && (
@@ -1266,40 +1251,106 @@ export default function SpecialistWorkbenchPage() {
                 </div>
               )}
 
-              {/* ── KB ── */}
-              {activeTab === "kb" && (
-                <div style={{ maxWidth: 680 }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>İlgili KB Makaleleri</h4>
-                  <p style={{ fontSize: 12, color: "#64748B", marginBottom: 18 }}>AI relevance skoruna göre sıralandı</p>
-                  {selected.kbArticles.length > 0 ? selected.kbArticles.map((kb, i) => (
-                    <div key={i} style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "16px 20px", marginBottom: 10, cursor: "pointer", transition: "all .15s", animation: `slideUp .2s ease ${i * 0.08}s both` }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = "#3B82F6"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(59,130,246,.08)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.boxShadow = "none"; }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                        <span>📄</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", color: "#3B82F6" }}>{kb.id}</span>
-                        <div style={{ flex: 1 }} />
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <div style={{ width: 40, height: 4, background: "#F1F5F9", borderRadius: 2, overflow: "hidden" }}>
-                            <div style={{ width: `${kb.relevance}%`, height: "100%", background: kb.relevance > 85 ? "#059669" : "#D97706", borderRadius: 2 }} />
-                          </div>
-                          <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", color: kb.relevance > 85 ? "#059669" : "#D97706" }}>{kb.relevance}%</span>
-                        </div>
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{kb.title}</div>
+              {/* KB tab removed */}
+
+              {/* ── Ekler ── */}
+              {activeTab === "ekler" && (
+                <div style={{ maxWidth: 720 }}>
+                  {/* Upload alanı */}
+                  <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", padding: "16px 20px", marginBottom: 18 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <input
+                        ref={attachFileRef}
+                        type="file"
+                        style={{ display: "none" }}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleAddAttachment(f); e.target.value = ""; }}
+                      />
+                      <button
+                        onClick={() => attachFileRef.current?.click()}
+                        disabled={attachSaving || !selectedStoreId}
+                        style={{
+                          padding: "8px 18px", borderRadius: 7, border: "none",
+                          background: "#3B82F6", color: "#fff", fontSize: 12, fontWeight: 600,
+                          cursor: (attachSaving || !selectedStoreId) ? "not-allowed" : "pointer",
+                          opacity: (attachSaving || !selectedStoreId) ? 0.5 : 1,
+                          display: "flex", alignItems: "center", gap: 6,
+                        }}
+                      >
+                        {attachSaving ? (
+                          <>
+                            <span style={{ animation: "pulse 0.8s ease infinite" }}>●</span> Yükleniyor...
+                          </>
+                        ) : (
+                          <>📎 Dosya Ekle</>
+                        )}
+                      </button>
+                      <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                        {selected.attachments.length} ek · Herhangi bir dosya türü desteklenir
+                      </span>
                     </div>
-                  )) : (
-                    <div style={{ background: "#fff", borderRadius: 8, border: "1px dashed #E2E8F0", padding: "32px", textAlign: "center" }}>
-                      <div style={{ fontSize: 24, marginBottom: 8 }}>📖</div>
-                      <div style={{ fontSize: 13, color: "#94A3B8", marginBottom: 10 }}>İlgili KB makalesi bulunamadı</div>
-                      <button style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Yeni KB Makalesi Oluştur</button>
+                  </div>
+
+                  {/* Ek listesi */}
+                  {selected.attachments.length === 0 ? (
+                    <div style={{
+                      background: "#fff", borderRadius: 8, border: "1px dashed #E2E8F0",
+                      padding: "40px 24px", textAlign: "center",
+                    }}>
+                      <div style={{ fontSize: 28, marginBottom: 10 }}>📎</div>
+                      <div style={{ fontSize: 13, color: "#94A3B8", marginBottom: 6 }}>Henüz ek yüklenmedi</div>
+                      <div style={{ fontSize: 11, color: "#CBD5E1" }}>Yukarıdaki butonu kullanarak dosya ekleyebilirsiniz</div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {selected.attachments.map((att, i) => {
+                        const ext = att.name.split(".").pop()?.toLowerCase() ?? "";
+                        const isImg = ["jpg","jpeg","png","gif","webp","svg"].includes(ext);
+                        const isPdf = ext === "pdf";
+                        const icon = isImg ? "🖼️" : isPdf ? "📄" : ext === "zip" || ext === "rar" ? "🗜️" : "📎";
+                        const sizeLabel = att.size < 1024 ? `${att.size} B`
+                          : att.size < 1024 * 1024 ? `${(att.size / 1024).toFixed(1)} KB`
+                          : `${(att.size / 1024 / 1024).toFixed(1)} MB`;
+                        return (
+                          <div key={att.id} style={{
+                            display: "flex", alignItems: "center", gap: 12,
+                            background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0",
+                            padding: "12px 16px",
+                            animation: `slideUp .2s ease ${i * 0.05}s both`,
+                            transition: "border-color .15s",
+                          }}
+                            onMouseEnter={e => (e.currentTarget.style.borderColor = "#3B82F6")}
+                            onMouseLeave={e => (e.currentTarget.style.borderColor = "#E2E8F0")}
+                          >
+                            <div style={{
+                              width: 38, height: 38, borderRadius: 8, background: "#F1F5F9",
+                              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0,
+                            }}>{icon}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name}</div>
+                              <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
+                                {sizeLabel} · {att.uploadedBy} · {new Date(att.uploadedAt).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            </div>
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                padding: "6px 12px", borderRadius: 6, border: "1px solid #E2E8F0",
+                                background: "#F8FAFC", color: "#3B82F6", fontSize: 11, fontWeight: 600,
+                                textDecoration: "none", display: "flex", alignItems: "center", gap: 4,
+                              }}
+                            >⬇ İndir</a>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               )}
 
               {/* ── DIAGNOSTICS ── */}
-              {activeTab === "diagnostics" && (
+              {false && activeTab === "diagnostics" && (
                 <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16, height: "calc(100vh - 280px)", minHeight: 400 }}>
                   {/* Command Palette */}
                   <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0", overflow: "hidden", display: "flex", flexDirection: "column" }}>

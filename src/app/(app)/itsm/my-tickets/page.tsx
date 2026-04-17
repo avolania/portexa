@@ -124,13 +124,13 @@ function TicketModal({
           )}
 
           {/* Yorumlar */}
-          {ticket.comments.length > 0 && (
+          {(ticket.comments ?? []).length > 0 && (
             <div>
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Yorumlar ({ticket.comments.length})
+                Yorumlar ({(ticket.comments ?? []).length})
               </div>
               <div className="space-y-3">
-                {ticket.comments.map((c) => (
+                {(ticket.comments ?? []).map((c) => (
                   <div key={c.id} className="bg-blue-50 rounded-xl p-3">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium text-blue-800">{c.authorName ?? "Destek Ekibi"}</span>
@@ -332,9 +332,9 @@ export default function MyTicketsPage() {
                         <span className={cn("px-1.5 py-0.5 rounded-full text-xs font-medium", stateInfo.badge)}>
                           {stateInfo.label}
                         </span>
-                        {ticket.comments.length > 0 && (
+                        {(ticket.comments ?? []).length > 0 && (
                           <span className="flex items-center gap-0.5 text-xs text-gray-400">
-                            <MessageSquare className="w-3 h-3" /> {ticket.comments.length}
+                            <MessageSquare className="w-3 h-3" /> {(ticket.comments ?? []).length}
                           </span>
                         )}
                       </div>

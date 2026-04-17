@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -382,9 +382,17 @@ function ActionPanel({ incidentId, state }: { incidentId: string; state: Inciden
 export default function IncidentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { incidents, addWorkNote, addComment, addAttachment, removeAttachment } = useIncidentStore();
+  const { incidents, addWorkNote, addComment, addAttachment, removeAttachment,
+          loadTicketActivity, activeWorkNotes, activeComments, activeEvents, activeTicketId } = useIncidentStore();
   const { profiles } = useAuthStore();
   const incident = incidents.find((i) => i.id === id);
+
+  // P1: Sayfa yüklenince notları ve olayları ayrı tablodan çek
+  useEffect(() => {
+    if (id && id !== activeTicketId) {
+      loadTicketActivity(id);
+    }
+  }, [id]);
 
   const [tab, setTab] = useState<Tab>("details");
   const [noteText, setNoteText] = useState("");
@@ -423,9 +431,9 @@ export default function IncidentDetailPage() {
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: "details",     label: "Detaylar"          },
     { key: "attachments", label: "Ekler", count: (incident.attachments ?? []).length },
-    { key: "worknotes",   label: "İş Notları",  count: incident.workNotes.length },
-    { key: "comments",    label: "Yorumlar",    count: incident.comments.length  },
-    { key: "timeline",    label: "Zaman Çizelgesi", count: incident.timeline.length },
+    { key: "worknotes",   label: "İş Notları",  count: activeWorkNotes.length },
+    { key: "comments",    label: "Yorumlar",    count: activeComments.length  },
+    { key: "timeline",    label: "Zaman Çizelgesi", count: activeEvents.length },
   ];
 
   return (
@@ -542,10 +550,10 @@ export default function IncidentDetailPage() {
                   </button>
                 </div>
               </div>
-              {incident.workNotes.length === 0 ? (
+              {activeWorkNotes.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">Henüz iş notu yok.</p>
               ) : (
-                [...incident.workNotes].reverse().map((note) => (
+                [...activeWorkNotes].reverse().map((note) => (
                   <div key={note.id} className="card bg-amber-50 border-amber-100">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-800">{note.authorName}</span>
@@ -574,10 +582,10 @@ export default function IncidentDetailPage() {
                   </button>
                 </div>
               </div>
-              {incident.comments.length === 0 ? (
+              {activeComments.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">Henüz yorum yok.</p>
               ) : (
-                [...incident.comments].reverse().map((c) => (
+                [...activeComments].reverse().map((c) => (
                   <div key={c.id} className="card">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-800">{c.authorName}</span>
@@ -591,7 +599,7 @@ export default function IncidentDetailPage() {
           )}
 
           {/* Tab: Timeline */}
-          {tab === "timeline" && <TicketTimeline timeline={incident.timeline} />}
+          {tab === "timeline" && <TicketTimeline timeline={activeEvents} />}
         </div>
 
         {/* Right 1/3 */}
@@ -605,7 +613,7 @@ export default function IncidentDetailPage() {
             {[
               { label: "Etki",         value: incident.impact.replace(/^\d-/, "") },
               { label: "Aciliyet",     value: incident.urgency.replace(/^\d-/, "") },
-              { label: "Atanan",       value: incident.assignedToId ? (Object.values(profiles).find((p) => p.id === incident.assignedToId)?.name ?? incident.assignedToId) : "—" },
+              { label: "Atanan",       value: incident.assignedToId ? (profiles[incident.assignedToId]?.name ?? incident.assignedToId) : "—" },
               { label: "Grup",         value: incident.assignmentGroupName ?? "—" },
               { label: "İlişkili CR",  value: incident.relatedCRId ?? "—" },
             ].map(({ label, value }) => (

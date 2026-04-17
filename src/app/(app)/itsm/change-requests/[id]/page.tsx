@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, AlertTriangle, Calendar, ArrowRight, Paperclip, FileText, Image, FileArchive, File, X as XIcon } from "lucide-react";
+import { ChevronRight, AlertTriangle, Calendar, ArrowRight, Paperclip, FileText, Image, FileArchive, File, X as XIcon, UserCheck } from "lucide-react";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
 import { useWorkflowInstanceStore } from "@/store/useWorkflowInstanceStore";
 import WorkflowProgress from "@/components/itsm/WorkflowProgress";
-import { ChangeRequestState, ChangeCloseCode } from "@/lib/itsm/types/enums";
+import { ChangeRequestState, ChangeCloseCode, ApprovalState } from "@/lib/itsm/types/enums";
 import { ITSM_PRIORITY_MAP, CR_STATE_MAP, CHANGE_TYPE_MAP, CHANGE_RISK_MAP, APPROVAL_STATE_MAP } from "@/lib/itsm/ui-maps";
 import { isValidCRTransition } from "@/lib/itsm/types/change-request.types";
 import { cn } from "@/lib/utils";
@@ -15,8 +15,9 @@ import { format, formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import type { Attachment } from "@/types";
 import TicketTimeline from "@/components/itsm/TicketTimeline";
+import TicketTasks from "@/components/itsm/TicketTasks";
 
-type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments";
+type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments" | "tasks";
 
 // ─── State machine steps ──────────────────────────────────────────────────────
 
@@ -257,9 +258,16 @@ function TicketAttachments({
 
 export default function ChangeRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { changeRequests, addWorkNote, addComment, addAttachment, removeAttachment, transition } = useChangeRequestStore();
+  const { changeRequests, addWorkNote, addComment, addAttachment, removeAttachment, transition, addTask, updateTask, deleteTask,
+          loadTicketActivity, activeWorkNotes, activeComments, activeEvents, activeTicketId } = useChangeRequestStore();
   const { instances } = useWorkflowInstanceStore();
   const cr = changeRequests.find((c) => c.id === id);
+
+  useEffect(() => {
+    if (id && id !== activeTicketId) {
+      loadTicketActivity(id);
+    }
+  }, [id]);
 
   const [tab, setTab]             = useState<Tab>("details");
   const [noteText, setNoteText]   = useState("");
@@ -300,10 +308,11 @@ export default function ChangeRequestDetailPage() {
 
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: "details",     label: "Detaylar" },
-    { key: "attachments", label: "Ekler",          count: (cr.attachments ?? []).length },
-    { key: "worknotes",   label: "İş Notları",     count: cr.workNotes.length },
-    { key: "comments",    label: "Yorumlar",        count: cr.comments.length  },
-    { key: "timeline",    label: "Zaman Çizelgesi", count: cr.timeline.length  },
+    { key: "tasks",       label: "Görevler",         count: (cr.tasks ?? []).length },
+    { key: "attachments", label: "Ekler",            count: (cr.attachments ?? []).length },
+    { key: "worknotes",   label: "İş Notları",       count: activeWorkNotes.length },
+    { key: "comments",    label: "Yorumlar",          count: activeComments.length  },
+    { key: "timeline",    label: "Zaman Çizelgesi",   count: activeEvents.length  },
   ];
 
   const terminal = [ChangeRequestState.CLOSED, ChangeRequestState.CANCELLED].includes(cr.state);
@@ -344,6 +353,26 @@ export default function ChangeRequestDetailPage() {
 
       {/* Progress stepper */}
       <CRProgress state={cr.state} />
+
+      {/* Pending Approval Banner */}
+      {cr.approvers.some((a) => a.approvalState === ApprovalState.REQUESTED) && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+          <UserCheck className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800">Onay Bekleniyor</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {cr.approvers
+                .filter((a) => a.approvalState === ApprovalState.REQUESTED)
+                .map((a) => (
+                  <span key={a.approverId} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    {a.approverName}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -412,8 +441,12 @@ export default function ChangeRequestDetailPage() {
                         <div className="flex items-center gap-2">
                           {a.decidedAt && <span className="text-xs text-gray-400">{format(new Date(a.decidedAt), "dd MMM HH:mm", { locale: tr })}</span>}
                           <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium",
-                            a.approvalState === "Approved" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
-                            {a.approvalState}
+                            a.approvalState === ApprovalState.APPROVED  ? "bg-emerald-100 text-emerald-700" :
+                            a.approvalState === ApprovalState.REJECTED  ? "bg-red-100 text-red-700" :
+                                                                          "bg-amber-100 text-amber-700")}>
+                            {a.approvalState === ApprovalState.REQUESTED ? "Bekliyor" :
+                             a.approvalState === ApprovalState.APPROVED  ? "Onaylandı" :
+                             a.approvalState === ApprovalState.REJECTED  ? "Reddedildi" : a.approvalState}
                           </span>
                         </div>
                       </div>
@@ -422,6 +455,17 @@ export default function ChangeRequestDetailPage() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Tab: Tasks */}
+          {tab === "tasks" && (
+            <TicketTasks
+              tasks={cr.tasks ?? []}
+              onAdd={(task) => addTask(cr.id, task)}
+              onUpdate={(taskId, patch) => updateTask(cr.id, taskId, patch)}
+              onDelete={(taskId) => deleteTask(cr.id, taskId)}
+              readonly={terminal}
+            />
           )}
 
           {/* Tab: Attachments */}
@@ -444,10 +488,10 @@ export default function ChangeRequestDetailPage() {
                   </div>
                 </div>
               )}
-              {cr.workNotes.length === 0 ? (
+              {activeWorkNotes.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">Henüz iş notu yok.</p>
               ) : (
-                [...cr.workNotes].reverse().map((note) => (
+                [...activeWorkNotes].reverse().map((note) => (
                   <div key={note.id} className="card bg-amber-50 border-amber-100">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-800">{note.authorName}</span>
@@ -471,10 +515,10 @@ export default function ChangeRequestDetailPage() {
                   </div>
                 </div>
               )}
-              {cr.comments.length === 0 ? (
+              {activeComments.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">Henüz yorum yok.</p>
               ) : (
-                [...cr.comments].reverse().map((c) => (
+                [...activeComments].reverse().map((c) => (
                   <div key={c.id} className="card">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-800">{c.authorName}</span>
@@ -488,7 +532,7 @@ export default function ChangeRequestDetailPage() {
           )}
 
           {/* Tab: Timeline */}
-          {tab === "timeline" && <TicketTimeline timeline={cr.timeline} />}
+          {tab === "timeline" && <TicketTimeline timeline={activeEvents} />}
         </div>
 
         {/* Right 1/3 */}

@@ -55,14 +55,15 @@ export interface ServiceRequest {
   approvalRequired: boolean;
   approvalState: ApprovalState;
   approvers: ApproverEntry[];
-  workNotes: WorkNote[];
-  comments: TicketComment[];
+  workNotes?: WorkNote[];     // P1: ayrı tabloda
+  comments?: TicketComment[]; // P1: ayrı tabloda
   attachments: Attachment[];
   fulfillmentNotes?: string;
   closureCode?: ServiceRequestClosureCode;
   linkedCRIds?: string[];
+  tasks?: import('@/types').ItsmTask[];
   sla: ServiceRequestSLA;
-  timeline: TicketEvent[];
+  timeline?: TicketEvent[];   // P1: ayrı tabloda
   createdAt: string;
   updatedAt: string;
   fulfilledAt?: string;
@@ -102,6 +103,7 @@ export interface UpdateServiceRequestDto {
   justification?: string;
   assignedToId?: string;
   assignmentGroupId?: string;
+  tasks?: import('@/types').ItsmTask[];
 }
 
 export interface FulfillServiceRequestDto {

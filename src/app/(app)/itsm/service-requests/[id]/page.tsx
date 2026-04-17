@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, Clock, XCircle, AlertTriangle, ArrowRight, Paperclip, FileText, Image, FileArchive, File, X as XIcon } from "lucide-react";
+import { ChevronRight, Clock, XCircle, AlertTriangle, ArrowRight, Paperclip, FileText, Image, FileArchive, File, X as XIcon, UserCheck } from "lucide-react";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useWorkflowInstanceStore } from "@/store/useWorkflowInstanceStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import WorkflowProgress from "@/components/itsm/WorkflowProgress";
 import { ServiceRequestClosureCode } from "@/lib/itsm/types/service-request.types";
-import { ServiceRequestState } from "@/lib/itsm/types/enums";
+import { ServiceRequestState, ApprovalState } from "@/lib/itsm/types/enums";
 import { ITSM_PRIORITY_MAP, SR_STATE_MAP, APPROVAL_STATE_MAP } from "@/lib/itsm/ui-maps";
 import { isValidSRTransition } from "@/lib/itsm/types/service-request.types";
 import { cn } from "@/lib/utils";
@@ -17,8 +17,9 @@ import { format, formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import type { Attachment } from "@/types";
 import TicketTimeline from "@/components/itsm/TicketTimeline";
+import TicketTasks from "@/components/itsm/TicketTasks";
 
-type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments";
+type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments" | "tasks";
 
 // ─── SLA Widget ───────────────────────────────────────────────────────────────
 
@@ -229,9 +230,16 @@ function TicketAttachments({
 
 export default function ServiceRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { serviceRequests, addWorkNote, addComment, addAttachment, removeAttachment, approve, reject } = useServiceRequestStore();
+  const { serviceRequests, addWorkNote, addComment, addAttachment, removeAttachment, approve, reject, addTask, updateTask, deleteTask,
+          loadTicketActivity, activeWorkNotes, activeComments, activeEvents, activeTicketId } = useServiceRequestStore();
   const { load: loadInstances } = useWorkflowInstanceStore();
   const sr = serviceRequests.find((s) => s.id === id);
+
+  useEffect(() => {
+    if (id && id !== activeTicketId) {
+      loadTicketActivity(id);
+    }
+  }, [id]);
 
   const [tab, setTab]             = useState<Tab>("details");
   const [noteText, setNoteText]   = useState("");
@@ -270,10 +278,11 @@ export default function ServiceRequestDetailPage() {
 
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: "details",     label: "Detaylar" },
-    { key: "attachments", label: "Ekler",           count: (sr.attachments ?? []).length },
-    { key: "worknotes",   label: "İş Notları",      count: sr.workNotes.length },
-    { key: "comments",    label: "Yorumlar",         count: sr.comments.length  },
-    { key: "timeline",    label: "Zaman Çizelgesi",  count: sr.timeline.length  },
+    { key: "tasks",       label: "Görevler",         count: (sr.tasks ?? []).length },
+    { key: "attachments", label: "Ekler",            count: (sr.attachments ?? []).length },
+    { key: "worknotes",   label: "İş Notları",       count: activeWorkNotes.length },
+    { key: "comments",    label: "Yorumlar",          count: activeComments.length  },
+    { key: "timeline",    label: "Zaman Çizelgesi",   count: activeEvents.length  },
   ];
 
   const isTerminal = [ServiceRequestState.CLOSED, ServiceRequestState.REJECTED, ServiceRequestState.CANCELLED].includes(sr.state);
@@ -315,6 +324,26 @@ export default function ServiceRequestDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Pending Approval Banner */}
+      {sr.approvalRequired && sr.approvers.some((a) => a.approvalState === ApprovalState.REQUESTED) && (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+          <UserCheck className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800">Onay Bekleniyor</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {sr.approvers
+                .filter((a) => a.approvalState === ApprovalState.REQUESTED)
+                .map((a) => (
+                  <span key={a.approverId} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    {a.approverName}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -367,8 +396,12 @@ export default function ServiceRequestDetailPage() {
                         <div className="flex items-center gap-2">
                           {a.decidedAt && <span className="text-xs text-gray-400">{format(new Date(a.decidedAt), "dd MMM HH:mm", { locale: tr })}</span>}
                           <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium",
-                            a.approvalState === "Approved" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
-                            {a.approvalState}
+                            a.approvalState === ApprovalState.APPROVED  ? "bg-emerald-100 text-emerald-700" :
+                            a.approvalState === ApprovalState.REJECTED  ? "bg-red-100 text-red-700" :
+                                                                          "bg-amber-100 text-amber-700")}>
+                            {a.approvalState === ApprovalState.REQUESTED ? "Bekliyor" :
+                             a.approvalState === ApprovalState.APPROVED  ? "Onaylandı" :
+                             a.approvalState === ApprovalState.REJECTED  ? "Reddedildi" : a.approvalState}
                           </span>
                         </div>
                       </div>
@@ -377,6 +410,17 @@ export default function ServiceRequestDetailPage() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Tab: Tasks */}
+          {tab === "tasks" && (
+            <TicketTasks
+              tasks={sr.tasks ?? []}
+              onAdd={(task) => addTask(sr.id, task)}
+              onUpdate={(taskId, patch) => updateTask(sr.id, taskId, patch)}
+              onDelete={(taskId) => deleteTask(sr.id, taskId)}
+              readonly={isTerminal}
+            />
           )}
 
           {/* Tab: Attachments */}
@@ -399,10 +443,10 @@ export default function ServiceRequestDetailPage() {
                   </div>
                 </div>
               )}
-              {sr.workNotes.length === 0 ? (
+              {activeWorkNotes.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">Henüz iş notu yok.</p>
               ) : (
-                [...sr.workNotes].reverse().map((note) => (
+                [...activeWorkNotes].reverse().map((note) => (
                   <div key={note.id} className="card bg-amber-50 border-amber-100">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-800">{note.authorName}</span>
@@ -426,10 +470,10 @@ export default function ServiceRequestDetailPage() {
                   </div>
                 </div>
               )}
-              {sr.comments.length === 0 ? (
+              {activeComments.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">Henüz yorum yok.</p>
               ) : (
-                [...sr.comments].reverse().map((c) => (
+                [...activeComments].reverse().map((c) => (
                   <div key={c.id} className="card">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-800">{c.authorName}</span>
@@ -443,7 +487,7 @@ export default function ServiceRequestDetailPage() {
           )}
 
           {/* Tab: Timeline */}
-          {tab === "timeline" && <TicketTimeline timeline={sr.timeline} />}
+          {tab === "timeline" && <TicketTimeline timeline={activeEvents} />}
         </div>
 
         {/* Right 1/3 */}
