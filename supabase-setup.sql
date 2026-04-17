@@ -315,6 +315,7 @@ create index if not exists idx_org_invitations_org     on org_invitations     (o
 -- approved veya rejected durumundaki ve 90 günden eski kayıtları siler.
 -- pending ve submitted kayıtlara dokunmaz.
 
+drop function if exists cleanup_old_activities();
 create or replace function cleanup_old_activities()
 returns integer
 language plpgsql
