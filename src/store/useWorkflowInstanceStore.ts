@@ -63,7 +63,8 @@ export const useWorkflowInstanceStore = create<WorkflowInstanceState>()(
     load: async () => {
       set({ loading: true, error: null });
       try {
-        const instances = await loadWorkflowInstances();
+        const orgId = useAuthStore.getState().user?.orgId;
+        const instances = await loadWorkflowInstances(orgId);
         set({ instances, loading: false });
       } catch (err) {
         set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });

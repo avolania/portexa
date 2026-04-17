@@ -252,6 +252,24 @@ export interface Attachment {
   uploadedAt: string;
 }
 
+export type ItsmTaskStatus = "open" | "in_progress" | "done";
+export type ItsmTaskPriority = "low" | "medium" | "high";
+
+export interface ItsmTask {
+  id: string;
+  title: string;
+  description?: string;
+  assignedUnit: string;
+  assignedUserId?: string;
+  assignedUserName?: string;
+  dueDate?: string;
+  priority: ItsmTaskPriority;
+  status: ItsmTaskStatus;
+  createdAt: string;
+  createdBy: string;
+  createdByName: string;
+}
+
 export interface Comment {
   id: string;
   content: string;

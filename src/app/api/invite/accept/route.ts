@@ -34,20 +34,33 @@ export async function POST(req: NextRequest) {
 
   // Kayıt işlemi yoksa sadece token'ı kabul et (eski davranış)
   if (!name || !password) {
-    const { error } = await supabaseAdmin
+    // H-6: conditional update — sadece accepted=false ise güncelle (double-claim önlenir)
+    const { count, error } = await supabaseAdmin
       .from("org_invitations")
-      .update({ accepted: true })
-      .eq("token", token);
+      .update({ accepted: true }, { count: "exact" })
+      .eq("token", token)
+      .eq("accepted", false);
 
-    if (error) {
-      return NextResponse.json({ error: "Güncelleme başarısız." }, { status: 500 });
+    if (error || (count ?? 0) === 0) {
+      return NextResponse.json({ error: "Bu davet zaten kullanılmış." }, { status: 410 });
     }
 
     return NextResponse.json({ success: true });
   }
 
+  // H-6: Önce token'ı atomik olarak "kullanıldı" say — conditional update
+  // accepted=false koşulu ile sadece bir request kazanır; diğeri count:0 alır.
+  const { count: claimCount, error: claimError } = await supabaseAdmin
+    .from("org_invitations")
+    .update({ accepted: true }, { count: "exact" })
+    .eq("token", token)
+    .eq("accepted", false);
+
+  if (claimError || (claimCount ?? 0) === 0) {
+    return NextResponse.json({ error: "Bu davet zaten kullanılmış." }, { status: 410 });
+  }
+
   // Admin API ile kullanıcı oluştur — e-posta onayı gerekmez
-  // Kullanıcı zaten varsa createUser "already registered" hatası döndürür
   const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
     email: invite.email,
     password,
@@ -60,6 +73,12 @@ export async function POST(req: NextRequest) {
   });
 
   if (createError || !newUser?.user) {
+    // Kullanıcı oluşturulamadıysa token'ı geri al (rollback)
+    await supabaseAdmin
+      .from("org_invitations")
+      .update({ accepted: false })
+      .eq("token", token);
+
     const alreadyExists =
       createError?.message?.toLowerCase().includes("already") ||
       createError?.message?.toLowerCase().includes("registered");
@@ -82,12 +101,6 @@ export async function POST(req: NextRequest) {
   await supabaseAdmin
     .from("auth_profiles")
     .upsert([{ id: newUser.user.id, data: profile }], { defaultToNull: false });
-
-  // Token'ı kullanıldı olarak işaretle
-  await supabaseAdmin
-    .from("org_invitations")
-    .update({ accepted: true })
-    .eq("token", token);
 
   return NextResponse.json({ success: true, email: invite.email });
 }

@@ -1,5 +1,5 @@
 import type { Notification } from "@/types";
-import { dbLoadAll, dbUpsert } from "@/lib/db";
+import { dbLoadAll, dbUpsert, dbBatchUpsert } from "@/lib/db";
 
 export async function loadNotifications(): Promise<Notification[]> {
   return dbLoadAll<Notification>("notifications");
@@ -24,7 +24,11 @@ export async function markAllNotificationsRead(
   current: Notification[]
 ): Promise<Notification[]> {
   const updated = current.map((n) => ({ ...n, read: true }));
-  await Promise.all(updated.map((n) => dbUpsert("notifications", n.id, n)));
+  // M-4: tek batch upsert — N+1 yerine tek DB isteği
+  await dbBatchUpsert(
+    "notifications",
+    updated.map((n) => ({ id: n.id, data: n })),
+  );
   return updated;
 }
 

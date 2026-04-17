@@ -11,7 +11,7 @@
  *     for all using (auth.role() = 'authenticated');
  */
 
-import { dbLoadAll, dbLoadOne, dbUpsert } from '@/lib/db';
+import { dbLoadAll, dbLoadOne, dbUpsert, dbConditionalUpdate, dbFindOneByJsonb } from '@/lib/db';
 import { createNotification } from '@/services/notificationService';
 import type { ApprovalWorkflowTemplate, ITSMConfig } from '@/lib/itsm/types/config.types';
 import type {
@@ -107,27 +107,23 @@ async function notifyOutcome(
 
 // ─── Load ─────────────────────────────────────────────────────────────────────
 
-export async function loadWorkflowInstances(): Promise<WorkflowInstance[]> {
-  return dbLoadAll<WorkflowInstance>(TABLE);
+export async function loadWorkflowInstances(orgId?: string): Promise<WorkflowInstance[]> {
+  return dbLoadAll<WorkflowInstance>(TABLE, orgId);
 }
 
 /**
  * Bir ticket'a ait aktif (running) instance'ı döner.
- * Genellikle detail sayfasında mevcut onay durumunu göstermek için kullanılır.
+ * H-5: dbFindOneByJsonb ile doğrudan JSONB filtresi — full table scan yok.
  */
 export async function getActiveInstance(
   ticketType: WorkflowTicketType,
   ticketId: string,
 ): Promise<WorkflowInstance | null> {
-  const all = await loadWorkflowInstances();
-  return (
-    all.find(
-      (i) =>
-        i.ticketId === ticketId &&
-        i.ticketType === ticketType &&
-        i.status === 'running',
-    ) ?? null
-  );
+  return dbFindOneByJsonb<WorkflowInstance>(TABLE, {
+    ticketId,
+    ticketType,
+    status: 'running',
+  });
 }
 
 // ─── Onaylayıcı ID Çözümlemesi ────────────────────────────────────────────────
@@ -219,6 +215,7 @@ export async function triggerWorkflow(
     currentStepIndex: 0,
     steps,
     startedAt: now,
+    version: 1,
   };
 
   await dbUpsert(TABLE, id, instance, orgId);
@@ -272,6 +269,9 @@ export async function submitDecision(
 
   const step = instance.steps[stepIdx];
   if (step.status !== 'active') return noop;
+
+  // Caller bu step'in onaylayıcılarından biri olmalı
+  if (step.resolvedApproverIds.length > 0 && !step.resolvedApproverIds.includes(approverId)) return noop;
 
   // Aynı onaylayıcıdan tekrar karar gelmesin
   if (step.decisions.some((d) => d.approverId === approverId)) return noop;
@@ -354,9 +354,23 @@ export async function submitDecision(
         : instance.currentStepIndex,
     status: instanceStatus,
     completedAt: instanceCompleted ? now : undefined,
+    version: (instance.version ?? 1) + 1,
   };
 
-  await dbUpsert(TABLE, instance.id, updatedInstance, instance.orgId);
+  // H-4: Optimistik kilit — version eşleşmiyorsa eş zamanlı yazma çakışması
+  const expectedVersion = instance.version ?? 1;
+  const { updated } = await dbConditionalUpdate(
+    TABLE,
+    instance.id,
+    updatedInstance,
+    instance.orgId,
+    expectedVersion,
+  );
+  if (!updated) {
+    throw new Error(
+      'Onay kaydedilemedi: bu adım eş zamanlı olarak başka bir kullanıcı tarafından güncellendi. Lütfen sayfayı yenileyip tekrar deneyin.',
+    );
+  }
 
   // Sonraki adım aktive olduysa o adımın onaylayıcılarına bildirim gönder
   if (stepCompleted && stepOutcome === 'approved' && !isLastStep) {

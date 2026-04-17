@@ -66,7 +66,7 @@ export async function uploadFile(
   const id = crypto.randomUUID();
   const ext = file.name.split(".").pop() ?? "";
   const folderSegment = folderId ?? "root";
-  const storagePath = `${projectId}/${phaseId}/${folderSegment}/${id}${ext ? "." + ext : ""}`;
+  const storagePath = `${orgId}/${projectId}/${phaseId}/${folderSegment}/${id}${ext ? "." + ext : ""}`;
 
   await dbUploadFile(storagePath, file);
 

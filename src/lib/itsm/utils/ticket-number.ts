@@ -9,8 +9,8 @@ export type TicketPrefix = 'INC' | 'REQ' | 'CHG';
  *
  * Requires: supabase-ticket-sequences.sql applied to the project.
  */
-export async function generateTicketNumber(prefix: TicketPrefix): Promise<string> {
-  const { data, error } = await supabase.rpc('next_ticket_number', { p_prefix: prefix });
+export async function generateTicketNumber(prefix: TicketPrefix, orgId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('next_ticket_number', { p_prefix: prefix, p_org_id: orgId });
   if (error) throw new Error(`Ticket numarası oluşturulamadı (${prefix}): ${error.message}`);
   return data as string;
 }

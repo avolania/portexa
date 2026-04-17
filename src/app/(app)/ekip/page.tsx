@@ -12,6 +12,7 @@ import { ROLE_META, ROLE_PERMISSIONS } from "@/lib/permissions";
 import { usePermission } from "@/hooks/usePermission";
 import Avatar from "@/components/ui/Avatar";
 import type { TeamMember, UserRole, Permission } from "@/types";
+import { supabase } from "@/lib/supabase";
 
 // ─── Rol badge ────────────────────────────────────────────────────────────────
 
@@ -426,10 +427,14 @@ function InviteModal({ onClose, orgId, orgName, invitedBy }: {
     setError("");
     setLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/invite", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), orgId, orgName, invitedBy }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ email: email.trim(), orgId, orgName }),
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) { setError(data.error ?? "Davet gönderilemedi."); return; }

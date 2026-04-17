@@ -49,11 +49,19 @@ async function buildAndSaveProfile(
     // organizations tablosu henüz oluşturulmamışsa auth akışı engellenmez
   }
 
+  // L-5: meta.role'a güvenme — self-signup her zaman 'admin', sistem rolleri
+  // (system_admin, approver, vb.) hiçbir zaman metadata'dan alınmaz.
+  const allowedSelfSignupRoles: User["role"][] = ["admin", "pm", "member", "viewer"];
+  const rawRole = meta.role as string | undefined;
+  const role: User["role"] = allowedSelfSignupRoles.includes(rawRole as User["role"])
+    ? (rawRole as User["role"])
+    : "admin";
+
   const profile: User = {
     id: userId,
     email,
     name: (meta.name as string | undefined) ?? "Kullanıcı",
-    role: (meta.role as User["role"] | undefined) ?? "admin",
+    role,
     language: "tr",
     orgId,
     company: (meta.company as string | undefined) ?? (meta.orgName as string | undefined),
@@ -202,20 +210,20 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
-  updateProfile: async (emailKey, data) => {
-    const existing = get().profiles[emailKey];
+  updateProfile: async (userId, data) => {
+    const existing = get().profiles[userId];
     if (!existing) return;
     const updated = { ...existing, ...data };
     set((s) => ({
-      profiles: { ...s.profiles, [emailKey]: updated },
-      user: s.user?.email === emailKey ? { ...s.user, ...data } : s.user,
+      profiles: { ...s.profiles, [userId]: updated },
+      user: s.user?.id === userId ? { ...s.user, ...data } : s.user,
     }));
     try {
-      await dbUpsertProfile(existing.id, updated);
+      await dbUpsertProfile(userId, updated);
     } catch (err) {
       set((s) => ({
-        profiles: { ...s.profiles, [emailKey]: existing },
-        user: s.user?.email === emailKey ? existing : s.user,
+        profiles: { ...s.profiles, [userId]: existing },
+        user: s.user?.id === userId ? existing : s.user,
       }));
       throw err;
     }

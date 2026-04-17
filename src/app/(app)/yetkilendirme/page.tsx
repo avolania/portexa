@@ -15,6 +15,7 @@ import { usePermission } from "@/hooks/usePermission";
 import Avatar from "@/components/ui/Avatar";
 import type { UserRole, Permission, Organization } from "@/types";
 import { dbLoadAllOrgs } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 // ─── Birleşik kullanıcı tipi ──────────────────────────────────────────────────
 
@@ -582,10 +583,14 @@ export default function YetkilendirmePage() {
     setInviteError("");
     setInviteSuccess("");
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/invite", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, orgId, orgName, invitedBy: authStore.user?.name ?? "Admin" }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ email, orgId, orgName }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { setInviteError(body.error ?? "Davet gönderilemedi."); return; }

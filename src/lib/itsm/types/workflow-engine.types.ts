@@ -67,6 +67,8 @@ export interface WorkflowInstance {
   steps: WorkflowStepInstance[];
   startedAt: string;
   completedAt?: string;
+  /** H-4: Optimistik kilit versiyonu — her dbConditionalUpdate'te artırılır */
+  version?: number;
 }
 
 // ─── submitDecision Dönüş Tipi ────────────────────────────────────────────────

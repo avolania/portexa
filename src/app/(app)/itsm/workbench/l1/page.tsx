@@ -87,7 +87,7 @@ interface TicketRow {
 
 export default function L1WorkbenchPage() {
   const { incidents, assign: assignInc, changeState: changeIncState, update: updateInc, addWorkNote, addAttachment: addIncAttachment, load: loadInc } = useIncidentStore();
-  const { serviceRequests, load: loadSR, update: updateSR, addWorkNote: addSRWorkNote, addAttachment: addSRAttachment } = useServiceRequestStore();
+  const { serviceRequests, load: loadSR, update: updateSR, changeState: changeSRState, addWorkNote: addSRWorkNote, addAttachment: addSRAttachment } = useServiceRequestStore();
   const { changeRequests, load: loadCR, update: updateCR, addWorkNote: addCRWorkNote, addAttachment: addCRAttachment } = useChangeRequestStore();
   const { user, profiles, loadProfiles } = useAuthStore();
 
@@ -105,6 +105,11 @@ export default function L1WorkbenchPage() {
   const [escalateId, setEscalateId]       = useState<string | null>(null);
   const [escalateNote, setEscalateNote]   = useState("");
   const [escalateLoading, setEscalateLoading] = useState(false);
+
+  // Çöz / Beklet onay modal
+  const [actionModal, setActionModal]     = useState<{ id: string; type: TicketRow["type"]; action: "resolve" | "pending" } | null>(null);
+  const [actionNote, setActionNote]       = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
   const [noteSaving, setNoteSaving]       = useState(false);
   const [noteError, setNoteError]         = useState<string | null>(null);
   const [attachSaving, setAttachSaving]   = useState(false);
@@ -226,6 +231,36 @@ export default function L1WorkbenchPage() {
       if (newState === IncidentState.IN_PROGRESS) await changeIncState(ticketId, { state: IncidentState.IN_PROGRESS });
       else if (newState === IncidentState.PENDING)  await changeIncState(ticketId, { state: IncidentState.PENDING });
       else if (newState === IncidentState.RESOLVED)  await changeIncState(ticketId, { state: IncidentState.RESOLVED });
+    }
+  };
+
+  const handleActionConfirm = async () => {
+    if (!actionModal || !actionNote.trim()) return;
+    setActionLoading(true);
+    try {
+      const noteContent = actionModal.action === "resolve"
+        ? `[ÇÖZÜLDÜ] ${actionNote.trim()}`
+        : `[BEKLETİLDİ] ${actionNote.trim()}`;
+      if (actionModal.type === "INC") {
+        await addWorkNote(actionModal.id, { content: noteContent });
+        await changeIncState(actionModal.id, {
+          state: actionModal.action === "resolve" ? IncidentState.RESOLVED : IncidentState.PENDING,
+        });
+      } else if (actionModal.type === "SR") {
+        await addSRWorkNote(actionModal.id, { content: noteContent });
+        if (actionModal.action === "resolve") {
+          await changeSRState(actionModal.id, ServiceRequestState.FULFILLED);
+        } else {
+          await changeSRState(actionModal.id, ServiceRequestState.PENDING);
+        }
+      } else if (actionModal.type === "CR") {
+        await addCRWorkNote(actionModal.id, { content: noteContent });
+      }
+      if (detailId === actionModal.id && actionModal.action === "resolve") setDetailId(null);
+    } finally {
+      setActionLoading(false);
+      setActionModal(null);
+      setActionNote("");
     }
   };
 
@@ -725,7 +760,7 @@ export default function L1WorkbenchPage() {
                       {/* Çöz */}
                       {t.state === IncidentState.IN_PROGRESS && t.type === "INC" && (
                         <button
-                          onClick={() => handleStateChange(t.id, t.type, IncidentState.RESOLVED)}
+                          onClick={() => { setActionModal({ id: t.id, type: t.type, action: "resolve" }); setActionNote(""); }}
                           title="Çöz"
                           style={{
                             width: 26, height: 26, borderRadius: 5, border: "1px solid #A7F3D0",
@@ -736,7 +771,7 @@ export default function L1WorkbenchPage() {
                       {/* Beklet */}
                       {t.state === IncidentState.IN_PROGRESS && (
                         <button
-                          onClick={() => handleStateChange(t.id, t.type, IncidentState.PENDING)}
+                          onClick={() => { setActionModal({ id: t.id, type: t.type, action: "pending" }); setActionNote(""); }}
                           title="Beklet"
                           style={{
                             width: 26, height: 26, borderRadius: 5, border: "1px solid #DDD6FE",
@@ -857,13 +892,13 @@ export default function L1WorkbenchPage() {
                   }}>▶ İşleme Al</button>
                 )}
                 {detail.state === IncidentState.IN_PROGRESS && detail.type === "INC" && (
-                  <button onClick={() => { handleStateChange(detail.id, detail.type, IncidentState.RESOLVED); setDetailId(null); }} style={{
+                  <button onClick={() => { setActionModal({ id: detail.id, type: detail.type, action: "resolve" }); setActionNote(""); }} style={{
                     padding: "7px 14px", borderRadius: 6, border: "none",
                     background: "#059669", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer",
                   }}>✓ Çözüldü</button>
                 )}
                 {detail.state === IncidentState.IN_PROGRESS && (
-                  <button onClick={() => handleStateChange(detail.id, detail.type, IncidentState.PENDING)} style={{
+                  <button onClick={() => { setActionModal({ id: detail.id, type: detail.type, action: "pending" }); setActionNote(""); }} style={{
                     padding: "7px 14px", borderRadius: 6, border: "1px solid #DDD6FE",
                     background: "#F5F3FF", color: "#7C3AED", fontSize: 11, fontWeight: 600, cursor: "pointer",
                   }}>⏷ Beklet</button>
@@ -1094,6 +1129,102 @@ export default function L1WorkbenchPage() {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ── Çöz / Beklet Onay Modal ── */}
+      {actionModal && (() => {
+        const ticket = allRows.find(t => t.id === actionModal.id);
+        if (!ticket) return null;
+        const isResolve = actionModal.action === "resolve";
+        return (
+          <>
+            <div
+              onClick={() => { setActionModal(null); setActionNote(""); }}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", zIndex: 300, animation: "fadeIn .15s ease" }}
+            />
+            <div style={{
+              position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+              background: "#fff", borderRadius: 12, padding: 24, width: 440,
+              boxShadow: "0 20px 60px rgba(0,0,0,.18)", zIndex: 301,
+              animation: "scaleIn .2s ease",
+            }}>
+              {/* Başlık */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 8,
+                  background: isResolve ? "#ECFDF5" : "#F5F3FF",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+                }}>{isResolve ? "✓" : "⏷"}</div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>
+                    {isResolve ? "İşlem Çözüldü" : "Beklete Al"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#6B7280", fontFamily: "'JetBrains Mono', monospace" }}>
+                    {ticket.number} — {ticket.title.slice(0, 40)}{ticket.title.length > 40 ? "…" : ""}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setActionModal(null); setActionNote(""); }}
+                  style={{ marginLeft: "auto", width: 28, height: 28, borderRadius: 6, border: "1px solid #E5E7EB", background: "#F9FAFB", color: "#6B7280", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+              </div>
+
+              {/* Açıklama alanı */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+                  {isResolve ? "Çözüm Açıklaması" : "Bekleme Nedeni"}
+                  <span style={{ color: "#EF4444", marginLeft: 3 }}>*</span>
+                </label>
+                <textarea
+                  value={actionNote}
+                  onChange={e => setActionNote(e.target.value)}
+                  placeholder={isResolve
+                    ? "Örn: Sunucu yeniden başlatıldı, servis normal seviyeye döndü..."
+                    : "Örn: Üçüncü parti tedarikçi yanıtı bekleniyor, müşteri onayı gerekiyor..."}
+                  rows={4}
+                  autoFocus
+                  style={{
+                    width: "100%", padding: "10px 12px", border: "1.5px solid #E5E7EB", borderRadius: 8,
+                    background: "#F9FAFB", color: "#111827", fontSize: 13,
+                    fontFamily: "'DM Sans', sans-serif", outline: "none", resize: "vertical", boxSizing: "border-box",
+                  }}
+                  onFocus={e => { e.target.style.borderColor = "#3B82F6"; e.target.style.background = "#fff"; }}
+                  onBlur={e => { e.target.style.borderColor = "#E5E7EB"; e.target.style.background = "#F9FAFB"; }}
+                />
+                {!actionNote.trim() && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: "#9CA3AF" }}>
+                    İşlem için açıklama zorunludur.
+                  </div>
+                )}
+              </div>
+
+              {/* Butonlar */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={handleActionConfirm}
+                  disabled={actionLoading || !actionNote.trim()}
+                  style={{
+                    flex: 1, padding: "10px 0", borderRadius: 8, border: "none",
+                    background: actionLoading || !actionNote.trim()
+                      ? "#F3F4F6"
+                      : isResolve ? "#059669" : "#7C3AED",
+                    color: actionLoading || !actionNote.trim() ? "#9CA3AF" : "#fff",
+                    fontSize: 13, fontWeight: 600,
+                    cursor: actionLoading || !actionNote.trim() ? "not-allowed" : "pointer",
+                    transition: "background .15s",
+                  }}
+                >
+                  {actionLoading ? "İşleniyor..." : isResolve ? "✓ Çözüldü Olarak İşaretle" : "⏷ Beklete Al"}
+                </button>
+                <button
+                  onClick={() => { setActionModal(null); setActionNote(""); }}
+                  style={{
+                    padding: "10px 18px", borderRadius: 8, border: "1px solid #E5E7EB",
+                    background: "#fff", color: "#6B7280", fontSize: 13, cursor: "pointer",
+                  }}>İptal</button>
               </div>
             </div>
           </>

@@ -104,8 +104,9 @@ export function addBusinessMinutes(
     }
 
     remaining -= leftToday;
+    // Advance exactly to end of business day; nextBusinessStart moves to next period
     cur = nextBusinessStart(
-      new Date(cur.getTime() + (leftToday + 1) * 60_000),
+      new Date(cur.getTime() + leftToday * 60_000),
       cfg,
     );
   }
