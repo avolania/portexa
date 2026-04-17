@@ -259,22 +259,40 @@ create policy "workflow_templates_org" on workflow_templates for all
 -- project-files bucket önce Storage sekmesinden oluşturun:
 --   Name: project-files  |  Public: true
 
+-- Bucket'ı Supabase Dashboard → Storage → project-files → Edit → Public: OFF yapın.
+
 drop policy if exists "storage_select" on storage.objects;
 drop policy if exists "storage_insert" on storage.objects;
 drop policy if exists "storage_update" on storage.objects;
 drop policy if exists "storage_delete" on storage.objects;
 
 create policy "storage_select" on storage.objects
-  for select using (bucket_id = 'project-files' and auth.uid() is not null);
+  for select using (
+    bucket_id = 'project-files'
+    and auth.uid() is not null
+    and (storage.foldername(name))[1] = get_my_org_id()
+  );
 
 create policy "storage_insert" on storage.objects
-  for insert with check (bucket_id = 'project-files' and auth.uid() is not null);
+  for insert with check (
+    bucket_id = 'project-files'
+    and auth.uid() is not null
+    and (storage.foldername(name))[1] = get_my_org_id()
+  );
 
 create policy "storage_update" on storage.objects
-  for update using (bucket_id = 'project-files' and auth.uid() is not null);
+  for update using (
+    bucket_id = 'project-files'
+    and auth.uid() is not null
+    and (storage.foldername(name))[1] = get_my_org_id()
+  );
 
 create policy "storage_delete" on storage.objects
-  for delete using (bucket_id = 'project-files' and auth.uid() is not null);
+  for delete using (
+    bucket_id = 'project-files'
+    and auth.uid() is not null
+    and (storage.foldername(name))[1] = get_my_org_id()
+  );
 
 -- ── 6. ORG_ID INDEXES ────────────────────────────────────────────────────────
 -- Her tablonun org_id kolonuna index — full table scan yerine index scan.

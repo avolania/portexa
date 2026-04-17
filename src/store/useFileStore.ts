@@ -70,11 +70,12 @@ export const useFileStore = create<FileState>()((set, get) => ({
   },
 
   deleteFolder: async (id) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     const { folders, files } = get();
     const rollbackFolders = folders;
     const rollbackFiles = files;
     try {
-      const { deletedFolderIds, deletedFiles } = await deleteFolder(id, folders, files);
+      const { deletedFolderIds, deletedFiles } = await deleteFolder(id, folders, files, orgId);
       const deletedFileIds = new Set(deletedFiles.map((f) => f.id));
       set((s) => ({
         folders: s.folders.filter((f) => !deletedFolderIds.has(f.id)),
@@ -98,10 +99,11 @@ export const useFileStore = create<FileState>()((set, get) => ({
   },
 
   deleteFile: async (fileId) => {
+    const orgId = useAuthStore.getState().user?.orgId ?? "";
     const rollback = get().files.find((f) => f.id === fileId);
     set((s) => ({ files: s.files.filter((f) => f.id !== fileId) }));
     try {
-      await deleteFile(fileId, get().files);
+      await deleteFile(fileId, get().files, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ files: [...s.files, rollback] }));
       throw err;

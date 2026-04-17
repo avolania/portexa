@@ -28,7 +28,8 @@ export async function renameFolder(
 export async function deleteFolder(
   id: string,
   folders: FileFolder[],
-  files: ProjectFile[]
+  files: ProjectFile[],
+  orgId: string,
 ): Promise<{ deletedFolderIds: Set<string>; deletedFiles: ProjectFile[] }> {
   // Collect folder id's recursively
   const deletedFolderIds = new Set<string>();
@@ -50,7 +51,7 @@ export async function deleteFolder(
   ]);
 
   // Storage best-effort — orphan storage files are recoverable; broken DB references are not
-  await Promise.allSettled(deletedFiles.map((f) => dbDeleteFile(f.storagePath)));
+  await Promise.allSettled(deletedFiles.map((f) => dbDeleteFile(orgId, f.storagePath)));
 
   return { deletedFolderIds, deletedFiles };
 }
@@ -66,9 +67,9 @@ export async function uploadFile(
   const id = crypto.randomUUID();
   const ext = file.name.split(".").pop() ?? "";
   const folderSegment = folderId ?? "root";
-  const storagePath = `${orgId}/${projectId}/${phaseId}/${folderSegment}/${id}${ext ? "." + ext : ""}`;
+  const storagePath = `${projectId}/${phaseId}/${folderSegment}/${id}${ext ? "." + ext : ""}`;
 
-  await dbUploadFile(storagePath, file);
+  await dbUploadFile(orgId, storagePath, file);
 
   const entry: ProjectFile = {
     id,
@@ -86,15 +87,15 @@ export async function uploadFile(
   try {
     await dbUpsert("project_files", id, entry, orgId);
   } catch (err) {
-    await dbDeleteFile(storagePath).catch(() => {});
+    await dbDeleteFile(orgId, storagePath).catch(() => {});
     throw err;
   }
   return entry;
 }
 
-export async function deleteFile(fileId: string, files: ProjectFile[]): Promise<void> {
+export async function deleteFile(fileId: string, files: ProjectFile[], orgId: string): Promise<void> {
   const file = files.find((f) => f.id === fileId);
   if (!file) return;
   await dbDelete("project_files", fileId);
-  await dbDeleteFile(file.storagePath).catch(() => {});
+  await dbDeleteFile(orgId, file.storagePath).catch(() => {});
 }

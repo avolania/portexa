@@ -286,18 +286,21 @@ export async function dbUpsertOrg(orgId: string, org: Organization): Promise<voi
 
 const BUCKET = "project-files";
 
-export async function dbUploadFile(path: string, file: File): Promise<void> {
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true });
+export async function dbUploadFile(orgId: string, path: string, file: File): Promise<void> {
+  const fullPath = `${orgId}/${path}`;
+  const { error } = await supabase.storage.from(BUCKET).upload(fullPath, file, { upsert: true });
   if (error) throw new Error(error.message);
 }
 
-export async function dbGetFileUrl(path: string): Promise<string> {
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+export async function dbGetFileUrl(orgId: string, path: string): Promise<string> {
+  const fullPath = `${orgId}/${path}`;
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(fullPath);
   return data.publicUrl;
 }
 
-export async function dbDeleteFile(path: string): Promise<void> {
-  const { error } = await supabase.storage.from(BUCKET).remove([path]);
+export async function dbDeleteFile(orgId: string, path: string): Promise<void> {
+  const fullPath = `${orgId}/${path}`;
+  const { error } = await supabase.storage.from(BUCKET).remove([fullPath]);
   if (error) {
     console.error("[db] delete file:", error.message);
     throw new Error(error.message);

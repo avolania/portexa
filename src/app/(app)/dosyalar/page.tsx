@@ -366,7 +366,7 @@ export default function DosyalarPage() {
   };
 
   const handleDownload = async (file: ProjectFile) => {
-    const url = await dbGetFileUrl(file.storagePath);
+    const url = await dbGetFileUrl(user?.orgId ?? "", file.storagePath);
     const a = document.createElement("a");
     a.href = url; a.download = file.name; a.target = "_blank"; a.click();
   };

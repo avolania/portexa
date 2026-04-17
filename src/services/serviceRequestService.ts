@@ -401,9 +401,9 @@ export async function addServiceRequestAttachment(
   if (!existing) return null;
   const fileId = uuid();
   const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
-  const path = `${orgId}/itsm/${id}/${fileId}${ext ? '.' + ext : ''}`;
-  await dbUploadFile(path, file);
-  const url = await dbGetFileUrl(path);
+  const path = `itsm/${id}/${fileId}${ext ? '.' + ext : ''}`;
+  await dbUploadFile(orgId, path, file);
+  const url = await dbGetFileUrl(orgId, path);
   const attachment: Attachment = {
     id: fileId,
     name: file.name,
