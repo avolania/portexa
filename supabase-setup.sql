@@ -275,3 +275,20 @@ create policy "storage_update" on storage.objects
 
 create policy "storage_delete" on storage.objects
   for delete using (bucket_id = 'project-files' and auth.uid() is not null);
+
+-- ── 6. ORG_ID INDEXES ────────────────────────────────────────────────────────
+-- Her tablonun org_id kolonuna index — full table scan yerine index scan.
+
+create index if not exists idx_auth_profiles_org      on auth_profiles      (org_id);
+create index if not exists idx_projects_org            on projects            (org_id);
+create index if not exists idx_tasks_org               on tasks               (org_id);
+create index if not exists idx_team_members_org        on team_members        (org_id);
+create index if not exists idx_governance_items_org    on governance_items    (org_id);
+create index if not exists idx_notifications_org       on notifications       (org_id);
+create index if not exists idx_reports_org             on reports             (org_id);
+create index if not exists idx_activity_entries_org    on activity_entries    (org_id);
+create index if not exists idx_file_folders_org        on file_folders        (org_id);
+create index if not exists idx_project_files_org       on project_files       (org_id);
+create index if not exists idx_workflow_requests_org   on workflow_requests   (org_id);
+create index if not exists idx_workflow_templates_org  on workflow_templates  (org_id);
+create index if not exists idx_org_invitations_org     on org_invitations     (org_id);

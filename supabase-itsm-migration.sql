@@ -146,7 +146,14 @@ begin
   end if;
 end $$;
 
--- ── 8. DOĞRULAMA ─────────────────────────────────────────────
+-- ── 8. ORG_ID INDEXES ────────────────────────────────────────────────────────
+
+create index if not exists idx_itsm_incidents_org         on itsm_incidents        (org_id);
+create index if not exists idx_itsm_service_requests_org  on itsm_service_requests (org_id);
+create index if not exists idx_itsm_change_requests_org   on itsm_change_requests  (org_id);
+create index if not exists idx_itsm_config_org            on itsm_config           (org_id);
+
+-- ── 9. DOĞRULAMA ─────────────────────────────────────────────
 -- Aşağıdaki sorgu tablolar ve politikaların doğru oluşturulduğunu gösterir:
 --
 -- select tablename, rowsecurity
