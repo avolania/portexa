@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
 
   await supabaseAdmin
     .from("auth_profiles")
-    .upsert([{ id: newUser.user.id, data: profile }], { defaultToNull: false });
+    .upsert([{ id: newUser.user.id, data: profile, org_id: invite.org_id }], { defaultToNull: false });
 
   return NextResponse.json({ success: true, email: invite.email });
 }

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   // ── 3. Caller'ın bu org'a üye olduğunu doğrula ──────────────────────────────
   const { data: profile } = await supabaseAdmin
-    .from("profiles")
+    .from("auth_profiles")
     .select("id")
     .eq("id", user.id)
     .eq("org_id", orgId)
