@@ -11,6 +11,7 @@ import {
 
 interface NotificationState {
   notifications: Notification[];
+  toasts: Notification[];       // realtime popup kuyruğu
   loading: boolean;
   error: string | null;
   load: () => Promise<void>;
@@ -18,11 +19,14 @@ interface NotificationState {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   addNotification: (notification: Notification) => void;
+  receiveRealtime: (notification: Notification) => void;  // DB'ye yazmadan ekle
+  dismissToast: (id: string) => void;
   unreadCount: () => number;
 }
 
 export const useNotificationStore = create<NotificationState>()((set, get) => ({
   notifications: [],
+  toasts: [],
   loading: false,
   error: null,
 
@@ -67,6 +71,17 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
     set((s) => ({ notifications: [notification, ...s.notifications] }));
     createNotification(notification, orgId);
   },
+
+  // Realtime'dan gelen bildirim — DB'ye yazmaz, sadece state'e ekler + toast gösterir
+  receiveRealtime: (notification) => {
+    set((s) => ({
+      notifications: [notification, ...s.notifications],
+      toasts: [notification, ...s.toasts],
+    }));
+  },
+
+  dismissToast: (id) =>
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   unreadCount: () => get().notifications.filter((n) => !n.read).length,
 }));

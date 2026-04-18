@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { User, Organization } from "@/types";
 import { supabase } from "@/lib/supabase";
 import { dbLoadProfiles, dbLoadProfile, dbUpsertProfile, dbLoadOrg, dbUpsertOrg } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
 
 interface AuthState {
   user: User | null;
@@ -104,6 +105,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         const existing = await dbLoadProfile(session.user.id);
         if (existing) {
           set({ user: existing, isAuthenticated: true, loading: false });
+          logAudit(existing, "user.login");
         } else {
           const profile = await buildAndSaveProfile(
             session.user.id,
@@ -111,8 +113,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             session.user.user_metadata ?? {}
           );
           set({ user: profile, isAuthenticated: true, loading: false });
+          logAudit(profile, "user.login");
         }
       } else if (event === "SIGNED_OUT") {
+        const current = get().user;
+        if (current) logAudit(current, "user.logout");
         set({ user: null, isAuthenticated: false, loading: false, profiles: {} });
       }
     });
@@ -220,6 +225,23 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }));
     try {
       await dbUpsertProfile(userId, updated);
+      const actor = get().user;
+      if (actor) {
+        if (data.role && data.role !== existing.role) {
+          logAudit(actor, "user.role_changed", {
+            resourceType: "user",
+            resourceId: userId,
+            resourceName: existing.email,
+            changes: { before: { role: existing.role }, after: { role: data.role } },
+          });
+        } else {
+          logAudit(actor, "user.profile_updated", {
+            resourceType: "user",
+            resourceId: userId,
+            resourceName: existing.email,
+          });
+        }
+      }
     } catch (err) {
       set((s) => ({
         profiles: { ...s.profiles, [userId]: existing },

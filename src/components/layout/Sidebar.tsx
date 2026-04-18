@@ -200,11 +200,19 @@ export default function Sidebar() {
                   <div className="space-y-0.5 mt-0.5">
                     <Link
                       href="/platform"
-                      className={cn("sidebar-item", pathname.startsWith("/platform") && "active", collapsed ? "justify-center px-2" : "pl-5")}
+                      className={cn("sidebar-item", pathname === "/platform" && "active", collapsed ? "justify-center px-2" : "pl-5")}
                       title={collapsed ? "Organizasyonlar" : undefined}
                     >
                       <Building2 className="w-4 h-4 flex-shrink-0" />
                       {!collapsed && <span>Organizasyonlar</span>}
+                    </Link>
+                    <Link
+                      href="/platform/audit-log"
+                      className={cn("sidebar-item", pathname.startsWith("/platform/audit-log") && "active", collapsed ? "justify-center px-2" : "pl-5")}
+                      title={collapsed ? "Denetim İzi" : undefined}
+                    >
+                      <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+                      {!collapsed && <span>Denetim İzi</span>}
                     </Link>
                   </div>
                 )}

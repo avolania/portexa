@@ -18,6 +18,10 @@ import { useChangeRequestStore } from "@/store/useChangeRequestStore";
 import { useOrgStore } from "@/store/useOrgStore";
 import { useWorkflowInstanceStore } from "@/store/useWorkflowInstanceStore";
 import { useITSMConfigStore } from "@/store/useITSMConfigStore";
+import { supabase } from "@/lib/supabase";
+import type { Notification } from "@/types";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import NotificationToastContainer from "@/components/ui/NotificationToast";
 
 function loadAllStores() {
   useAuthStore.getState().loadProfiles();
@@ -44,18 +48,25 @@ const IDLE_EVENTS = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"
 
 export default function StoreHydration() {
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeChannel = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
     useAuthStore.getState().initAuth();
 
-    // Her isAuthenticated: false → true geçişinde store'ları yükle
     let prevAuthenticated = useAuthStore.getState().isAuthenticated;
 
-    if (prevAuthenticated) loadAllStores();
+    if (prevAuthenticated) {
+      loadAllStores();
+      subscribeNotifications();
+    }
 
     const unsub = useAuthStore.subscribe((state) => {
       if (state.isAuthenticated && !prevAuthenticated) {
         loadAllStores();
+        subscribeNotifications();
+      }
+      if (!state.isAuthenticated && prevAuthenticated) {
+        unsubscribeNotifications();
       }
       prevAuthenticated = state.isAuthenticated;
     });
@@ -76,10 +87,48 @@ export default function StoreHydration() {
 
     return () => {
       unsub();
+      unsubscribeNotifications();
       if (idleTimer.current) clearTimeout(idleTimer.current);
       IDLE_EVENTS.forEach((e) => window.removeEventListener(e, resetTimer));
     };
   }, []);
 
-  return null;
+  function subscribeNotifications() {
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+
+    // Önceki aboneliği temizle
+    unsubscribeNotifications();
+
+    realtimeChannel.current = supabase
+      .channel(`notifications:${user.orgId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `org_id=eq.${user.orgId}`,
+        },
+        (payload) => {
+          const notification = payload.new?.data as Notification | undefined;
+          if (!notification) return;
+
+          // Sadece bu kullanıcıya ait bildirimleri göster
+          if (!notification.recipientId || notification.recipientId === user.id) {
+            useNotificationStore.getState().receiveRealtime(notification);
+          }
+        }
+      )
+      .subscribe();
+  }
+
+  function unsubscribeNotifications() {
+    if (realtimeChannel.current) {
+      supabase.removeChannel(realtimeChannel.current);
+      realtimeChannel.current = null;
+    }
+  }
+
+  return <NotificationToastContainer />;
 }

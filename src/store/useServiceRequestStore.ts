@@ -93,9 +93,12 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
     set({ loading: true, error: null });
     try {
       const orgId = useAuthStore.getState().user?.orgId;
+      console.log('[debug] loadServiceRequests orgId:', orgId);
       const serviceRequests = await loadServiceRequests(undefined, orgId);
+      console.log('[debug] loadServiceRequests result count:', serviceRequests.length);
       set({ serviceRequests, loading: false });
     } catch (err) {
+      console.error('[debug] loadServiceRequests error:', err);
       set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
     }
   },
@@ -143,25 +146,26 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
 
     // Onay gerekiyorsa workflow engine'i tetikle
     if (updated.approvalRequired) {
-      try {
-        const workflowId = config.srApprovalConfig.workflowId;
-        const definition = workflowId
-          ? config.approvalWorkflows.find((w) => w.id === workflowId)
-          : undefined;
-        if (definition) {
-          const instance = await triggerWorkflow(
-            definition,
-            'service_request',
-            id,
-            user.orgId,
-            config,
-            updated.requestedById,
-          );
-          useWorkflowInstanceStore.getState().addInstance(instance);
-        }
-      } catch (err) {
-        console.error('[workflow] SR submit workflow trigger failed:', err);
+      const workflowId = config.srApprovalConfig.workflowId;
+      const definition = workflowId
+        ? config.approvalWorkflows.find((w) => w.id === workflowId)
+        : undefined;
+
+      if (!definition) {
+        throw new Error(
+          'Onay workflow şablonu bulunamadı. ITSM Ayarları > Servis Talebi Onayı bölümünden bir şablon seçin.'
+        );
       }
+
+      const instance = await triggerWorkflow(
+        definition,
+        'service_request',
+        id,
+        user.orgId,
+        config,
+        updated.requestedById,
+      );
+      useWorkflowInstanceStore.getState().addInstance(instance);
     }
   },
 
