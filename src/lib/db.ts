@@ -186,10 +186,10 @@ export async function dbLoadFiltered<T>(
   if (orgId) query = query.eq('org_id', orgId);
 
   for (const state of opts.excludeStates ?? []) {
-    query = query.filter("data->>'state'", 'neq', state);
+    query = query.filter('data->>state', 'neq', state);
   }
   for (const [key, val] of Object.entries(opts.scalarFilters ?? {})) {
-    query = query.filter(`data->>'${key}'`, 'eq', val);
+    query = query.filter(`data->>${key}`, 'eq', val);
   }
 
   const { data, error } = await query;
