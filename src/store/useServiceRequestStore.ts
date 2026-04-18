@@ -110,8 +110,33 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
     const { config } = useITSMConfigStore.getState();
     const approvalRequired = config.srApprovalConfig.requireApproval && !!config.srApprovalConfig.workflowId;
 
+    // SR direkt doğru state ile oluşturuluyor (DRAFT yok)
     const sr = await createServiceRequest({ ...dto, approvalRequired }, user.orgId, user.id, user.name);
     set((s) => ({ serviceRequests: [...s.serviceRequests, sr] }));
+
+    // Onay gerekiyorsa workflow hemen tetikle
+    if (approvalRequired) {
+      const workflowId = config.srApprovalConfig.workflowId;
+      const definition = workflowId
+        ? config.approvalWorkflows.find((w) => w.id === workflowId)
+        : undefined;
+      if (definition) {
+        try {
+          const instance = await triggerWorkflow(
+            definition,
+            'service_request',
+            sr.id,
+            user.orgId,
+            config,
+            sr.requestedById,
+          );
+          useWorkflowInstanceStore.getState().addInstance(instance);
+        } catch (err) {
+          console.error('[SR] workflow trigger failed:', err);
+        }
+      }
+    }
+
     return sr;
   },
 

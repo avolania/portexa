@@ -80,7 +80,7 @@ function fileIcon(type: string) {
 // ─── New SR Modal ─────────────────────────────────────────────────────────────
 
 function NewSRModal({ onClose }: { onClose: () => void }) {
-  const { create, addAttachment, submit, load } = useServiceRequestStore();
+  const { create, addAttachment, load } = useServiceRequestStore();
   const { user } = useAuthStore();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -119,14 +119,7 @@ function NewSRModal({ onClose }: { onClose: () => void }) {
         for (const file of pendingFiles) await addAttachment(sr.id, file);
       }
       if (sr) {
-        try {
-          await submit(sr.id);
-        } catch (submitErr) {
-          console.error('[SR] auto-submit failed:', submitErr);
-        }
-        try {
-          await load();
-        } catch (_) { /* non-fatal */ }
+        try { await load(); } catch (_) { /* non-fatal */ }
       }
       onClose();
     } catch (err) {
