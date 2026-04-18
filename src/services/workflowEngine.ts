@@ -1,14 +1,10 @@
 /**
  * Workflow Engine — Faz 1
  *
- * Supabase'de `workflow_instances` tablosuna ihtiyaç duyar:
- *   create table workflow_instances (
- *     id   text primary key,
- *     data jsonb not null
- *   );
- *   alter table workflow_instances enable row level security;
- *   create policy "authenticated" on workflow_instances
- *     for all using (auth.role() = 'authenticated');
+ * Gerekli tablolar supabase-itsm-tickets-migration.sql ile oluşturulur:
+ *   - workflow_instances  (org_id + RLS)
+ *   - itsm_ticket_notes   (org_id + RLS)
+ *   - itsm_ticket_events  (org_id + RLS)
  */
 
 import { dbLoadAll, dbLoadOne, dbUpsert, dbConditionalUpdate, dbFindOneByJsonb } from '@/lib/db';

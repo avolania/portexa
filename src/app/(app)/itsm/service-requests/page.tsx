@@ -80,9 +80,10 @@ function fileIcon(type: string) {
 // ─── New SR Modal ─────────────────────────────────────────────────────────────
 
 function NewSRModal({ onClose }: { onClose: () => void }) {
-  const { create, addAttachment } = useServiceRequestStore();
+  const { create, addAttachment, submit, load } = useServiceRequestStore();
   const { user } = useAuthStore();
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [form, setForm] = useState({
     shortDescription: "",
@@ -99,24 +100,40 @@ function NewSRModal({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     if (!form.shortDescription.trim()) return;
     setSaving(true);
-    const dto: CreateServiceRequestDto = {
-      requestedForId: user?.id ?? "",
-      requestedById: user?.id ?? "",
-      requestType: form.requestType || "Genel",
-      category: form.category || "Genel",
-      impact: form.impact,
-      urgency: form.urgency,
-      shortDescription: form.shortDescription,
-      description: form.description,
-      justification: form.justification || undefined,
-      approvalRequired: form.approvalRequired,
-    };
-    const sr = await create(dto);
-    if (sr && pendingFiles.length > 0) {
-      for (const file of pendingFiles) await addAttachment(sr.id, file);
+    setSaveError(null);
+    try {
+      const dto: CreateServiceRequestDto = {
+        requestedForId: user?.id ?? "",
+        requestedById: user?.id ?? "",
+        requestType: form.requestType || "Genel",
+        category: form.category || "Genel",
+        impact: form.impact,
+        urgency: form.urgency,
+        shortDescription: form.shortDescription,
+        description: form.description,
+        justification: form.justification || undefined,
+        approvalRequired: form.approvalRequired,
+      };
+      const sr = await create(dto);
+      if (sr && pendingFiles.length > 0) {
+        for (const file of pendingFiles) await addAttachment(sr.id, file);
+      }
+      if (sr) {
+        try {
+          await submit(sr.id);
+        } catch (submitErr) {
+          console.error('[SR] auto-submit failed:', submitErr);
+        }
+        try {
+          await load();
+        } catch (_) { /* non-fatal */ }
+      }
+      onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    onClose();
   };
 
   const f = (k: string, v: string | boolean) => setForm((s) => ({ ...s, [k]: v }));
@@ -188,6 +205,11 @@ function NewSRModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => { if (e.target.files) setPendingFiles((pf) => [...pf, ...Array.from(e.target.files!)]); e.target.value = ""; }} />
             </label>
           </div>
+          {saveError && (
+            <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 break-words">
+              <span className="font-semibold">Hata: </span>{saveError}
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">İptal</button>
             <button type="submit" disabled={saving} className="btn-primary">{saving ? "Kaydediliyor..." : "Oluştur"}</button>
