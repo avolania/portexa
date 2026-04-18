@@ -87,12 +87,9 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
     set({ loading: true, error: null });
     try {
       const orgId = useAuthStore.getState().user?.orgId;
-      console.log('[debug] loadIncidents orgId:', orgId);
       const incidents = await loadIncidents(undefined, orgId);
-      console.log('[debug] loadIncidents result count:', incidents.length);
       set({ incidents, loading: false });
     } catch (err) {
-      console.error('[debug] loadIncidents error:', err);
       set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
     }
   },

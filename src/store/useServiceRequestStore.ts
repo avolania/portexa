@@ -93,12 +93,9 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
     set({ loading: true, error: null });
     try {
       const orgId = useAuthStore.getState().user?.orgId;
-      console.log('[debug] loadServiceRequests orgId:', orgId);
       const serviceRequests = await loadServiceRequests(undefined, orgId);
-      console.log('[debug] loadServiceRequests result count:', serviceRequests.length);
       set({ serviceRequests, loading: false });
     } catch (err) {
-      console.error('[debug] loadServiceRequests error:', err);
       set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
     }
   },
