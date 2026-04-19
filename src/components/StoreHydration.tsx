@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useTeamStore } from "@/store/useTeamStore";
@@ -49,6 +50,14 @@ const IDLE_EVENTS = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"
 export default function StoreHydration() {
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeChannel = useRef<RealtimeChannel | null>(null);
+  const pathname = usePathname();
+
+  // Sayfa her değişiminde proje ve görev verilerini tazele
+  useEffect(() => {
+    if (useAuthStore.getState().isAuthenticated) {
+      useProjectStore.getState().load();
+    }
+  }, [pathname]);
 
   useEffect(() => {
     useAuthStore.getState().initAuth();
