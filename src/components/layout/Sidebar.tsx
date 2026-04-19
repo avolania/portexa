@@ -9,7 +9,7 @@ import {
   ChevronRight, ShieldCheck, HeadphonesIcon,
   AlertCircle, GitPullRequest, LifeBuoy, Ticket,
   SlidersHorizontal, ClipboardList, ChevronDown, Wallet,
-  Globe, Building2, MonitorCheck,
+  Globe, Building2, MonitorCheck, ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -72,6 +72,7 @@ const navSections: NavSection[] = [
       { href: "/itsm/incidents",              icon: AlertCircle,     label: "Incident'lar"      },
       { href: "/itsm/service-requests",       icon: ClipboardList,   label: "Servis Talepleri"  },
       { href: "/itsm/change-requests",        icon: GitPullRequest,  label: "Değişiklikler"     },
+      { href: "/itsm/approvals",              icon: ClipboardCheck,  label: "Onaylarım"         },
       { href: "/itsm/workbench/l1",           icon: MonitorCheck,    label: "L1 Workbench"      },
       { href: "/itsm/workbench/l2",           icon: MonitorCheck,    label: "L2/L3 Specialist"  },
       { href: "/itsm/workbench/sdm",          icon: MonitorCheck,    label: "SDM Dashboard"     },
