@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Search, LayoutGrid, List, MoreHorizontal, Calendar, Users, Zap, GitMerge, CheckSquare } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -13,9 +13,11 @@ import NewProjectModal from "@/components/projects/NewProjectModal";
 import PermissionGate from "@/components/auth/PermissionGate";
 
 export default function ProjelerPage() {
-  const { projects } = useProjectStore();
+  const { projects, load } = useProjectStore();
   const profiles = useAuthStore((s) => s.profiles);
   const [search, setSearch] = useState("");
+
+  useEffect(() => { load(); }, [load]);
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showNewProject, setShowNewProject] = useState(false);
