@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useProjectStore } from "@/store/useProjectStore";
 import { ProjectStatusBadge, PriorityBadge } from "@/components/ui/Badge";
 import KanbanBoard from "@/components/kanban/KanbanBoard";
@@ -22,12 +22,14 @@ import { CURRENCIES, formatCurrency as formatCurrencyLib } from "@/lib/currencie
 
 export default function ProjeDetayPage() {
   const params = useParams();
-  const { projects, getProjectTasks, updateProject } = useProjectStore();
+  const router = useRouter();
+  const { projects, getProjectTasks, updateProject, deleteProject } = useProjectStore();
   const { members: teamMembers, assignProject, unassignProject } = useTeamStore();
   const profiles = useAuthStore((s) => s.profiles);
   const project = projects.find((p) => p.id === params.id);
   const [activeTab, setActiveTab] = useState<"tasks" | "governance" | "team" | "plan" | "budget" | "data">("tasks");
   const [showNewTask, setShowNewTask] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   if (!project) {
@@ -138,7 +140,10 @@ export default function ProjeDetayPage() {
             <Download className="w-4 h-4" />
             Excel
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
             <Settings className="w-4 h-4" />
             Ayarlar
           </button>
@@ -295,7 +300,262 @@ export default function ProjeDetayPage() {
           onClose={() => setShowNewTask(false)}
         />
       )}
+
+      {showSettings && (
+        <ProjectSettingsModal
+          project={project}
+          onSave={async (patch) => { await updateProject(project.id, patch); }}
+          onDelete={async () => { await deleteProject(project.id); router.push("/projeler"); }}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── Project Settings Modal ───────────────────────────────────────────────────
+
+function ProjectSettingsModal({
+  project,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  project: Project;
+  onSave: (patch: Partial<Project>) => Promise<void>;
+  onDelete: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: project.name,
+    description: project.description ?? "",
+    status: project.status,
+    priority: project.priority,
+    startDate: project.startDate,
+    endDate: project.endDate,
+    tags: project.tags.join(", "),
+  });
+  const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const dirty =
+    form.name !== project.name ||
+    form.description !== (project.description ?? "") ||
+    form.status !== project.status ||
+    form.priority !== project.priority ||
+    form.startDate !== project.startDate ||
+    form.endDate !== project.endDate ||
+    form.tags !== project.tags.join(", ");
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+        status: form.status as import("@/types").ProjectStatus,
+        priority: form.priority as import("@/types").Priority,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+      });
+      onClose();
+    } catch {
+      setError("Kaydedilemedi. Tekrar deneyin.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await onDelete();
+    } catch {
+      setError("Silinemedi. Tekrar deneyin.");
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const inputCls = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all";
+  const labelCls = "block text-xs font-semibold text-gray-500 mb-1";
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto pointer-events-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <Settings className="w-5 h-5 text-gray-400" />
+              <h2 className="text-base font-bold text-gray-900">Proje Ayarları</h2>
+            </div>
+            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Proje Adı */}
+            <div>
+              <label className={labelCls}>Proje Adı *</label>
+              <input
+                className={inputCls}
+                value={form.name}
+                onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+                placeholder="Proje adı..."
+              />
+            </div>
+
+            {/* Açıklama */}
+            <div>
+              <label className={labelCls}>Açıklama</label>
+              <textarea
+                className={inputCls}
+                rows={2}
+                value={form.description}
+                onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+                placeholder="Proje açıklaması..."
+              />
+            </div>
+
+            {/* Status & Priority */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Durum</label>
+                <select
+                  className={inputCls}
+                  value={form.status}
+                  onChange={(e) => setForm((s) => ({ ...s, status: e.target.value as typeof form.status }))}
+                >
+                  <option value="active">Aktif</option>
+                  <option value="on_hold">Beklemede</option>
+                  <option value="at_risk">Riskli</option>
+                  <option value="completed">Tamamlandı</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Öncelik</label>
+                <select
+                  className={inputCls}
+                  value={form.priority}
+                  onChange={(e) => setForm((s) => ({ ...s, priority: e.target.value as typeof form.priority }))}
+                >
+                  <option value="low">Düşük</option>
+                  <option value="medium">Orta</option>
+                  <option value="high">Yüksek</option>
+                  <option value="critical">Kritik</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Tarihler */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Başlangıç Tarihi</label>
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={form.startDate}
+                  onChange={(e) => setForm((s) => ({ ...s, startDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Bitiş Tarihi</label>
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={form.endDate}
+                  onChange={(e) => setForm((s) => ({ ...s, endDate: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Etiketler */}
+            <div>
+              <label className={labelCls}>Etiketler (virgülle ayırın)</label>
+              <input
+                className={inputCls}
+                value={form.tags}
+                onChange={(e) => setForm((s) => ({ ...s, tags: e.target.value }))}
+                placeholder="web, react, api..."
+              />
+            </div>
+
+            {error && (
+              <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</div>
+            )}
+
+            {/* Kaydet / İptal */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={onClose}
+                disabled={saving}
+                className="flex-1 py-2.5 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || !dirty || !form.name.trim()}
+                className="flex-1 py-2.5 text-sm font-semibold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {saving ? (
+                  <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Kaydediliyor...</>
+                ) : (
+                  <><Save className="w-4 h-4" />Kaydet</>
+                )}
+              </button>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="border border-red-200 rounded-xl p-4 mt-2 bg-red-50/50">
+              <h3 className="text-sm font-semibold text-red-700 mb-1">Tehlikeli Alan</h3>
+              <p className="text-xs text-red-600 mb-3">
+                Projeyi silmek tüm görevleri ve verileri kalıcı olarak siler.
+              </p>
+              {!showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 border border-red-300 bg-white rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Projeyi Sil
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-red-700">
+                    Emin misiniz? Bu işlem geri alınamaz.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={deleting}
+                      className="flex-1 py-2 text-sm font-medium border border-gray-200 bg-white rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Vazgeç
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="flex-1 py-2 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                    >
+                      {deleting ? "Siliniyor..." : <><Trash2 className="w-3.5 h-3.5" />Evet, Sil</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
