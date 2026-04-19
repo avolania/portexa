@@ -8,6 +8,7 @@ import { useState } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { useProjectStore } from "@/store/useProjectStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/lib/utils";
 import { CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
 import type { Project, Priority, ProjectType } from "@/types";
@@ -62,6 +63,7 @@ interface Props {
 
 export default function NewProjectModal({ onClose }: Props) {
   const addProject = useProjectStore((s) => s.addProject);
+  const user = useAuthStore((s) => s.user);
   const [projectType, setProjectType] = useState<ProjectType>("agile");
   const [currency, setCurrency] = useState(DEFAULT_CURRENCY);
   const [step, setStep] = useState<1 | 2>(1);
@@ -91,8 +93,8 @@ export default function NewProjectModal({ onClose }: Props) {
       budget: data.budget ? Number(data.budget) : undefined,
       budgetUsed: 0,
       currency,
-      managerId: "1",
-      members: ["1"],
+      managerId: user?.id ?? "",
+      members: user?.id ? [user.id] : [],
       tags: data.tags ? data.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

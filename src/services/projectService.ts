@@ -3,10 +3,10 @@ import { dbLoadAll, dbUpsert, dbDelete } from "@/lib/db";
 
 // ─── Load ──────────────────────────────────────────────────────────────────────
 
-export async function loadProjects(): Promise<{ projects: Project[]; tasks: Task[] }> {
+export async function loadProjects(orgId?: string): Promise<{ projects: Project[]; tasks: Task[] }> {
   const [projects, tasks] = await Promise.all([
-    dbLoadAll<Project>("projects"),
-    dbLoadAll<Task>("tasks"),
+    dbLoadAll<Project>("projects", orgId),
+    dbLoadAll<Task>("tasks", orgId),
   ]);
   return { projects, tasks };
 }

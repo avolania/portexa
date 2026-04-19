@@ -43,7 +43,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   load: async () => {
     set({ loading: true, error: null });
     try {
-      const { projects, tasks } = await loadProjects();
+      const orgId = useAuthStore.getState().user?.orgId;
+      const { projects, tasks } = await loadProjects(orgId);
       set({ projects: _syncProgress(tasks, projects), tasks, loading: false });
     } catch (err) {
       set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
