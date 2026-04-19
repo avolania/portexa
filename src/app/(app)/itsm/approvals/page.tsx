@@ -361,7 +361,9 @@ export default function ApprovalsPage() {
       setDecisionModal(null);
       await loadInstances();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Bir hata oluştu.");
+      const msg = err instanceof Error ? err.message : "Bir hata oluştu.";
+      setError(msg);
+      setDecisionModal(null);
     } finally {
       setSaving(false);
     }

@@ -45,7 +45,7 @@ export async function dbConditionalUpdate(
     .from(table)
     .update({ data, org_id: orgId }, { count: 'exact' })
     .eq("id", id)
-    .filter("data->>'version'", "eq", String(expectedVersion));
+    .filter("data->>version", "eq", String(expectedVersion));
   if (error) {
     console.error(`[db] conditionalUpdate ${table}:`, error.message);
     throw new Error(error.message);
@@ -60,7 +60,7 @@ export async function dbFindOneByJsonb<T>(
 ): Promise<T | null> {
   let query = supabase.from(table).select("data");
   for (const [key, value] of Object.entries(filters)) {
-    query = query.filter(`data->>'${key}'`, "eq", value);
+    query = query.filter(`data->>${key}`, "eq", value);
   }
   const { data, error } = await query.limit(1).maybeSingle();
   if (error || !data) return null;
