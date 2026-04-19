@@ -75,7 +75,7 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
   loadTicketActivity: async (ticketId) => {
     const orgId = useAuthStore.getState().user?.orgId;
     if (!orgId) return;
-    set({ activityLoading: true, activeTicketId: ticketId });
+    set({ activityLoading: true, activeTicketId: ticketId, activeWorkNotes: [], activeComments: [], activeEvents: [] });
     try {
       const [noteRows, events] = await Promise.all([
         dbLoadNotes<WorkNote>(ticketId, orgId),
@@ -85,7 +85,7 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
       const comments  = noteRows.filter((r) => r.noteType === 'comment').map((r) => r.data);
       set({ activeWorkNotes: workNotes, activeComments: comments, activeEvents: events, activityLoading: false });
     } catch {
-      set({ activityLoading: false });
+      set({ activeWorkNotes: [], activeComments: [], activeEvents: [], activityLoading: false });
     }
   },
 
@@ -231,7 +231,7 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
     if (!user) return;
     const note = await addSRWorkNote(id, dto, null, user.id, user.name, user.orgId);
     set((s) => ({
-      activeWorkNotes: [...s.activeWorkNotes, note],
+      activeWorkNotes: s.activeTicketId === id ? [...s.activeWorkNotes, note] : s.activeWorkNotes,
       serviceRequests: s.serviceRequests.map((sr) => sr.id === id ? { ...sr, updatedAt: note.createdAt } : sr),
     }));
   },

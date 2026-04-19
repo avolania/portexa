@@ -74,7 +74,7 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
   loadTicketActivity: async (ticketId) => {
     const orgId = useAuthStore.getState().user?.orgId;
     if (!orgId) return;
-    set({ activityLoading: true, activeTicketId: ticketId });
+    set({ activityLoading: true, activeTicketId: ticketId, activeWorkNotes: [], activeComments: [], activeEvents: [] });
     try {
       const [noteRows, events] = await Promise.all([
         dbLoadNotes<WorkNote>(ticketId, orgId),
@@ -84,7 +84,7 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
       const comments  = noteRows.filter((r) => r.noteType === 'comment').map((r) => r.data);
       set({ activeWorkNotes: workNotes, activeComments: comments, activeEvents: events, activityLoading: false });
     } catch {
-      set({ activityLoading: false });
+      set({ activeWorkNotes: [], activeComments: [], activeEvents: [], activityLoading: false });
     }
   },
 
@@ -176,7 +176,7 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
     if (!user) return;
     const note = await addCRWorkNote(id, dto, null, user.id, user.name, user.orgId);
     set((s) => ({
-      activeWorkNotes: [...s.activeWorkNotes, note],
+      activeWorkNotes: s.activeTicketId === id ? [...s.activeWorkNotes, note] : s.activeWorkNotes,
       changeRequests: s.changeRequests.map((cr) => cr.id === id ? { ...cr, updatedAt: note.createdAt } : cr),
     }));
   },

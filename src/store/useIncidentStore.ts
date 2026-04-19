@@ -69,7 +69,8 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
   loadTicketActivity: async (ticketId) => {
     const orgId = useAuthStore.getState().user?.orgId;
     if (!orgId) return;
-    set({ activityLoading: true, activeTicketId: ticketId });
+    // Ticket değişince eski notları hemen temizle — yeni yüklenene kadar karışma olmaz
+    set({ activityLoading: true, activeTicketId: ticketId, activeWorkNotes: [], activeComments: [], activeEvents: [] });
     try {
       const [noteRows, events] = await Promise.all([
         dbLoadNotes<WorkNote>(ticketId, orgId),
@@ -79,7 +80,8 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
       const comments  = noteRows.filter((r) => r.noteType === 'comment').map((r) => r.data);
       set({ activeWorkNotes: workNotes, activeComments: comments, activeEvents: events, activityLoading: false });
     } catch {
-      set({ activityLoading: false });
+      // Hata olsa bile eski ticket'ın notları görünmesin
+      set({ activeWorkNotes: [], activeComments: [], activeEvents: [], activityLoading: false });
     }
   },
 
@@ -142,7 +144,8 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
     if (!user) return;
     const note = await addIncidentWorkNote(id, dto, null, user.id, user.name, user.orgId);
     set((s) => ({
-      activeWorkNotes: [...s.activeWorkNotes, note],
+      // Sadece bu ticket aktif ise UI'ya ekle — farklı bir ticket seçiliyken ekleme
+      activeWorkNotes: s.activeTicketId === id ? [...s.activeWorkNotes, note] : s.activeWorkNotes,
       incidents: s.incidents.map((i) => i.id === id ? { ...i, updatedAt: note.createdAt } : i),
     }));
   },
