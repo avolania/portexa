@@ -349,44 +349,38 @@ export async function closeIncident(
 
 // ─── Notes & comments ─────────────────────────────────────────────────────────
 
-/** P1: Not ayrı tabloya yazılır, blob güncellenmez. Yeni WorkNote döner. */
+/** P1: Not ayrı tabloya yazılır. current listesine bağımlılık yok — ID yeterli. */
 export async function addIncidentWorkNote(
   id: string,
   dto: AddWorkNoteDto,
-  current: Incident[],
+  _current: unknown,
   actorId: string,
   actorName: string,
   orgId: string,
-): Promise<import('@/lib/itsm/types/interfaces').WorkNote | null> {
-  const existing = current.find((i) => i.id === id);
-  if (!existing) return null;
+): Promise<import('@/lib/itsm/types/interfaces').WorkNote> {
   const now = new Date().toISOString();
   const note = makeNote(actorId, actorName, dto.content, now);
   await Promise.all([
     dbInsertNote(id, 'incident', 'work_note', orgId, note),
     dbInsertEvent(id, 'incident', orgId, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }),
-    dbUpsert(TABLE, id, { ...existing, updatedAt: now }, orgId),
   ]);
   return note;
 }
 
-/** P1: Yorum ayrı tabloya yazılır. Yeni TicketComment döner. */
+/** P1: Yorum ayrı tabloya yazılır. current listesine bağımlılık yok. */
 export async function addIncidentComment(
   id: string,
   dto: AddCommentDto,
-  current: Incident[],
+  _current: unknown,
   actorId: string,
   actorName: string,
   orgId: string,
-): Promise<import('@/lib/itsm/types/interfaces').TicketComment | null> {
-  const existing = current.find((i) => i.id === id);
-  if (!existing) return null;
+): Promise<import('@/lib/itsm/types/interfaces').TicketComment> {
   const now = new Date().toISOString();
   const comment = makeNote(actorId, actorName, dto.content, now);
   await Promise.all([
     dbInsertNote(id, 'incident', 'comment', orgId, comment),
     dbInsertEvent(id, 'incident', orgId, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }),
-    dbUpsert(TABLE, id, { ...existing, updatedAt: now }, orgId),
   ]);
   return comment;
 }

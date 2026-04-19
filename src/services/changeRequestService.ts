@@ -311,19 +311,16 @@ export async function closeChangeRequest(
 export async function addCRWorkNote(
   id: string,
   dto: AddWorkNoteDto,
-  current: ChangeRequest[],
+  _current: unknown,
   actorId: string,
   actorName: string,
   orgId: string,
-): Promise<import('@/lib/itsm/types/interfaces').WorkNote | null> {
-  const existing = current.find((cr) => cr.id === id);
-  if (!existing) return null;
+): Promise<import('@/lib/itsm/types/interfaces').WorkNote> {
   const now = new Date().toISOString();
   const note = { id: uuid(), authorId: actorId, authorName: actorName, content: dto.content, createdAt: now };
   await Promise.all([
     dbInsertNote(id, 'change-request', 'work_note', orgId, note),
     dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.WORK_NOTE_ADDED, actorId, actorName, timestamp: now }),
-    dbUpsert(TABLE, id, { ...existing, updatedAt: now }, orgId),
   ]);
   return note;
 }
@@ -331,19 +328,16 @@ export async function addCRWorkNote(
 export async function addCRComment(
   id: string,
   dto: AddCommentDto,
-  current: ChangeRequest[],
+  _current: unknown,
   actorId: string,
   actorName: string,
   orgId: string,
-): Promise<import('@/lib/itsm/types/interfaces').TicketComment | null> {
-  const existing = current.find((cr) => cr.id === id);
-  if (!existing) return null;
+): Promise<import('@/lib/itsm/types/interfaces').TicketComment> {
   const now = new Date().toISOString();
   const comment = { id: uuid(), authorId: actorId, authorName: actorName, content: dto.content, createdAt: now };
   await Promise.all([
     dbInsertNote(id, 'change-request', 'comment', orgId, comment),
     dbInsertEvent(id, 'change-request', orgId, { id: uuid(), type: TicketEventType.COMMENT_ADDED, actorId, actorName, timestamp: now }),
-    dbUpsert(TABLE, id, { ...existing, updatedAt: now }, orgId),
   ]);
   return comment;
 }

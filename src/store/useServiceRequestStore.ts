@@ -229,25 +229,21 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
   addWorkNote: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const note = await addSRWorkNote(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
-    if (note) {
-      set((s) => ({
-        activeWorkNotes: [...s.activeWorkNotes, note],
-        serviceRequests: s.serviceRequests.map((sr) => sr.id === id ? { ...sr, updatedAt: note.createdAt } : sr),
-      }));
-    }
+    const note = await addSRWorkNote(id, dto, null, user.id, user.name, user.orgId);
+    set((s) => ({
+      activeWorkNotes: [...s.activeWorkNotes, note],
+      serviceRequests: s.serviceRequests.map((sr) => sr.id === id ? { ...sr, updatedAt: note.createdAt } : sr),
+    }));
   },
 
   addComment: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const comment = await addSRComment(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
-    if (comment) {
-      set((s) => ({
-        activeComments: [...s.activeComments, comment],
-        serviceRequests: s.serviceRequests.map((sr) => sr.id === id ? { ...sr, updatedAt: comment.createdAt } : sr),
-      }));
-    }
+    const comment = await addSRComment(id, dto, null, user.id, user.name, user.orgId);
+    set((s) => ({
+      activeComments: [...s.activeComments, comment],
+      serviceRequests: s.serviceRequests.map((sr) => sr.id === id ? { ...sr, updatedAt: comment.createdAt } : sr),
+    }));
   },
 
   addAttachment: async (id, file) => {

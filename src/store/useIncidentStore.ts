@@ -140,25 +140,21 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
   addWorkNote: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const note = await addIncidentWorkNote(id, dto, get().incidents, user.id, user.name, user.orgId);
-    if (note) {
-      set((s) => ({
-        activeWorkNotes: [...s.activeWorkNotes, note],
-        incidents: s.incidents.map((i) => i.id === id ? { ...i, updatedAt: note.createdAt } : i),
-      }));
-    }
+    const note = await addIncidentWorkNote(id, dto, null, user.id, user.name, user.orgId);
+    set((s) => ({
+      activeWorkNotes: [...s.activeWorkNotes, note],
+      incidents: s.incidents.map((i) => i.id === id ? { ...i, updatedAt: note.createdAt } : i),
+    }));
   },
 
   addComment: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const comment = await addIncidentComment(id, dto, get().incidents, user.id, user.name, user.orgId);
-    if (comment) {
-      set((s) => ({
-        activeComments: [...s.activeComments, comment],
-        incidents: s.incidents.map((i) => i.id === id ? { ...i, updatedAt: comment.createdAt } : i),
-      }));
-    }
+    const comment = await addIncidentComment(id, dto, null, user.id, user.name, user.orgId);
+    set((s) => ({
+      activeComments: [...s.activeComments, comment],
+      incidents: s.incidents.map((i) => i.id === id ? { ...i, updatedAt: comment.createdAt } : i),
+    }));
   },
 
   linkCR: async (id, dto) => {

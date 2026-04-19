@@ -174,25 +174,21 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
   addWorkNote: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const note = await addCRWorkNote(id, dto, get().changeRequests, user.id, user.name, user.orgId);
-    if (note) {
-      set((s) => ({
-        activeWorkNotes: [...s.activeWorkNotes, note],
-        changeRequests: s.changeRequests.map((cr) => cr.id === id ? { ...cr, updatedAt: note.createdAt } : cr),
-      }));
-    }
+    const note = await addCRWorkNote(id, dto, null, user.id, user.name, user.orgId);
+    set((s) => ({
+      activeWorkNotes: [...s.activeWorkNotes, note],
+      changeRequests: s.changeRequests.map((cr) => cr.id === id ? { ...cr, updatedAt: note.createdAt } : cr),
+    }));
   },
 
   addComment: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
-    const comment = await addCRComment(id, dto, get().changeRequests, user.id, user.name, user.orgId);
-    if (comment) {
-      set((s) => ({
-        activeComments: [...s.activeComments, comment],
-        changeRequests: s.changeRequests.map((cr) => cr.id === id ? { ...cr, updatedAt: comment.createdAt } : cr),
-      }));
-    }
+    const comment = await addCRComment(id, dto, null, user.id, user.name, user.orgId);
+    set((s) => ({
+      activeComments: [...s.activeComments, comment],
+      changeRequests: s.changeRequests.map((cr) => cr.id === id ? { ...cr, updatedAt: comment.createdAt } : cr),
+    }));
   },
 
   linkIncident: async (id, dto) => {
