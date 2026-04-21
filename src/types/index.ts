@@ -72,6 +72,7 @@ export interface OrgSettings {
   workingDays: number[];     // 0=Sun, 1=Mon, …, 6=Sat
   workingHoursPerDay: number;
   fiscalYearStart: number;   // 1–12
+  projectRoles: string[];    // Proje ekibi rolleri (ör. "SME", "Test Lideri")
   integrations: {
     slackWebhook?: string;
     jiraUrl?: string;
@@ -178,6 +179,13 @@ export interface ProjectPhase {
   icon?: string;
 }
 
+export interface ProjectResponsibility {
+  id: string;
+  area: string;       // Sorumluluk alanı (ör. "Frontend", "Test", "Altyapı")
+  assigneeId: string; // project.members içindeki kullanıcı ID'si
+  notes?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -192,10 +200,13 @@ export interface Project {
   budgetUsed?: number;
   currency?: string;
   managerId: string;
+  ownerId?: string | null;                       // proje sahibi
   members: string[];
+  memberRoles?: Record<string, string>;          // memberId → proje rolü (ör. "SME", "Test Lideri")
+  responsibilities?: ProjectResponsibility[];    // sorumluluk listesi
   tags: string[];
   currentSprint?: number;
-  phases?: ProjectPhase[];           // özel faz listesi; yoksa varsayılan 5 faz kullanılır
+  phases?: ProjectPhase[];
   phasePlan?: Partial<Record<string, PhasePlanEntry>>;
   createdAt: string;
   updatedAt: string;

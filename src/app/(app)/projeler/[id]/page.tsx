@@ -13,6 +13,8 @@ import Link from "next/link";
 import { exportProjectPlan } from "@/lib/exportExcel";
 import { useTeamStore } from "@/store/useTeamStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
+import { DEFAULT_PROJECT_ROLES } from "@/services/settingsService";
 import { ROLE_META } from "@/lib/permissions";
 import Avatar from "@/components/ui/Avatar";
 import * as XLSX from "xlsx";
@@ -26,6 +28,9 @@ export default function ProjeDetayPage() {
   const { projects, getProjectTasks, updateProject, deleteProject } = useProjectStore();
   const { members: teamMembers, assignProject, unassignProject } = useTeamStore();
   const profiles = useAuthStore((s) => s.profiles);
+  const projectRoles = useSettingsStore((s) =>
+    s.settings.projectRoles?.length ? s.settings.projectRoles : DEFAULT_PROJECT_ROLES
+  );
   const project = projects.find((p) => p.id === params.id);
   const [activeTab, setActiveTab] = useState<"tasks" | "governance" | "team" | "plan" | "budget" | "data">("tasks");
   const [showNewTask, setShowNewTask] = useState(false);
@@ -75,20 +80,24 @@ export default function ProjeDetayPage() {
     }
   };
 
-  const handleAddMember = (memberId: string) => {
-    if (project.members.includes(memberId)) return;
-    withSave(async () => {
-      await updateProject(project.id, { members: [...project.members, memberId] });
-      const tm = teamMembers.find((m) => m.id === memberId);
-      if (tm) assignProject(memberId, project.id);
+  const handleSaveTeamMembers = async (
+    newMembers: string[],
+    memberRoles?: Record<string, string>,
+    responsibilities?: import("@/types").ProjectResponsibility[],
+    ownerId?: string,
+  ) => {
+    const added = newMembers.filter((id) => !project.members.includes(id));
+    const removed = project.members.filter((id) => !newMembers.includes(id));
+    // ownerId boş string → null (JSON'da açıkça null yaz, undefined olursa JSON'dan düşer)
+    const ownerIdToSave: string | null = ownerId || null;
+    await updateProject(project.id, { members: newMembers, memberRoles, responsibilities, ownerId: ownerIdToSave });
+    added.forEach((id) => {
+      const tm = teamMembers.find((m) => m.id === id);
+      if (tm) assignProject(id, project.id);
     });
-  };
-
-  const handleRemoveMember = (memberId: string) => {
-    withSave(async () => {
-      await updateProject(project.id, { members: project.members.filter((id) => id !== memberId) });
-      const tm = teamMembers.find((m) => m.id === memberId);
-      if (tm) unassignProject(memberId, project.id);
+    removed.forEach((id) => {
+      const tm = teamMembers.find((m) => m.id === id);
+      if (tm) unassignProject(id, project.id);
     });
   };
 
@@ -277,8 +286,8 @@ export default function ProjeDetayPage() {
           project={project}
           teamMembers={teamMembers}
           profiles={profiles}
-          onAdd={handleAddMember}
-          onRemove={handleRemoveMember}
+          projectRoles={projectRoles}
+          onSave={handleSaveTeamMembers}
         />
       )}
 
@@ -565,19 +574,93 @@ function TeamTab({
   project,
   teamMembers,
   profiles,
-  onAdd,
-  onRemove,
+  projectRoles,
+  onSave,
 }: {
   project: Project;
   teamMembers: TeamMember[];
   profiles: Record<string, User>;
-  onAdd: (memberId: string) => void;
-  onRemove: (memberId: string) => void;
+  projectRoles: string[];
+  onSave: (
+    members: string[],
+    memberRoles: Record<string, string>,
+    responsibilities: import("@/types").ProjectResponsibility[],
+    ownerId: string,
+  ) => Promise<void>;
 }) {
   const [search, setSearch] = useState("");
+  const [pendingMembers, setPendingMembers] = useState<string[]>(project.members);
+  const [ownerId, setOwnerId] = useState<string>(project.ownerId ?? "");
+  const [memberRoles, setMemberRoles] = useState<Record<string, string>>(project.memberRoles ?? {});
+  const [responsibilities, setResponsibilities] = useState<import("@/types").ProjectResponsibility[]>(
+    project.responsibilities ?? []
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
-  // Projedeki mevcut üyeleri çöz: önce teamStore, yoksa profiles
-  const currentMembers = project.members.map((id) => {
+  const membersChanged =
+    pendingMembers.length !== project.members.length ||
+    [...pendingMembers].sort().some((id, i) => [...project.members].sort()[i] !== id);
+  const ownerChanged = ownerId !== (project.ownerId ?? "");
+  const rolesChanged = JSON.stringify(memberRoles) !== JSON.stringify(project.memberRoles ?? {});
+  const respChanged = JSON.stringify(responsibilities) !== JSON.stringify(project.responsibilities ?? []);
+  const dirty = membersChanged || ownerChanged || rolesChanged || respChanged;
+
+  const handleAdd = (memberId: string) => {
+    if (pendingMembers.includes(memberId)) return;
+    setPendingMembers((prev) => [...prev, memberId]);
+  };
+
+  const handleRemove = (memberId: string) => {
+    setPendingMembers((prev) => prev.filter((id) => id !== memberId));
+    setMemberRoles((prev) => { const next = { ...prev }; delete next[memberId]; return next; });
+    setResponsibilities((prev) => prev.map((r) => r.assigneeId === memberId ? { ...r, assigneeId: "" } : r));
+  };
+
+  const setMemberRole = (memberId: string, role: string) => {
+    setMemberRoles((prev) => ({ ...prev, [memberId]: role }));
+  };
+
+  const addResponsibility = () => {
+    setResponsibilities((prev) => [
+      ...prev,
+      { id: `resp_${Date.now().toString(36)}`, area: "", assigneeId: "", notes: "" },
+    ]);
+  };
+
+  const updateResp = (id: string, field: keyof import("@/types").ProjectResponsibility, value: string) => {
+    setResponsibilities((prev) => prev.map((r) => r.id === id ? { ...r, [field]: value } : r));
+  };
+
+  const removeResp = (id: string) => {
+    setResponsibilities((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSave(pendingMembers, memberRoles, responsibilities, ownerId);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      setSaveError("Kaydedilemedi. Tekrar deneyin.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setPendingMembers(project.members);
+    setOwnerId(project.ownerId ?? "");
+    setMemberRoles(project.memberRoles ?? {});
+    setResponsibilities(project.responsibilities ?? []);
+    setSaveError(null);
+    setSaved(false);
+  };
+
+  const currentMembers = pendingMembers.map((id) => {
     const tm = teamMembers.find((m) => m.id === id);
     if (tm) return { id: tm.id, name: tm.name, email: tm.email, role: tm.role, title: tm.title };
     const prof = Object.values(profiles).find((p) => p.id === id);
@@ -585,123 +668,244 @@ function TeamTab({
     return null;
   }).filter(Boolean) as { id: string; name: string; email: string; role: NonNullable<TeamMember["role"]>; title?: string }[];
 
-  // Eklenebilecek üyeler: teamStore'da olup projede olmayan
-  const available = teamMembers.filter(
-    (m) => !project.members.includes(m.id)
-  );
-
+  const available = teamMembers.filter((m) => !pendingMembers.includes(m.id));
   const filteredAvailable = available.filter((m) => {
     const q = search.toLowerCase();
-    return (
-      !q ||
-      m.name.toLowerCase().includes(q) ||
-      m.email.toLowerCase().includes(q) ||
-      (m.title ?? "").toLowerCase().includes(q)
-    );
+    return !q || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q) || (m.title ?? "").toLowerCase().includes(q);
   });
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Sol: Mevcut ekip */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-900">
-            Projedeki Ekip
-            <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{currentMembers.length}</span>
-          </h3>
-        </div>
+  const memberOptions = currentMembers.map((m) => ({ id: m.id, name: m.name }));
 
-        {currentMembers.length === 0 ? (
-          <div className="text-center py-12 bg-white border border-dashed border-gray-200 rounded-2xl text-gray-400">
-            <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Henüz ekip üyesi eklenmemiş.</p>
-            <p className="text-xs mt-1">Sağ panelden üye seçin.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {currentMembers.map((m) => {
-              const meta = ROLE_META[m.role];
-              return (
-                <div key={m.id} className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
-                  <Avatar name={m.name} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">{m.name}</div>
-                    <div className="text-xs text-gray-400 truncate">{m.email}</div>
-                    {m.title && <div className="text-xs text-gray-400 truncate">{m.title}</div>}
-                  </div>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${meta.bg} ${meta.color}`}>
-                    {meta.label}
-                  </span>
-                  <button
-                    onClick={() => onRemove(m.id)}
-                    className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                    title="Projeden çıkar"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              );
-            })}
+  return (
+    <div className="space-y-6">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {dirty && !saved && (
+            <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> Kaydedilmemiş değişiklik
+            </span>
+          )}
+          {saved && (
+            <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Kaydedildi
+            </span>
+          )}
+          {saveError && (
+            <span className="flex items-center gap-1 text-xs font-medium text-white bg-red-500 px-3 py-1 rounded-lg">
+              ⚠ {saveError}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={handleCancel} disabled={!dirty || saving}
+            className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            İptal
+          </button>
+          <button onClick={handleSave} disabled={!dirty || saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            {saving ? <><svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Kaydediliyor...</> : <><Save className="w-3.5 h-3.5" />Kaydet</>}
+          </button>
+        </div>
+      </div>
+
+      {/* Proje Sahibi */}
+      <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-4">
+        <div className="flex-1">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Proje Sahibi</label>
+          <select
+            value={ownerId}
+            onChange={(e) => { setOwnerId(e.target.value); setSaved(false); }}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          >
+            <option value="">— Seçin</option>
+            {currentMembers.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+        {ownerId && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Avatar name={currentMembers.find((m) => m.id === ownerId)?.name ?? ""} size="sm" />
+            <div>
+              <div className="text-sm font-medium text-gray-900">
+                {currentMembers.find((m) => m.id === ownerId)?.name ?? ""}
+              </div>
+              <div className="text-xs text-indigo-600 font-medium">Proje Sahibi</div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Sağ: Eklenebilecek üyeler */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-gray-900">
-          Eklenebilecek Üyeler
-          <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{available.length}</span>
-        </h3>
+      {/* Üye yönetimi */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Sol: Mevcut ekip + rol ataması */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Projedeki Ekip
+            <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{currentMembers.length}</span>
+          </h3>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="İsim, e-posta veya unvan ara..."
-            className="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          />
-          {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <X className="w-3.5 h-3.5" />
-            </button>
+          {currentMembers.length === 0 ? (
+            <div className="text-center py-12 bg-white border border-dashed border-gray-200 rounded-2xl text-gray-400">
+              <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Henüz ekip üyesi eklenmemiş.</p>
+              <p className="text-xs mt-1">Sağ panelden üye seçin.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {currentMembers.map((m) => {
+                const meta = ROLE_META[m.role];
+                return (
+                  <div key={m.id} className="bg-white border border-gray-200 rounded-xl px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={m.name} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">{m.name}</div>
+                        <div className="text-xs text-gray-400 truncate">{m.email}</div>
+                      </div>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${meta.bg} ${meta.color}`}>
+                        {meta.label}
+                      </span>
+                      <button onClick={() => handleRemove(m.id)}
+                        className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0" title="Projeden çıkar">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {/* Proje rolü */}
+                    <div className="flex items-center gap-2 pl-9">
+                      <select
+                        value={memberRoles[m.id] ?? ""}
+                        onChange={(e) => setMemberRole(m.id, e.target.value)}
+                        className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-700"
+                      >
+                        <option value="">— Proje rolü seçin</option>
+                        {projectRoles.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {available.length === 0 ? (
-          <div className="text-center py-12 bg-white border border-dashed border-gray-200 rounded-2xl text-gray-400">
-            <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Tüm ekip üyeleri projede.</p>
+        {/* Sağ: Eklenebilecek üyeler */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Eklenebilecek Üyeler
+            <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{available.length}</span>
+          </h3>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="İsim, e-posta veya unvan ara..."
+              className="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-        ) : filteredAvailable.length === 0 ? (
+
+          {available.length === 0 ? (
+            <div className="text-center py-12 bg-white border border-dashed border-gray-200 rounded-2xl text-gray-400">
+              <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Tüm ekip üyeleri projede.</p>
+            </div>
+          ) : filteredAvailable.length === 0 ? (
+            <div className="text-center py-8 text-gray-400"><p className="text-sm">Eşleşen üye bulunamadı.</p></div>
+          ) : (
+            <div className="space-y-2">
+              {filteredAvailable.map((m) => {
+                const meta = ROLE_META[m.role];
+                return (
+                  <div key={m.id} className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-indigo-200 transition-colors">
+                    <Avatar name={m.name} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{m.name}</div>
+                      <div className="text-xs text-gray-400 truncate">{m.email}</div>
+                      {m.title && <div className="text-xs text-gray-400 truncate">{m.title}</div>}
+                    </div>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${meta.bg} ${meta.color}`}>
+                      {meta.label}
+                    </span>
+                    <button onClick={() => handleAdd(m.id)}
+                      className="flex items-center gap-1 text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0">
+                      <UserPlus className="w-3.5 h-3.5" /> Ekle
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sorumluluk Listesi */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Sorumluluk Listesi</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Her alan için proje ekibinden sorumlu atayın.</p>
+          </div>
+          <button onClick={addResponsibility}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200">
+            <Plus className="w-3.5 h-3.5" /> Ekle
+          </button>
+        </div>
+
+        {responsibilities.length === 0 ? (
           <div className="text-center py-8 text-gray-400">
-            <p className="text-sm">Eşleşen üye bulunamadı.</p>
+            <p className="text-sm">Henüz sorumluluk eklenmemiş.</p>
+            <p className="text-xs mt-1">"Ekle" butonuyla başlayın.</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {filteredAvailable.map((m) => {
-              const meta = ROLE_META[m.role];
-              return (
-                <div key={m.id} className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-indigo-200 transition-colors">
-                  <Avatar name={m.name} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">{m.name}</div>
-                    <div className="text-xs text-gray-400 truncate">{m.email}</div>
-                    {m.title && <div className="text-xs text-gray-400 truncate">{m.title}</div>}
-                  </div>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${meta.bg} ${meta.color}`}>
-                    {meta.label}
-                  </span>
-                  <button
-                    onClick={() => onAdd(m.id)}
-                    className="flex items-center gap-1 text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0"
+          <div className="divide-y divide-gray-100">
+            {/* Başlık satırı */}
+            <div className="grid grid-cols-12 gap-3 px-4 py-2 bg-gray-50/50">
+              <div className="col-span-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Alan / Konu</div>
+              <div className="col-span-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sorumlu</div>
+              <div className="col-span-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Notlar</div>
+              <div className="col-span-1" />
+            </div>
+            {responsibilities.map((resp) => (
+              <div key={resp.id} className="grid grid-cols-12 gap-3 px-4 py-2.5 items-center">
+                <div className="col-span-4">
+                  <input
+                    value={resp.area}
+                    onChange={(e) => updateResp(resp.id, "area", e.target.value)}
+                    placeholder="Ör. Test Yönetimi"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <select
+                    value={resp.assigneeId}
+                    onChange={(e) => updateResp(resp.id, "assigneeId", e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    Ekle
+                    <option value="">— Seçin</option>
+                    {memberOptions.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-4">
+                  <input
+                    value={resp.notes ?? ""}
+                    onChange={(e) => updateResp(resp.id, "notes", e.target.value)}
+                    placeholder="Kısa not..."
+                    className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </div>
+                <div className="col-span-1 flex justify-end">
+                  <button onClick={() => removeResp(resp.id)}
+                    className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -719,22 +923,33 @@ function PlanTab({
   onUpdate: (phasePlan: Partial<Record<string, PhasePlanEntry>>) => Promise<void>;
 }) {
   const { getProjectTasks, updateProject } = useProjectStore();
+  const { members: teamMembers } = useTeamStore();
+  const profiles = useAuthStore((s) => s.profiles);
   const allTasks = getProjectTasks(project.id);
+
+  // Proje üyelerini isimle listele
+  const projectMembers = (project.members ?? []).map((memberId) => {
+    const tm = teamMembers.find((m) => m.id === memberId);
+    if (tm) return { id: memberId, name: tm.name };
+    const prof = Object.values(profiles).find((p) => p.id === memberId);
+    return { id: memberId, name: prof?.name ?? memberId };
+  });
 
   // ── Faz listesi state ──────────────────────────────────────────────────────
   const [phases, setPhases] = useState<ProjectPhase[]>(
     project.phases ?? DEFAULT_PHASES.map((p) => ({ id: p.id, label: p.label, icon: p.icon }))
   );
   const [phasesDirty, setPhasesDirty] = useState(false);
+  const [phasesSaving, setPhasesSaving] = useState(false);
+  const [phasesSaved, setPhasesSaved] = useState(false);
 
   // ── Plan entries state ─────────────────────────────────────────────────────
   const [form, setForm] = useState<Partial<Record<string, PhasePlanEntry>>>(
     project.phasePlan ?? {}
   );
   const [dirty, setDirty] = useState(false);
+  const [saving, setPlanSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-
-  const anyDirty = dirty || phasesDirty;
 
   const setField = (phaseId: string, field: keyof PhasePlanEntry, value: string) => {
     setForm((prev) => ({
@@ -745,24 +960,35 @@ function PlanTab({
     setSaved(false);
   };
 
-  const handleSave = () => {
-    // Faz listesi değiştiyse kaydet
-    if (phasesDirty) {
-      updateProject(project.id, { phases });
-      setPhasesDirty(false);
-    }
-    // Plan girişlerini kaydet
-    onUpdate(form);
+  // Faz listesi kaydet
+  const handleSavePhases = async () => {
+    setPhasesSaving(true);
+    await updateProject(project.id, { phases });
+    setPhasesDirty(false);
+    setPhasesSaving(false);
+    setPhasesSaved(true);
+    setTimeout(() => setPhasesSaved(false), 2500);
+  };
+
+  const handleResetPhases = () => {
+    setPhases(project.phases ?? DEFAULT_PHASES.map((p) => ({ id: p.id, label: p.label, icon: p.icon })));
+    setPhasesDirty(false);
+    setPhasesSaved(false);
+  };
+
+  // Faz planı kaydet
+  const handleSavePlan = async () => {
+    setPlanSaving(true);
+    await onUpdate(form);
     setDirty(false);
+    setPlanSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const handleReset = () => {
-    setPhases(project.phases ?? DEFAULT_PHASES.map((p) => ({ id: p.id, label: p.label, icon: p.icon })));
+  const handleResetPlan = () => {
     setForm(project.phasePlan ?? {});
     setDirty(false);
-    setPhasesDirty(false);
     setSaved(false);
   };
 
@@ -804,15 +1030,41 @@ function PlanTab({
         <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Fazları Düzenle</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Faz adlarını değiştirin, sıralayin, ekleyin veya silin.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Faz adlarını değiştirin, sıralayın, ekleyin veya silin.</p>
           </div>
-          <button
-            onClick={addPhase}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Faz Ekle
-          </button>
+          <div className="flex items-center gap-2">
+            {phasesSaved && (
+              <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Kaydedildi
+              </span>
+            )}
+            <button
+              onClick={addPhase}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Faz Ekle
+            </button>
+            {phasesDirty && (
+              <>
+                <button
+                  onClick={handleResetPhases}
+                  disabled={phasesSaving}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleSavePhases}
+                  disabled={phasesSaving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-40"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {phasesSaving ? "Kaydediliyor..." : "Kaydet"}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="divide-y divide-gray-100">
@@ -884,25 +1136,25 @@ function PlanTab({
                 <CheckCircle2 className="w-3.5 h-3.5" /> Kaydedildi
               </span>
             )}
-            {anyDirty && (
+            {dirty && (
               <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5" /> Kaydedilmemiş değişiklik
               </span>
             )}
             <button
-              onClick={handleReset}
-              disabled={!anyDirty}
+              onClick={handleResetPlan}
+              disabled={!dirty || saving}
               className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               İptal
             </button>
             <button
-              onClick={handleSave}
-              disabled={!anyDirty}
+              onClick={handleSavePlan}
+              disabled={!dirty || saving}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Save className="w-3.5 h-3.5" />
-              Kaydet
+              {saving ? "Kaydediliyor..." : "Kaydet"}
             </button>
           </div>
         </div>
@@ -957,13 +1209,16 @@ function PlanTab({
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Sorumlu</label>
-                    <input
-                      type="text"
+                    <select
                       value={entry.owner ?? ""}
                       onChange={(e) => setField(phase.id, "owner", e.target.value)}
-                      placeholder="Sorumlu adı..."
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                    />
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                    >
+                      <option value="">— Seçin</option>
+                      {projectMembers.map((m) => (
+                        <option key={m.id} value={m.name}>{m.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Notlar</label>

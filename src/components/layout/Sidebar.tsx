@@ -84,8 +84,9 @@ const navSections: NavSection[] = [
     icon: ShieldCheck,
     defaultOpen: false,
     items: [
-      { href: "/yetkilendirme", icon: ShieldCheck,       label: "Yetkilendirme" },
-      { href: "/itsm/settings", icon: SlidersHorizontal, label: "ITSM Ayarları", adminOnly: true },
+      { href: "/yetkilendirme",          icon: ShieldCheck,       label: "Yetkilendirme"  },
+      { href: "/sistem/proje-ayarlari",  icon: FolderKanban,      label: "Proje Ayarları", adminOnly: true },
+      { href: "/itsm/settings",          icon: SlidersHorizontal, label: "ITSM Ayarları",  adminOnly: true },
     ],
   },
 ];

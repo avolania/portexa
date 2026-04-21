@@ -6,11 +6,12 @@ import {
   Circle, AlertCircle, ChevronDown, Calendar, FileText,
   BarChart3, Users, LayoutDashboard, ListOrdered,
   TrendingUp, DollarSign, Target, Activity,
-  Save, Download,
+  Save, Download, Clock, ShieldAlert, GitMerge,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line,
 } from "recharts";
 import { useReportStore } from "@/store/useReportStore";
 import { useProjectStore } from "@/store/useProjectStore";
@@ -1083,6 +1084,584 @@ function DashboardView() {
   );
 }
 
+// ─── Project Selector ─────────────────────────────────────────────────────────
+
+function ProjectSelector({
+  value,
+  onChange,
+  projects,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  projects: { id: string; name: string }[];
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+    >
+      {projects.map((p) => (
+        <option key={p.id} value={p.id}>{p.name}</option>
+      ))}
+    </select>
+  );
+}
+
+// ─── Weekly Dashboard View ────────────────────────────────────────────────────
+
+function WeeklyDashboardView() {
+  const { projects, tasks } = useProjectStore();
+  const govItems = useGovernanceStore((s) => s.items);
+  const [selId, setSelId] = useState(projects[0]?.id ?? "");
+
+  const proj = projects.find((p) => p.id === selId);
+  const projTasks = tasks.filter((t) => t.projectId === selId);
+
+  const done   = projTasks.filter((t) => t.status === "done");
+  const inProg = projTasks.filter((t) => t.status === "in_progress");
+  const review = projTasks.filter((t) => t.status === "review");
+  const todo   = projTasks.filter((t) => t.status === "todo");
+  const overdue = projTasks.filter(
+    (t) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "done"
+  );
+  const openRisks  = govItems.filter((g) => g.projectId === selId && g.category === "risk"  && g.status === "open");
+  const openIssues = govItems.filter((g) => g.projectId === selId && g.category === "issue" && g.status === "open");
+
+  const budgetPct = proj?.budget && proj.budget > 0
+    ? Math.round(((proj.budgetUsed ?? 0) / proj.budget) * 100) : null;
+
+  const taskPie = [
+    { name: "Tamamlanan",  value: done.length,   color: "#10b981" },
+    { name: "Devam",       value: inProg.length, color: "#6366f1" },
+    { name: "İnceleme",    value: review.length, color: "#f59e0b" },
+    { name: "Bekleyen",    value: todo.length,   color: "#d1d5db" },
+  ].filter((d) => d.value > 0);
+
+  if (!proj) return (
+    <div className="text-center py-16 text-gray-400 text-sm">Proje bulunamadı.</div>
+  );
+
+  return (
+    <div className="space-y-5">
+      {/* Project selector */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500 font-medium">Proje seçin:</p>
+        <ProjectSelector value={selId} onChange={setSelId} projects={projects} />
+      </div>
+
+      {/* Top stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { label: "Tamamlanan",    value: done.length,    icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { label: "Devam Eden",    value: inProg.length,  icon: Activity,     color: "text-indigo-600",  bg: "bg-indigo-50"  },
+          { label: "Geciken",       value: overdue.length, icon: Clock,        color: overdue.length > 0 ? "text-red-600" : "text-gray-400", bg: overdue.length > 0 ? "bg-red-50" : "bg-gray-50" },
+          { label: "Açık Risk",     value: openRisks.length,  icon: ShieldAlert, color: openRisks.length > 0 ? "text-red-600" : "text-gray-400", bg: openRisks.length > 0 ? "bg-red-50" : "bg-gray-50" },
+          { label: "Açık Sorun",   value: openIssues.length, icon: AlertCircle, color: openIssues.length > 0 ? "text-amber-600" : "text-gray-400", bg: openIssues.length > 0 ? "bg-amber-50" : "bg-gray-50" },
+          { label: "İlerleme",     value: `%${proj.progress}`, icon: Target, color: "text-violet-600", bg: "bg-violet-50" },
+        ].map((c) => {
+          const Icon = c.icon;
+          return (
+            <div key={c.label} className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className={`w-8 h-8 ${c.bg} rounded-lg flex items-center justify-center mb-2`}>
+                <Icon className={`w-4 h-4 ${c.color}`} />
+              </div>
+              <div className="text-xl font-bold text-gray-900">{c.value}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{c.label}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Progress + budget */}
+        <div className="space-y-4">
+          {/* Genel Durum (progress) */}
+          <div className="bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 p-5">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Genel Durum Özeti</p>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-4xl font-bold text-gray-900">%{proj.progress}</span>
+              <span className={`text-sm font-semibold px-3 py-1 rounded-full ${
+                proj.status === "at_risk"   ? "bg-red-100 text-red-700" :
+                proj.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                                              "bg-indigo-100 text-indigo-700"
+              }`}>
+                {proj.status === "active" ? "Aktif" : proj.status === "at_risk" ? "⚠ Risk" : proj.status === "completed" ? "Tamamlandı" : "Beklemede"}
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${proj.status === "at_risk" ? "bg-red-500" : "bg-indigo-500"}`}
+                style={{ width: `${proj.progress}%` }}
+              />
+            </div>
+            {proj.endDate && (
+              <p className="text-xs text-gray-400 mt-2">
+                Hedef Bitiş: {new Date(proj.endDate).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" })}
+              </p>
+            )}
+          </div>
+
+          {/* Bütçe Durumu */}
+          {budgetPct !== null ? (
+            <div className="bg-white border border-gray-200 rounded-2xl p-5">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Bütçe Durumu</p>
+              <div className="flex items-center justify-between mb-1 text-xs text-gray-500">
+                <span>Harcanan: {(proj.budgetUsed ?? 0).toLocaleString("tr-TR")} ₺</span>
+                <span>Toplam: {proj.budget!.toLocaleString("tr-TR")} ₺</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${budgetPct > 90 ? "bg-red-500" : budgetPct > 75 ? "bg-amber-500" : "bg-emerald-500"}`}
+                    style={{ width: `${Math.min(budgetPct, 100)}%` }}
+                  />
+                </div>
+                <span className={`text-xl font-bold w-14 text-right ${budgetPct > 90 ? "text-red-600" : budgetPct > 75 ? "text-amber-600" : "text-emerald-600"}`}>
+                  %{budgetPct}
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Kalan: {(proj.budget! - (proj.budgetUsed ?? 0)).toLocaleString("tr-TR")} ₺
+                {budgetPct >= 100 && " — ⚠ Bütçe aşıldı"}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-2xl p-5 flex items-center justify-center text-sm text-gray-400 h-24">
+              Bütçe bilgisi girilmemiş.
+            </div>
+          )}
+        </div>
+
+        {/* Task pie */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Görev Durumu Dağılımı</p>
+          {taskPie.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={taskPie} cx="50%" cy="50%" innerRadius={44} outerRadius={68} dataKey="value" paddingAngle={3} strokeWidth={0}>
+                    {taskPie.map((e, i) => <Cell key={i} fill={e.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
+                {taskPie.map((d) => (
+                  <div key={d.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
+                      <span className="text-gray-500">{d.name}</span>
+                    </div>
+                    <span className="font-semibold text-gray-700">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : <p className="text-sm text-gray-400 text-center py-10">Görev kaydedilmemiş.</p>}
+        </div>
+      </div>
+
+      {/* Devam eden çalışmalar */}
+      {inProg.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Devam Eden Çalışmalar</p>
+          <div className="space-y-2">
+            {inProg.slice(0, 8).map((t) => (
+              <div key={t.id} className="flex items-center gap-3 p-2.5 bg-indigo-50 rounded-lg">
+                <div className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />
+                <span className="text-sm text-gray-800 flex-1 truncate">{t.title}</span>
+                {t.dueDate && (
+                  <span className="text-xs text-gray-400 font-mono flex-shrink-0">
+                    {new Date(t.dueDate).toLocaleDateString("tr-TR")}
+                  </span>
+                )}
+              </div>
+            ))}
+            {inProg.length > 8 && <p className="text-xs text-gray-400 pl-2">+ {inProg.length - 8} görev daha</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Tamamlananlar */}
+      {done.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Tamamlanan Görevler ({done.length})</p>
+          <div className="space-y-2">
+            {done.slice(0, 6).map((t) => (
+              <div key={t.id} className="flex items-center gap-3 p-2.5 bg-emerald-50 rounded-lg">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                <span className="text-sm text-gray-700 flex-1 truncate">{t.title}</span>
+              </div>
+            ))}
+            {done.length > 6 && <p className="text-xs text-gray-400 pl-2">+ {done.length - 6} görev daha</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Geciken + Risk & Sorunlar */}
+      {(overdue.length > 0 || openRisks.length > 0 || openIssues.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {overdue.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-2xl p-5">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Geciken Görevler ({overdue.length})</p>
+              <div className="space-y-2">
+                {overdue.slice(0, 5).map((t) => (
+                  <div key={t.id} className="flex items-center gap-3 p-2.5 bg-red-50 rounded-lg">
+                    <Clock className="w-4 h-4 text-red-500 flex-shrink-0" />
+                    <span className="text-sm text-gray-800 flex-1 truncate">{t.title}</span>
+                    <span className="text-xs text-red-600 font-mono flex-shrink-0">
+                      {new Date(t.dueDate!).toLocaleDateString("tr-TR")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(openRisks.length > 0 || openIssues.length > 0) && (
+            <div className="bg-white border border-gray-200 rounded-2xl p-5">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Risk ve Sorunlar</p>
+              <div className="space-y-2">
+                {openRisks.slice(0, 3).map((r) => (
+                  <div key={r.id} className="flex items-center gap-3 p-2.5 bg-red-50 rounded-lg">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      r.priority === "critical" ? "bg-red-700 text-white" :
+                      r.priority === "high"     ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                    }`}>{r.priority ?? "—"}</span>
+                    <span className="text-sm text-gray-800 flex-1 truncate">{r.title}</span>
+                    <span className="text-xs text-gray-400">Risk</span>
+                  </div>
+                ))}
+                {openIssues.slice(0, 3).map((i) => (
+                  <div key={i.id} className="flex items-center gap-3 p-2.5 bg-amber-50 rounded-lg">
+                    <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                    <span className="text-sm text-gray-800 flex-1 truncate">{i.title}</span>
+                    <span className="text-xs text-gray-400">Sorun</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Steerco Dashboard View ───────────────────────────────────────────────────
+
+function SteercoDashboardView() {
+  const { projects, tasks } = useProjectStore();
+  const govItems = useGovernanceStore((s) => s.items);
+  const [selId, setSelId] = useState(projects[0]?.id ?? "");
+
+  const proj = projects.find((p) => p.id === selId);
+  const projTasks = tasks.filter((t) => t.projectId === selId);
+
+  const done    = projTasks.filter((t) => t.status === "done");
+  const inProg  = projTasks.filter((t) => t.status === "in_progress");
+  const todo    = projTasks.filter((t) => t.status === "todo");
+  const overdue = projTasks.filter(
+    (t) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "done"
+  );
+
+  const risks     = govItems.filter((g) => g.projectId === selId && g.category === "risk");
+  const openRisks = risks.filter((g) => g.status === "open");
+  const decisions  = govItems.filter((g) => g.projectId === selId && g.category === "decision");
+  const pendingChanges = govItems.filter(
+    (g) => g.projectId === selId && g.category === "change" && g.status === "pending"
+  );
+
+  const budgetPct = proj?.budget && proj.budget > 0
+    ? Math.round(((proj.budgetUsed ?? 0) / proj.budget) * 100) : null;
+
+  // Sprint velocity
+  const sprintData = Array.from(new Set(projTasks.filter((t) => t.sprint).map((t) => t.sprint!)))
+    .sort((a, b) => a - b).slice(-10)
+    .map((s) => {
+      const st = projTasks.filter((t) => t.sprint === s);
+      return {
+        name: `S${s}`,
+        Tamamlanan: st.filter((t) => t.status === "done").length,
+        Devam: st.filter((t) => t.status === "in_progress").length,
+        Bekleyen: st.filter((t) => t.status === "todo").length,
+      };
+    });
+
+  // Cumulative task completion (for line chart)
+  const completionTrend = sprintData.map((d, i) => ({
+    name: d.name,
+    Tamamlanan: sprintData.slice(0, i + 1).reduce((s, x) => s + x.Tamamlanan, 0),
+  }));
+
+  // Risk by priority
+  const riskPieData = [
+    { name: "Kritik", value: risks.filter((r) => r.priority === "critical").length, color: "#dc2626" },
+    { name: "Yüksek", value: risks.filter((r) => r.priority === "high").length,     color: "#f59e0b" },
+    { name: "Orta",   value: risks.filter((r) => r.priority === "medium").length,   color: "#6366f1" },
+    { name: "Düşük",  value: risks.filter((r) => r.priority === "low").length,      color: "#d1d5db" },
+  ].filter((d) => d.value > 0);
+
+  const taskPie = [
+    { name: "Tamamlanan", value: done.length,   color: "#10b981" },
+    { name: "Devam",      value: inProg.length, color: "#6366f1" },
+    { name: "Bekleyen",   value: todo.length,   color: "#d1d5db" },
+  ].filter((d) => d.value > 0);
+
+  if (!proj) return (
+    <div className="text-center py-16 text-gray-400 text-sm">Proje bulunamadı.</div>
+  );
+
+  const completionRate = projTasks.length > 0 ? Math.round((done.length / projTasks.length) * 100) : 0;
+
+  return (
+    <div className="space-y-5">
+      {/* Project selector */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500 font-medium">Proje seçin:</p>
+        <ProjectSelector value={selId} onChange={setSelId} projects={projects} />
+      </div>
+
+      {/* Yönetici Özeti stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: "Proje İlerlemesi",    value: `%${proj.progress}`,      icon: Target,      color: "text-indigo-600",  bg: "bg-indigo-50",  accent: "#6366f1" },
+          { label: "Tamamlanma Oranı",    value: `%${completionRate}`,     icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", accent: "#10b981" },
+          { label: "Bütçe Kullanımı",     value: budgetPct !== null ? `%${budgetPct}` : "—", icon: DollarSign, color: budgetPct && budgetPct > 90 ? "text-red-600" : "text-violet-600", bg: budgetPct && budgetPct > 90 ? "bg-red-50" : "bg-violet-50", accent: "#8b5cf6" },
+          { label: "Açık Risk",           value: openRisks.length,         icon: ShieldAlert,  color: openRisks.length > 0 ? "text-red-600" : "text-gray-400", bg: openRisks.length > 0 ? "bg-red-50" : "bg-gray-50", accent: "#ef4444" },
+        ].map((c) => {
+          const Icon = c.icon;
+          return (
+            <div key={c.label} className="bg-white border border-gray-200 rounded-2xl p-5 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full rounded-l-2xl" style={{ background: c.accent }} />
+              <div className={`w-9 h-9 ${c.bg} rounded-xl flex items-center justify-center mb-3`}>
+                <Icon className={`w-5 h-5 ${c.color}`} />
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{c.value}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{c.label}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Progress + Task breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Milestone & Deliverable Durumu */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Milestone ve Deliverable Durumu</p>
+          <div className="space-y-3 mb-4">
+            {[
+              { label: "Tamamlanan",   value: done.length,   total: projTasks.length, color: "bg-emerald-500" },
+              { label: "Devam Eden",   value: inProg.length, total: projTasks.length, color: "bg-indigo-500"  },
+              { label: "Bekleyen",     value: todo.length,   total: projTasks.length, color: "bg-gray-300"    },
+              { label: "Geciken",      value: overdue.length, total: projTasks.length, color: "bg-red-500"   },
+            ].map((row) => (
+              <div key={row.label}>
+                <div className="flex justify-between text-xs text-gray-600 mb-1">
+                  <span>{row.label}</span>
+                  <span className="font-semibold">{row.value} / {row.total}</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${row.color}`}
+                    style={{ width: row.total > 0 ? `${Math.min((row.value / row.total) * 100, 100)}%` : "0%" }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          {taskPie.length > 0 && (
+            <ResponsiveContainer width="100%" height={100}>
+              <PieChart>
+                <Pie data={taskPie} cx="50%" cy="50%" innerRadius={28} outerRadius={44} dataKey="value" paddingAngle={3} strokeWidth={0}>
+                  {taskPie.map((e, i) => <Cell key={i} fill={e.color} />)}
+                </Pie>
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Bütçe ve Kaynak Durumu */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Bütçe ve Kaynak Durumu</p>
+          {budgetPct !== null ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-gray-900">%{budgetPct}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Kullanım oranı</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-gray-700">{(proj.budgetUsed ?? 0).toLocaleString("tr-TR")} ₺</div>
+                  <div className="text-xs text-gray-400">/ {proj.budget!.toLocaleString("tr-TR")} ₺ toplam</div>
+                </div>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-5 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${budgetPct > 90 ? "bg-red-500" : budgetPct > 75 ? "bg-amber-500" : "bg-emerald-500"}`}
+                  style={{ width: `${Math.min(budgetPct, 100)}%` }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <div className="text-xs text-gray-400 mb-1">Harcanan</div>
+                  <div className="text-sm font-bold text-gray-800">{(proj.budgetUsed ?? 0).toLocaleString("tr-TR")} ₺</div>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <div className="text-xs text-gray-400 mb-1">Kalan</div>
+                  <div className={`text-sm font-bold ${budgetPct > 100 ? "text-red-600" : "text-emerald-600"}`}>
+                    {(proj.budget! - (proj.budgetUsed ?? 0)).toLocaleString("tr-TR")} ₺
+                  </div>
+                </div>
+              </div>
+              {budgetPct > 90 && (
+                <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg font-medium">
+                  ⚠ Bütçe %{budgetPct} kullanıldı — dikkat gerekiyor.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full text-sm text-gray-400 py-10">
+              Bütçe bilgisi girilmemiş.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sprint Velocity */}
+      {sprintData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-white border border-gray-200 rounded-2xl p-5">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Sprint Bazlı Görev Dağılımı (Velocity)</p>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={sprintData} barSize={14} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="Tamamlanan" fill="#10b981" stackId="a" />
+                <Bar dataKey="Devam"      fill="#6366f1" stackId="a" />
+                <Bar dataKey="Bekleyen"   fill="#d1d5db" stackId="a" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {completionTrend.length > 1 && (
+            <div className="bg-white border border-gray-200 rounded-2xl p-5">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Kümülatif Tamamlanma Trendi</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={completionTrend} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  <Line type="monotone" dataKey="Tamamlanan" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: "#10b981" }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Risk Yönetimi */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-5">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Risk Yönetimi</p>
+        {risks.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="space-y-2">
+              {risks.slice(0, 6).map((r) => (
+                <div key={r.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${
+                    r.priority === "critical" ? "bg-red-700 text-white" :
+                    r.priority === "high"     ? "bg-red-100 text-red-700" :
+                    r.priority === "medium"   ? "bg-amber-100 text-amber-700" :
+                                                "bg-gray-100 text-gray-600"
+                  }`}>
+                    {r.priority ?? "—"}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-800 font-medium truncate">{r.title}</p>
+                    {r.mitigationPlan && (
+                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">↳ {r.mitigationPlan}</p>
+                    )}
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                    r.status === "open" ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-500"
+                  }`}>{r.status === "open" ? "Açık" : "Kapalı"}</span>
+                </div>
+              ))}
+              {risks.length > 6 && <p className="text-xs text-gray-400 pl-2">+ {risks.length - 6} risk daha</p>}
+            </div>
+            {riskPieData.length > 0 && (
+              <div className="flex flex-col items-center">
+                <ResponsiveContainer width="100%" height={140}>
+                  <PieChart>
+                    <Pie data={riskPieData} cx="50%" cy="50%" innerRadius={36} outerRadius={58} dataKey="value" paddingAngle={3} strokeWidth={0}>
+                      {riskPieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  {riskPieData.map((d) => (
+                    <div key={d.name} className="flex items-center gap-1.5 text-xs">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
+                      <span className="text-gray-500">{d.name} ({d.value})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 text-center py-6">Kayıtlı risk bulunmuyor.</p>
+        )}
+      </div>
+
+      {/* Karar Gerektiren Konular */}
+      {(pendingChanges.length > 0 || decisions.length > 0) && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Karar Gerektiren Konular</p>
+          <div className="space-y-2">
+            {pendingChanges.map((c) => (
+              <div key={c.id} className="flex items-center gap-3 p-3 bg-violet-50 rounded-xl">
+                <GitMerge className="w-4 h-4 text-violet-500 flex-shrink-0" />
+                <span className="text-sm text-gray-800 flex-1 truncate">{c.title}</span>
+                <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">Değişiklik</span>
+              </div>
+            ))}
+            {decisions.slice(-3).map((d) => (
+              <div key={d.id} className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
+                <CheckCircle2 className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span className="text-sm text-gray-800 flex-1 truncate">{d.title}</span>
+                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Karar</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Dönem Kazanımları */}
+      {done.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-5">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Dönem Kazanımları (Son Tamamlananlar)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {done.slice(-8).reverse().map((t) => (
+              <div key={t.id} className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-lg">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                <span className="text-sm text-gray-700 truncate">{t.title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Tab Panel ────────────────────────────────────────────────────────────────
 
 function TabPanel({
@@ -1136,36 +1715,36 @@ function TabPanel({
         </button>
       </div>
 
-      {/* Dashboard alt-tab toggle */}
-      {type === "dashboard" && (
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 w-fit">
-          <button
-            onClick={() => setDashView("visual")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              dashView === "visual" ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4" /> Dashboard Görünümü
-          </button>
-          <button
-            onClick={() => setDashView("reports")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              dashView === "reports" ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            <ListOrdered className="w-4 h-4" /> Kayıtlı Raporlar
-            {filtered.length > 0 && (
-              <span className="bg-indigo-100 text-indigo-700 text-xs px-1.5 py-0.5 rounded-full">{filtered.length}</span>
-            )}
-          </button>
-        </div>
-      )}
+      {/* Visual/Reports toggle — for all report types */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 w-fit">
+        <button
+          onClick={() => setDashView("visual")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            dashView === "visual" ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          <LayoutDashboard className="w-4 h-4" /> Dashboard Görünümü
+        </button>
+        <button
+          onClick={() => setDashView("reports")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            dashView === "reports" ? "bg-white shadow-sm text-indigo-700" : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          <ListOrdered className="w-4 h-4" /> Kayıtlı Raporlar
+          {filtered.length > 0 && (
+            <span className="bg-indigo-100 text-indigo-700 text-xs px-1.5 py-0.5 rounded-full">{filtered.length}</span>
+          )}
+        </button>
+      </div>
 
-      {/* Dashboard visual view */}
-      {type === "dashboard" && dashView === "visual" && <DashboardView />}
+      {/* Visual dashboard views */}
+      {dashView === "visual" && type === "dashboard" && <DashboardView />}
+      {dashView === "visual" && type === "weekly"    && <WeeklyDashboardView />}
+      {dashView === "visual" && type === "steerco"   && <SteercoDashboardView />}
 
       {/* Report list */}
-      {(type !== "dashboard" || dashView === "reports") && (
+      {dashView === "reports" && (
         <>
           {filtered.length === 0 ? (
             <div className="text-center py-16 text-gray-400">

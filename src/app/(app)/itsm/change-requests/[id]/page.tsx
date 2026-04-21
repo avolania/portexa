@@ -17,7 +17,7 @@ import type { Attachment } from "@/types";
 import TicketTimeline from "@/components/itsm/TicketTimeline";
 import TicketTasks from "@/components/itsm/TicketTasks";
 
-type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments" | "tasks";
+type Tab = "details" | "worknotes" | "comments" | "timeline" | "attachments" | "tasks" | "approvals";
 
 // ─── State machine steps ──────────────────────────────────────────────────────
 
@@ -306,12 +306,14 @@ export default function ChangeRequestDetailPage() {
     setSaving(false);
   };
 
+  const approvalCount = cr.approvers.length;
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: "details",     label: "Detaylar" },
-    { key: "tasks",       label: "Görevler",         count: (cr.tasks ?? []).length },
-    { key: "attachments", label: "Ekler",            count: (cr.attachments ?? []).length },
-    { key: "worknotes",   label: "İş Notları",       count: activeWorkNotes.length },
-    { key: "comments",    label: "Yorumlar",          count: activeComments.length  },
+    { key: "approvals",   label: "Onaylar",           count: approvalCount > 0 ? approvalCount : undefined },
+    { key: "tasks",       label: "Görevler",          count: (cr.tasks ?? []).length },
+    { key: "attachments", label: "Ekler",             count: (cr.attachments ?? []).length },
+    { key: "worknotes",   label: "İş Notları",        count: activeWorkNotes.length },
+    { key: "comments",    label: "Yorumlar",           count: activeComments.length  },
     { key: "timeline",    label: "Zaman Çizelgesi",   count: activeEvents.length  },
   ];
 
@@ -431,27 +433,53 @@ export default function ChangeRequestDetailPage() {
                   <p className="text-sm text-emerald-700">{cr.closureNotes}</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Tab: Approvals */}
+          {tab === "approvals" && (
+            <div className="space-y-4">
+              <WorkflowProgress
+                ticketType="change_request"
+                ticketId={cr.id}
+                onApproved={() => transition(cr.id, ChangeRequestState.SCHEDULED)}
+                onRejected={() => transition(cr.id, ChangeRequestState.CANCELLED)}
+              />
               {cr.approvers.length > 0 && (
                 <div className="card">
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">Onaylayıcılar</h3>
                   <div className="space-y-2">
-                    {cr.approvers.map((a) => (
-                      <div key={a.approverId} className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700">{a.approverName}</span>
+                    {cr.approvers.map((a, idx) => (
+                      <div key={a.approverId} className="flex items-center gap-3 text-sm py-2 border-b border-gray-100 last:border-0">
+                        <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
+                          {idx + 1}
+                        </div>
+                        <span className="flex-1 text-gray-700 font-medium">{a.approverName}</span>
                         <div className="flex items-center gap-2">
-                          {a.decidedAt && <span className="text-xs text-gray-400">{format(new Date(a.decidedAt), "dd MMM HH:mm", { locale: tr })}</span>}
-                          <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium",
+                          {a.decidedAt && (
+                            <span className="text-xs text-gray-400">{format(new Date(a.decidedAt), "dd MMM HH:mm", { locale: tr })}</span>
+                          )}
+                          <span className={cn(
+                            "px-2.5 py-0.5 rounded-full text-xs font-medium",
                             a.approvalState === ApprovalState.APPROVED  ? "bg-emerald-100 text-emerald-700" :
-                            a.approvalState === ApprovalState.REJECTED  ? "bg-red-100 text-red-700" :
-                                                                          "bg-amber-100 text-amber-700")}>
-                            {a.approvalState === ApprovalState.REQUESTED ? "Bekliyor" :
-                             a.approvalState === ApprovalState.APPROVED  ? "Onaylandı" :
-                             a.approvalState === ApprovalState.REJECTED  ? "Reddedildi" : a.approvalState}
+                            a.approvalState === ApprovalState.REJECTED  ? "bg-red-100 text-red-700"         :
+                            a.approvalState === ApprovalState.REQUESTED ? "bg-amber-100 text-amber-700"     :
+                                                                          "bg-gray-100 text-gray-500"
+                          )}>
+                            {a.approvalState === ApprovalState.APPROVED  ? "Onaylandı" :
+                             a.approvalState === ApprovalState.REJECTED  ? "Reddedildi" :
+                             a.approvalState === ApprovalState.REQUESTED ? "Bekliyor"   : "Beklemede"}
                           </span>
                         </div>
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+              {cr.approvers.length === 0 && !instances.find((i) => i.ticketId === cr.id) && (
+                <div className="card text-center py-8 text-gray-400">
+                  <UserCheck className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">Bu CR için henüz onay akışı başlatılmamış.</p>
                 </div>
               )}
             </div>
@@ -538,12 +566,6 @@ export default function ChangeRequestDetailPage() {
         {/* Right 1/3 */}
         <div className="space-y-4">
           <CRActionPanel crId={cr.id} state={cr.state} />
-          <WorkflowProgress
-            ticketType="change_request"
-            ticketId={cr.id}
-            onApproved={() => transition(cr.id, ChangeRequestState.SCHEDULED)}
-            onRejected={() => transition(cr.id, ChangeRequestState.CANCELLED)}
-          />
           <div className="card space-y-3">
             <h3 className="text-sm font-semibold text-gray-900">Bilgiler</h3>
             {[

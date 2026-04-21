@@ -16,8 +16,9 @@ export default function Topbar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = async () => {
+    setMenuOpen(false);
     await signOut();
-    router.push("/giris");
+    window.location.href = "/giris";
   };
 
   return (

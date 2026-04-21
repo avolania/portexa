@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Plus, X, FileText, Users, AlertTriangle, GitBranch, Bug, CheckCircle2, Download, Upload, Check, LayoutTemplate, UserPlus } from "lucide-react";
+import { Plus, X, FileText, Users, AlertTriangle, GitBranch, Bug, CheckCircle2, Download, Upload, Check, LayoutTemplate, UserPlus, Pencil, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useGovernanceStore, GOVERNANCE_STATUS_META } from "@/store/useGovernanceStore";
 import { useProjectStore } from "@/store/useProjectStore";
@@ -158,9 +158,11 @@ export default function GovernancePanel({ projectId }: Props) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedItem, setSelectedItem] = useState<GovernanceItem | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [importResult, setImportResult] = useState<{ success: number; errors: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { getProjectItems, addItem, updateItem } = useGovernanceStore();
+  const { getProjectItems, addItem, updateItem, deleteItem } = useGovernanceStore();
   const { projects } = useProjectStore();
   const { members: teamMembers } = useTeamStore();
   const profiles = useAuthStore((s) => s.profiles);
@@ -272,6 +274,85 @@ export default function GovernancePanel({ projectId }: Props) {
     if (!name || form.attendees.includes(name)) return;
     setForm((f) => ({ ...f, attendees: [...f.attendees, name], externalAttendee: "" }));
   };
+
+  function openEdit(item: GovernanceItem) {
+    // Parse meetingDate into parts
+    let meetingDateOnly = "";
+    let meetingHour = "09";
+    let meetingMinute = "00";
+    if (item.meetingDate) {
+      const parts = item.meetingDate.split("T");
+      meetingDateOnly = parts[0] ?? "";
+      const timeParts = (parts[1] ?? "").split(":");
+      meetingHour = timeParts[0]?.padStart(2, "0") ?? "09";
+      meetingMinute = timeParts[1] ?? "00";
+    }
+    setEditForm({
+      ...EMPTY_FORM,
+      title: item.title,
+      description: item.description ?? "",
+      owner: item.owner ?? "",
+      dueDate: item.dueDate ?? "",
+      meetingDateOnly,
+      meetingHour,
+      meetingMinute,
+      attendees: item.attendees ?? [],
+      priority: item.priority ?? "",
+      impact: item.impact ?? "",
+      probability: item.probability ?? "",
+      mitigationPlan: item.mitigationPlan ?? "",
+      requestedBy: item.requestedBy ?? "",
+      impactAssessment: item.impactAssessment ?? "",
+      decidedBy: item.decidedBy ?? "",
+      rationale: item.rationale ?? "",
+    });
+    setEditMode(true);
+  }
+
+  function handleEditSave() {
+    if (!selectedItem || !editForm.title.trim()) return;
+    const meetingDate = editForm.meetingDateOnly
+      ? `${editForm.meetingDateOnly}T${editForm.meetingHour}:${editForm.meetingMinute}`
+      : undefined;
+    const patch: Partial<GovernanceItem> = {
+      title: editForm.title.trim(),
+      description: editForm.description || undefined,
+      owner: editForm.owner || undefined,
+      dueDate: editForm.dueDate || undefined,
+      priority: (editForm.priority as Priority) || undefined,
+      impact: (editForm.impact as "low" | "medium" | "high") || undefined,
+      probability: (editForm.probability as "low" | "medium" | "high") || undefined,
+      mitigationPlan: editForm.mitigationPlan || undefined,
+      requestedBy: editForm.requestedBy || undefined,
+      impactAssessment: editForm.impactAssessment || undefined,
+      attendees: editForm.attendees.length > 0 ? editForm.attendees : undefined,
+      decidedBy: editForm.decidedBy || undefined,
+      rationale: editForm.rationale || undefined,
+      meetingDate,
+      updatedAt: new Date().toISOString(),
+    };
+    updateItem(selectedItem.id, patch);
+    setSelectedItem({ ...selectedItem, ...patch });
+    setEditMode(false);
+  }
+
+  function handleDelete(id: string) {
+    if (!confirm("Bu kaydı silmek istediğinizden emin misiniz?")) return;
+    deleteItem(id);
+    setSelectedItem(null);
+    setEditMode(false);
+  }
+
+  const setEditField = (key: keyof typeof EMPTY_FORM, value: string) =>
+    setEditForm((f) => ({ ...f, [key]: value }));
+
+  const toggleEditAttendee = (name: string) =>
+    setEditForm((f) => ({
+      ...f,
+      attendees: f.attendees.includes(name)
+        ? f.attendees.filter((a) => a !== name)
+        : [...f.attendees, name],
+    }));
 
   const toggleWeekday = (day: number) =>
     setForm((f) => ({
@@ -1076,111 +1157,365 @@ export default function GovernancePanel({ projectId }: Props) {
       {/* Detail modal */}
       {selectedItem && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedItem(null)} />
-          <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setSelectedItem(null); setEditMode(false); }} />
+          <div className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto">
             <div className="flex items-start justify-between mb-4">
-              <div>
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${GOVERNANCE_STATUS_META[selectedItem.status].bg} ${GOVERNANCE_STATUS_META[selectedItem.status].color}`}>
                     {GOVERNANCE_STATUS_META[selectedItem.status].label}
                   </span>
-                  {selectedItem.priority && (
+                  {selectedItem.priority && !editMode && (
                     <span className={`text-xs font-semibold ${PRIORITY_META[selectedItem.priority].color}`}>
                       {PRIORITY_META[selectedItem.priority].label} Öncelik
                     </span>
                   )}
                 </div>
-                <h2 className="text-lg font-bold text-gray-900">{selectedItem.title}</h2>
+                {editMode ? (
+                  <input
+                    value={editForm.title}
+                    onChange={(e) => setEditField("title", e.target.value)}
+                    className="w-full text-lg font-bold text-gray-900 border-b border-indigo-400 focus:outline-none pb-0.5 bg-transparent"
+                    autoFocus
+                  />
+                ) : (
+                  <h2 className="text-lg font-bold text-gray-900">{selectedItem.title}</h2>
+                )}
               </div>
-              <button onClick={() => setSelectedItem(null)} className="p-2 hover:bg-gray-100 rounded-lg">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
+              <div className="flex items-center gap-1 ml-3 shrink-0">
+                {!editMode && (
+                  <>
+                    <button
+                      onClick={() => openEdit(selectedItem)}
+                      className="p-2 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-gray-500 transition-colors"
+                      title="Düzenle"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(selectedItem.id)}
+                      className="p-2 hover:bg-red-50 hover:text-red-600 rounded-lg text-gray-500 transition-colors"
+                      title="Sil"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+                <button onClick={() => { setSelectedItem(null); setEditMode(false); }} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-3 text-sm">
-              {selectedItem.description && (
-                <p className="text-gray-600">{selectedItem.description}</p>
-              )}
+            {editMode ? (
+              /* ── Edit Form ── */
+              <div className="space-y-4 text-sm">
+                {/* Status */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Durum</label>
+                  <select
+                    value={selectedItem.status}
+                    onChange={(e) => setSelectedItem({ ...selectedItem, status: e.target.value as GovernanceStatus })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    {Object.entries(GOVERNANCE_STATUS_META).map(([key, meta]) => (
+                      <option key={key} value={key}>{meta.label}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                {selectedItem.owner && (
-                  <div><span className="text-xs text-gray-400">Sorumlu</span><div className="font-medium text-gray-800">{selectedItem.owner}</div></div>
-                )}
-                {selectedItem.dueDate && (
-                  <div><span className="text-xs text-gray-400">Son Tarih</span><div className="font-medium text-gray-800">{new Date(selectedItem.dueDate).toLocaleDateString("tr-TR")}</div></div>
-                )}
-                <div><span className="text-xs text-gray-400">Oluşturulma</span><div className="font-medium text-gray-800">{new Date(selectedItem.createdAt).toLocaleDateString("tr-TR")}</div></div>
-              </div>
+                {/* Açıklama */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Açıklama</label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) => setEditField("description", e.target.value)}
+                    rows={3}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  />
+                </div>
 
-              {/* Risk fields */}
-              {selectedItem.category === "risk" && (
-                <div className="bg-amber-50 rounded-xl p-3 space-y-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><span className="text-xs text-gray-400">Etki</span><div className="font-medium">{IMPACT_LABELS[selectedItem.impact ?? ""]}</div></div>
-                    <div><span className="text-xs text-gray-400">Olasılık</span><div className="font-medium">{IMPACT_LABELS[selectedItem.probability ?? ""]}</div></div>
+                {/* Sorumlu + Son Tarih */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Sorumlu</label>
+                    {projectTeam.length > 0 ? (
+                      <select value={editForm.owner} onChange={(e) => setEditField("owner", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                        <option value="">— Seçin —</option>
+                        {projectTeam.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                      </select>
+                    ) : (
+                      <input value={editForm.owner} onChange={(e) => setEditField("owner", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    )}
                   </div>
-                  {selectedItem.mitigationPlan && (
-                    <div><span className="text-xs text-gray-400">Azaltma Planı</span><p className="text-gray-700 mt-0.5">{selectedItem.mitigationPlan}</p></div>
-                  )}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Son Tarih</label>
+                    <input type="date" value={editForm.dueDate} onChange={(e) => setEditField("dueDate", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
                 </div>
-              )}
 
-              {/* Change request fields */}
-              {selectedItem.category === "change" && (
-                <div className="bg-blue-50 rounded-xl p-3 space-y-2">
-                  {selectedItem.requestedBy && (
-                    <div><span className="text-xs text-gray-400">Talep Eden</span><div className="font-medium">{selectedItem.requestedBy}</div></div>
-                  )}
-                  {selectedItem.impactAssessment && (
-                    <div><span className="text-xs text-gray-400">Etki Değerlendirmesi</span><p className="text-gray-700 mt-0.5">{selectedItem.impactAssessment}</p></div>
-                  )}
+                {/* Öncelik */}
+                {(selectedItem.category === "risk" || selectedItem.category === "issue" || selectedItem.category === "change") && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Öncelik</label>
+                    <select value={editForm.priority} onChange={(e) => setEditField("priority", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                      <option value="">— Seçin —</option>
+                      <option value="low">Düşük</option>
+                      <option value="medium">Orta</option>
+                      <option value="high">Yüksek</option>
+                      <option value="critical">Kritik</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Risk alanları */}
+                {selectedItem.category === "risk" && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Etki</label>
+                        <select value={editForm.impact} onChange={(e) => setEditField("impact", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                          <option value="">— Seçin —</option>
+                          <option value="low">Düşük</option>
+                          <option value="medium">Orta</option>
+                          <option value="high">Yüksek</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Olasılık</label>
+                        <select value={editForm.probability} onChange={(e) => setEditField("probability", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                          <option value="">— Seçin —</option>
+                          <option value="low">Düşük</option>
+                          <option value="medium">Orta</option>
+                          <option value="high">Yüksek</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Azaltma Planı</label>
+                      <textarea value={editForm.mitigationPlan} onChange={(e) => setEditField("mitigationPlan", e.target.value)} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                    </div>
+                  </>
+                )}
+
+                {/* Toplantı alanları */}
+                {selectedItem.category === "meeting" && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Toplantı Tarihi</label>
+                        <input type="date" value={editForm.meetingDateOnly} onChange={(e) => setEditField("meetingDateOnly", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Saat</label>
+                        <div className="flex items-center gap-1">
+                          <select value={editForm.meetingHour} onChange={(e) => setEditField("meetingHour", e.target.value)} className="flex-1 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                            {HOUR_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
+                          </select>
+                          <span className="text-gray-400">:</span>
+                          <select value={editForm.meetingMinute} onChange={(e) => setEditField("meetingMinute", e.target.value)} className="flex-1 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                            {MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Katılımcılar */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Katılımcılar</label>
+                      {projectTeam.length > 0 && (
+                        <div className="border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
+                          {projectTeam.map((m) => {
+                            const checked = editForm.attendees.includes(m.name);
+                            return (
+                              <button key={m.id} type="button" onClick={() => toggleEditAttendee(m.name)} className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${checked ? "bg-indigo-50" : "hover:bg-gray-50"}`}>
+                                <Avatar name={m.name} size="sm" />
+                                <span className="flex-1 text-sm text-gray-800">{m.name}</span>
+                                {checked && <Check className="w-4 h-4 text-indigo-600" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                          <input
+                            value={editForm.externalAttendee}
+                            onChange={(e) => setEditField("externalAttendee", e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const name = editForm.externalAttendee.trim();
+                                if (name && !editForm.attendees.includes(name)) {
+                                  setEditForm((f) => ({ ...f, attendees: [...f.attendees, name], externalAttendee: "" }));
+                                }
+                              }
+                            }}
+                            placeholder="Harici katılımcı ekle..."
+                            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const name = editForm.externalAttendee.trim();
+                            if (name && !editForm.attendees.includes(name)) {
+                              setEditForm((f) => ({ ...f, attendees: [...f.attendees, name], externalAttendee: "" }));
+                            }
+                          }}
+                          className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors font-medium"
+                        >
+                          Ekle
+                        </button>
+                      </div>
+                      {editForm.attendees.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {editForm.attendees.map((a) => (
+                            <span key={a} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-100 text-indigo-700">
+                              {a}
+                              <button type="button" onClick={() => toggleEditAttendee(a)} className="hover:text-red-500 ml-0.5"><X className="w-3 h-3" /></button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Değişiklik alanları */}
+                {selectedItem.category === "change" && (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Talep Eden</label>
+                      {projectTeam.length > 0 ? (
+                        <select value={editForm.requestedBy} onChange={(e) => setEditField("requestedBy", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                          <option value="">— Seçin —</option>
+                          {projectTeam.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                        </select>
+                      ) : (
+                        <input value={editForm.requestedBy} onChange={(e) => setEditField("requestedBy", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Etki Değerlendirmesi</label>
+                      <textarea value={editForm.impactAssessment} onChange={(e) => setEditField("impactAssessment", e.target.value)} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                    </div>
+                  </>
+                )}
+
+                {/* Karar alanları */}
+                {selectedItem.category === "decision" && (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Karar Veren</label>
+                      {projectTeam.length > 0 ? (
+                        <select value={editForm.decidedBy} onChange={(e) => setEditField("decidedBy", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                          <option value="">— Seçin —</option>
+                          {projectTeam.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                        </select>
+                      ) : (
+                        <input value={editForm.decidedBy} onChange={(e) => setEditField("decidedBy", e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gerekçe</label>
+                      <textarea value={editForm.rationale} onChange={(e) => setEditField("rationale", e.target.value)} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                    </div>
+                  </>
+                )}
+
+                <div className="flex gap-3 pt-1">
+                  <Button variant="outline" className="flex-1" onClick={() => setEditMode(false)}>İptal</Button>
+                  <Button className="flex-1" onClick={handleEditSave} disabled={!editForm.title.trim()}>Kaydet</Button>
                 </div>
-              )}
-
-              {/* Meeting fields */}
-              {selectedItem.category === "meeting" && (
-                <div className="bg-violet-50 rounded-xl p-3 space-y-2">
-                  {selectedItem.meetingDate && (
-                    <div><span className="text-xs text-gray-400">Toplantı Tarihi</span><div className="font-medium">{new Date(selectedItem.meetingDate).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>
-                  )}
-                  {selectedItem.attendees && selectedItem.attendees.length > 0 && (
-                    <div><span className="text-xs text-gray-400">Katılımcılar</span><div className="flex flex-wrap gap-1 mt-1">{selectedItem.attendees.map((a) => (<span key={a} className="text-xs bg-white border border-violet-200 text-violet-700 px-2 py-0.5 rounded-full">{a}</span>))}</div></div>
-                  )}
-                  {selectedItem.minutes && (
-                    <div><span className="text-xs text-gray-400">Toplantı Notları</span><p className="text-gray-700 mt-0.5">{selectedItem.minutes}</p></div>
-                  )}
-                </div>
-              )}
-
-              {/* Decision fields */}
-              {selectedItem.category === "decision" && (
-                <div className="bg-emerald-50 rounded-xl p-3 space-y-2">
-                  {selectedItem.decidedBy && (
-                    <div><span className="text-xs text-gray-400">Karar Veren</span><div className="font-medium">{selectedItem.decidedBy}</div></div>
-                  )}
-                  {selectedItem.rationale && (
-                    <div><span className="text-xs text-gray-400">Gerekçe</span><p className="text-gray-700 mt-0.5">{selectedItem.rationale}</p></div>
-                  )}
-                </div>
-              )}
-
-              {/* Attachments */}
-              <div className="pt-2 border-t border-gray-100">
-                <AttachmentSection
-                  attachments={selectedItem.attachments ?? []}
-                  onAdd={(att: Attachment) => {
-                    const updated = [...(selectedItem.attachments ?? []), att];
-                    updateItem(selectedItem.id, { attachments: updated });
-                    setSelectedItem({ ...selectedItem, attachments: updated });
-                  }}
-                  onRemove={(id) => {
-                    const updated = (selectedItem.attachments ?? []).filter((a) => a.id !== id);
-                    updateItem(selectedItem.id, { attachments: updated });
-                    setSelectedItem({ ...selectedItem, attachments: updated });
-                  }}
-                />
               </div>
-            </div>
+            ) : (
+              /* ── Read View ── */
+              <div className="space-y-3 text-sm">
+                {selectedItem.description && (
+                  <p className="text-gray-600">{selectedItem.description}</p>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  {selectedItem.owner && (
+                    <div><span className="text-xs text-gray-400">Sorumlu</span><div className="font-medium text-gray-800">{selectedItem.owner}</div></div>
+                  )}
+                  {selectedItem.dueDate && (
+                    <div><span className="text-xs text-gray-400">Son Tarih</span><div className="font-medium text-gray-800">{new Date(selectedItem.dueDate).toLocaleDateString("tr-TR")}</div></div>
+                  )}
+                  <div><span className="text-xs text-gray-400">Oluşturulma</span><div className="font-medium text-gray-800">{new Date(selectedItem.createdAt).toLocaleDateString("tr-TR")}</div></div>
+                </div>
+
+                {/* Risk fields */}
+                {selectedItem.category === "risk" && (
+                  <div className="bg-amber-50 rounded-xl p-3 space-y-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><span className="text-xs text-gray-400">Etki</span><div className="font-medium">{IMPACT_LABELS[selectedItem.impact ?? ""]}</div></div>
+                      <div><span className="text-xs text-gray-400">Olasılık</span><div className="font-medium">{IMPACT_LABELS[selectedItem.probability ?? ""]}</div></div>
+                    </div>
+                    {selectedItem.mitigationPlan && (
+                      <div><span className="text-xs text-gray-400">Azaltma Planı</span><p className="text-gray-700 mt-0.5">{selectedItem.mitigationPlan}</p></div>
+                    )}
+                  </div>
+                )}
+
+                {/* Change request fields */}
+                {selectedItem.category === "change" && (
+                  <div className="bg-blue-50 rounded-xl p-3 space-y-2">
+                    {selectedItem.requestedBy && (
+                      <div><span className="text-xs text-gray-400">Talep Eden</span><div className="font-medium">{selectedItem.requestedBy}</div></div>
+                    )}
+                    {selectedItem.impactAssessment && (
+                      <div><span className="text-xs text-gray-400">Etki Değerlendirmesi</span><p className="text-gray-700 mt-0.5">{selectedItem.impactAssessment}</p></div>
+                    )}
+                  </div>
+                )}
+
+                {/* Meeting fields */}
+                {selectedItem.category === "meeting" && (
+                  <div className="bg-violet-50 rounded-xl p-3 space-y-2">
+                    {selectedItem.meetingDate && (
+                      <div><span className="text-xs text-gray-400">Toplantı Tarihi</span><div className="font-medium">{new Date(selectedItem.meetingDate).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>
+                    )}
+                    {selectedItem.attendees && selectedItem.attendees.length > 0 && (
+                      <div><span className="text-xs text-gray-400">Katılımcılar</span><div className="flex flex-wrap gap-1 mt-1">{selectedItem.attendees.map((a) => (<span key={a} className="text-xs bg-white border border-violet-200 text-violet-700 px-2 py-0.5 rounded-full">{a}</span>))}</div></div>
+                    )}
+                    {selectedItem.minutes && (
+                      <div><span className="text-xs text-gray-400">Toplantı Notları</span><p className="text-gray-700 mt-0.5">{selectedItem.minutes}</p></div>
+                    )}
+                  </div>
+                )}
+
+                {/* Decision fields */}
+                {selectedItem.category === "decision" && (
+                  <div className="bg-emerald-50 rounded-xl p-3 space-y-2">
+                    {selectedItem.decidedBy && (
+                      <div><span className="text-xs text-gray-400">Karar Veren</span><div className="font-medium">{selectedItem.decidedBy}</div></div>
+                    )}
+                    {selectedItem.rationale && (
+                      <div><span className="text-xs text-gray-400">Gerekçe</span><p className="text-gray-700 mt-0.5">{selectedItem.rationale}</p></div>
+                    )}
+                  </div>
+                )}
+
+                {/* Attachments */}
+                <div className="pt-2 border-t border-gray-100">
+                  <AttachmentSection
+                    attachments={selectedItem.attachments ?? []}
+                    onAdd={(att: Attachment) => {
+                      const updated = [...(selectedItem.attachments ?? []), att];
+                      updateItem(selectedItem.id, { attachments: updated });
+                      setSelectedItem({ ...selectedItem, attachments: updated });
+                    }}
+                    onRemove={(id) => {
+                      const updated = (selectedItem.attachments ?? []).filter((a) => a.id !== id);
+                      updateItem(selectedItem.id, { attachments: updated });
+                      setSelectedItem({ ...selectedItem, attachments: updated });
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

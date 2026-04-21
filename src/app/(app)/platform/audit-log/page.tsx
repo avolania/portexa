@@ -55,25 +55,34 @@ export default function AuditLogPage() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const [error, setError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!user) { setLoading(false); return; }
     setLoading(true);
-    let query = supabase
-      .from("audit_logs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(200);
+    setError(null);
+    try {
+      let query = supabase
+        .from("audit_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200);
 
-    if (user.role !== "system_admin") {
-      query = query.eq("org_id", user.orgId);
-    }
-    if (actionFilter) {
-      query = query.eq("action", actionFilter);
-    }
+      if (user.role !== "system_admin") {
+        query = query.eq("org_id", user.orgId);
+      }
+      if (actionFilter) {
+        query = query.eq("action", actionFilter);
+      }
 
-    const { data } = await query;
-    setLogs((data ?? []) as AuditLogRow[]);
-    setLoading(false);
+      const { data, error: qErr } = await query;
+      if (qErr) setError(qErr.message);
+      else setLogs((data ?? []) as AuditLogRow[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Yüklenemedi");
+    } finally {
+      setLoading(false);
+    }
   }, [user, actionFilter]);
 
   useEffect(() => { load(); }, [load]);
@@ -152,6 +161,10 @@ export default function AuditLogPage() {
         {loading ? (
           <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13 }}>
             Yükleniyor...
+          </div>
+        ) : error ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#EF4444", fontSize: 13 }}>
+            Hata: {error}
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 13, fontStyle: "italic" }}>

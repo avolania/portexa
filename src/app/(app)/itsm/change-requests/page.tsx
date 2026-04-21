@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Plus, Search, GitPullRequest, Calendar, CheckCircle,
   Paperclip, X as XIcon, PanelLeftClose, PanelLeftOpen,
@@ -8,7 +8,9 @@ import {
   ArrowRight, UserCheck,
 } from "lucide-react";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
+import { useWorkflowInstanceStore } from "@/store/useWorkflowInstanceStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import WorkflowProgress from "@/components/itsm/WorkflowProgress";
 import { ChangeRequestState, ChangeType, ChangeRisk, Impact, ChangeCloseCode, SapModule, SapCategory, ApprovalState } from "@/lib/itsm/types/enums";
 import { isValidCRTransition } from "@/lib/itsm/types/change-request.types";
 import { ITSM_PRIORITY_MAP, CR_STATE_MAP, CHANGE_TYPE_MAP, CHANGE_RISK_MAP, APPROVAL_STATE_MAP } from "@/lib/itsm/ui-maps";
@@ -77,6 +79,7 @@ function NewCRModal({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     shortDescription: "", description: "", justification: "", category: "",
     sapCategory: "", sapModule: "",
@@ -217,11 +220,12 @@ function NewCRModal({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             )}
-            <label className="relative flex items-center gap-2 px-3 py-2 w-full border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/30 transition-colors cursor-pointer overflow-hidden">
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 w-full border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/30 transition-colors">
               <Paperclip className="w-4 h-4" /> Dosya ekle
-              <input type="file" multiple className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
-                onChange={(e) => { if (e.target.files) setPendingFiles((pf) => [...pf, ...Array.from(e.target.files!)]); e.target.value = ""; }} />
-            </label>
+            </button>
+            <input ref={fileInputRef} type="file" multiple className="hidden"
+              onChange={(e) => { if (e.target.files) setPendingFiles((pf) => [...pf, ...Array.from(e.target.files!)]); e.target.value = ""; }} />
           </div>
           {saveError && <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{saveError}</div>}
           <div className="flex justify-end gap-3 pt-2">
@@ -328,11 +332,12 @@ function CRAttachments({ attachments, onAdd, onRemove }: {
 
 // ─── CR Detail Panel ──────────────────────────────────────────────────────────
 
-type Tab = "details" | "cab" | "plans" | "tasks" | "worknotes" | "comments" | "timeline" | "attachments";
+type Tab = "details" | "approvals" | "plans" | "tasks" | "worknotes" | "comments" | "timeline" | "attachments";
 
 function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
   const { changeRequests, transition, close, approve, addWorkNote, addComment, addAttachment, removeAttachment, addTask, updateTask, deleteTask,
           loadTicketActivity, activeWorkNotes, activeComments, activeEvents, activeTicketId } = useChangeRequestStore();
+  const { instances } = useWorkflowInstanceStore();
   const { profiles } = useAuthStore();
   const cr = changeRequests.find((c) => c.id === crId);
 
@@ -412,10 +417,12 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
     setSaving(false);
   };
 
+  const hasWorkflow = instances.some((i) => i.ticketId === cr.id);
+  const approvalCount = cr.approvers.length || (hasWorkflow ? 1 : 0);
   const TABS: { key: Tab; label: string; count?: number }[] = [
-    { key: "details",     label: "Detaylar"    },
-    { key: "cab",         label: "CAB",        count: cr.approvers.length },
-    { key: "plans",       label: "Planlar"     },
+    { key: "details",   label: "Detaylar"    },
+    { key: "approvals", label: "Onaylar",    count: approvalCount > 0 ? approvalCount : undefined },
+    { key: "plans",     label: "Planlar"     },
     { key: "tasks",       label: "Görevler",   count: (cr.tasks ?? []).length },
     { key: "attachments", label: "Ekler",      count: (cr.attachments ?? []).length },
     { key: "worknotes",   label: "İş Notları", count: activeWorkNotes.length },
@@ -559,50 +566,56 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
               </div>
             )}
 
-            {/* CAB */}
-            {tab === "cab" && (
+            {/* Approvals */}
+            {tab === "approvals" && (
               <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-sm font-semibold text-gray-800">CAB Oylama</h3>
-                  {cabTotal > 0 && (
-                    <span className={cn("text-xs font-semibold font-mono", cabApproved === cabTotal ? "text-emerald-600" : "text-amber-600")}>
-                      {cabApproved}/{cabTotal} Onay
-                    </span>
-                  )}
-                </div>
-                {cr.approvers.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-8">CAB üyesi atanmamış.</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {cr.approvers.map((a, i) => {
-                      const isApproved = a.approvalState === "Approved";
-                      const isPending  = a.approvalState !== "Approved" && a.approvalState !== "Rejected";
-                      return (
-                        <div key={i} className={cn("bg-white rounded-lg border p-4",
-                          isApproved ? "border-emerald-200" : isPending ? "border-amber-200" : "border-red-200"
-                        )}>
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
-                              isApproved ? "bg-emerald-100 text-emerald-700" : isPending ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                <WorkflowProgress
+                  ticketType="change_request"
+                  ticketId={cr.id}
+                  onApproved={() => transition(cr.id, ChangeRequestState.SCHEDULED)}
+                  onRejected={() => transition(cr.id, ChangeRequestState.CANCELLED)}
+                />
+                {cr.approvers.length > 0 && (
+                  <div className="bg-white rounded-lg border border-gray-200">
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                      <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Onaylayıcılar</h3>
+                      <span className={cn("text-xs font-semibold font-mono", cabApproved === cabTotal ? "text-emerald-600" : "text-amber-600")}>
+                        {cabApproved}/{cabTotal} onay
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {cr.approvers.map((a, idx) => {
+                        const isApproved = a.approvalState === ApprovalState.APPROVED;
+                        const isRejected = a.approvalState === ApprovalState.REJECTED;
+                        const isPending  = !isApproved && !isRejected;
+                        return (
+                          <div key={a.approverId} className="flex items-center gap-3 px-3 py-2.5">
+                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
+                              isApproved ? "bg-emerald-100 text-emerald-700" : isRejected ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                             )}>
-                              {isApproved ? "✓" : isPending ? "?" : "✗"}
+                              {idx + 1}
                             </div>
-                            <div>
-                              <div className="text-sm font-semibold text-gray-800">{a.approverName}</div>
-                              <span className={cn("text-xs font-medium",
-                                isApproved ? "text-emerald-600" : isPending ? "text-amber-600" : "text-red-600"
-                              )}>{a.approvalState}</span>
+                            <span className="flex-1 text-sm text-gray-800 font-medium">{a.approverName}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {a.decidedAt && (
+                                <span className="text-xs text-gray-400">{format(new Date(a.decidedAt), "dd MMM HH:mm", { locale: tr })}</span>
+                              )}
+                              <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium",
+                                isApproved ? "bg-emerald-100 text-emerald-700" : isRejected ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                              )}>
+                                {isApproved ? "Onaylandı" : isRejected ? "Reddedildi" : "Bekliyor"}
+                              </span>
                             </div>
                           </div>
-                          {a.decidedAt && (
-                            <div className="text-xs text-gray-400">{format(new Date(a.decidedAt), "dd MMM HH:mm", { locale: tr })}</div>
-                          )}
-                          {a.comments && (
-                            <p className="text-xs text-gray-500 mt-2 italic">"{a.comments}"</p>
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {cr.approvers.length === 0 && !hasWorkflow && (
+                  <div className="text-center py-10 text-gray-400">
+                    <UserCheck className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    <p className="text-sm">Bu CR için henüz onay akışı başlatılmamış.</p>
                   </div>
                 )}
                 <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
@@ -808,10 +821,10 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
             </div>
           )}
 
-          {/* CAB özet */}
+          {/* Onaylar özet */}
           {cabTotal > 0 && (
             <div className="space-y-1.5">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">CAB</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Onaylar</p>
               <div className="flex gap-1.5 flex-wrap">
                 {cr.approvers.map((a, i) => {
                   const isApproved = a.approvalState === "Approved";

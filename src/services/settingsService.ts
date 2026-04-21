@@ -2,6 +2,19 @@ import type { OrgSettings } from "@/types";
 import { dbUpsert } from "@/lib/db";
 import { supabase } from "@/lib/supabase";
 
+export const DEFAULT_PROJECT_ROLES = [
+  "Proje Yöneticisi",
+  "Proje Sahibi",
+  "Konu Uzmanı (SME)",
+  "Test Lideri",
+  "Altyapı Sorumlusu",
+  "Geliştirici",
+  "Analist",
+  "Paydaş",
+  "Danışman",
+  "Diğer",
+];
+
 export const SETTINGS_DEFAULTS: OrgSettings = {
   orgName: "Pixanto",
   timezone: "Europe/Istanbul",
@@ -10,6 +23,7 @@ export const SETTINGS_DEFAULTS: OrgSettings = {
   workingDays: [1, 2, 3, 4, 5],
   workingHoursPerDay: 8,
   fiscalYearStart: 1,
+  projectRoles: DEFAULT_PROJECT_ROLES,
   integrations: {},
 };
 

@@ -47,6 +47,7 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       const { projects, tasks } = await loadProjects(orgId);
       set({ projects: _syncProgress(tasks, projects), tasks, loading: false });
     } catch (err) {
+      console.error("[ProjectStore] load error:", err);
       set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
     }
   },
