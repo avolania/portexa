@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useProjectStore } from "@/store/useProjectStore";
 import { ProjectStatusBadge, PriorityBadge } from "@/components/ui/Badge";
@@ -1259,49 +1259,72 @@ function BudgetTab({
   project: Project;
   onUpdate: (patch: Partial<Project>) => Promise<void>;
 }) {
+  const { updateProject } = useProjectStore();
   const [expenses, setExpenses] = useState<Expense[]>(project.expenses ?? []);
+  const [expenseError, setExpenseError] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [editBudget, setEditBudget] = useState(false);
   const [budgetForm, setBudgetForm] = useState({
     budget: String(project.budget ?? ""),
-    budgetUsed: String(project.budgetUsed ?? ""),
     currency: project.currency ?? "TRY",
   });
   const [form, setForm] = useState({
     description: "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10),
   });
 
+  // Proje prop'u değiştiğinde (store'dan yeniden yüklenince) expenses'i senkronize et
+  useEffect(() => {
+    setExpenses(project.expenses ?? []);
+  }, [project.expenses]);
+
   const budget = project.budget ?? 0;
-  const budgetUsed = project.budgetUsed ?? 0;
+  // budgetUsed her zaman gider kayıtlarından hesaplanır
+  const budgetUsed = expenses.reduce((s, e) => s + e.amount, 0);
   const remaining = budget - budgetUsed;
   const pct = budget > 0 ? Math.round((budgetUsed / budget) * 100) : 0;
 
   const fmt = (n: number) => formatCurrencyLib(n, project.currency);
 
   const handleSaveBudget = async () => {
+    // budgetUsed forma dokunulmaz — gider kayıtlarından otomatik gelir
     await onUpdate({
       budget: Number(budgetForm.budget) || undefined,
-      budgetUsed: Number(budgetForm.budgetUsed) || undefined,
       currency: budgetForm.currency,
     });
     setEditBudget(false);
   };
 
-  const handleAddExpense = () => {
+  const handleAddExpense = async () => {
     if (!form.description.trim() || !form.amount) return;
     const amount = Number(form.amount);
     const newExpense: Expense = { id: crypto.randomUUID(), category: form.category, description: form.description.trim(), amount, date: form.date };
+    const prevExpenses = expenses;
     const newList = [newExpense, ...expenses];
-    setExpenses(newList);
-    onUpdate({ expenses: newList, budgetUsed: budgetUsed + amount });
+    const computed = newList.reduce((s, e) => s + e.amount, 0);
+    setExpenses(newList); // optimistic
+    setExpenseError(null);
     setForm({ description: "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10) });
     setShowAdd(false);
+    try {
+      await updateProject(project.id, { expenses: newList, budgetUsed: computed });
+    } catch {
+      setExpenses(prevExpenses); // revert on error
+      setExpenseError("Gider kaydedilemedi. Lütfen tekrar deneyin.");
+    }
   };
 
-  const handleDeleteExpense = (expense: Expense) => {
+  const handleDeleteExpense = async (expense: Expense) => {
+    const prevExpenses = expenses;
     const newList = expenses.filter((e) => e.id !== expense.id);
-    setExpenses(newList);
-    onUpdate({ expenses: newList, budgetUsed: Math.max(0, budgetUsed - expense.amount) });
+    const computed = newList.reduce((s, e) => s + e.amount, 0);
+    setExpenses(newList); // optimistic
+    setExpenseError(null);
+    try {
+      await updateProject(project.id, { expenses: newList, budgetUsed: computed });
+    } catch {
+      setExpenses(prevExpenses); // revert on error
+      setExpenseError("Gider silinemedi. Lütfen tekrar deneyin.");
+    }
   };
 
   return (
@@ -1358,7 +1381,7 @@ function BudgetTab({
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-900">Bütçe Bilgileri</h3>
           <button
-            onClick={() => { setEditBudget(!editBudget); setBudgetForm({ budget: String(project.budget ?? ""), budgetUsed: String(project.budgetUsed ?? ""), currency: project.currency ?? "TRY" }); }}
+            onClick={() => { setEditBudget(!editBudget); setBudgetForm({ budget: String(project.budget ?? ""), currency: project.currency ?? "TRY" }); }}
             className="text-xs text-indigo-600 hover:underline"
           >
             {editBudget ? "İptal" : "Düzenle"}
@@ -1366,7 +1389,7 @@ function BudgetTab({
         </div>
         {editBudget ? (
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+            <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Para Birimi</label>
               <select
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -1388,16 +1411,6 @@ function BudgetTab({
                 placeholder="0"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Harcanan</label>
-              <input
-                type="number"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={budgetForm.budgetUsed}
-                onChange={(e) => setBudgetForm((s) => ({ ...s, budgetUsed: e.target.value }))}
-                placeholder="0"
-              />
-            </div>
             <div className="col-span-2 flex justify-end">
               <button onClick={handleSaveBudget} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
                 <Save className="w-4 h-4" /> Kaydet
@@ -1415,12 +1428,21 @@ function BudgetTab({
               <div className="font-semibold text-gray-900 mt-0.5">{budget > 0 ? fmt(budget) : "Tanımlanmamış"}</div>
             </div>
             <div>
-              <span className="text-gray-400 text-xs">Harcanan</span>
+              <span className="text-gray-400 text-xs">Harcanan (Giderlerden)</span>
               <div className="font-semibold text-gray-900 mt-0.5">{budgetUsed > 0 ? fmt(budgetUsed) : "—"}</div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Gider kayıt hatası */}
+      {expenseError && (
+        <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {expenseError}
+          <button onClick={() => setExpenseError(null)} className="ml-auto text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+        </div>
+      )}
 
       {/* Giderler */}
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
