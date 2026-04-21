@@ -199,6 +199,7 @@ export interface Project {
   budget?: number;
   budgetUsed?: number;
   currency?: string;
+  expenses?: { id: string; category: string; description: string; amount: number; date: string }[];
   managerId: string;
   ownerId?: string | null;                       // proje sahibi
   members: string[];

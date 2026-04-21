@@ -1259,7 +1259,7 @@ function BudgetTab({
   project: Project;
   onUpdate: (patch: Partial<Project>) => Promise<void>;
 }) {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>(project.expenses ?? []);
   const [showAdd, setShowAdd] = useState(false);
   const [editBudget, setEditBudget] = useState(false);
   const [budgetForm, setBudgetForm] = useState({
@@ -1291,16 +1291,17 @@ function BudgetTab({
     if (!form.description.trim() || !form.amount) return;
     const amount = Number(form.amount);
     const newExpense: Expense = { id: crypto.randomUUID(), category: form.category, description: form.description.trim(), amount, date: form.date };
-    setExpenses((prev) => [newExpense, ...prev]);
-    // budgetUsed'ı otomatik artır
-    onUpdate({ budgetUsed: budgetUsed + amount });
+    const newList = [newExpense, ...expenses];
+    setExpenses(newList);
+    onUpdate({ expenses: newList, budgetUsed: budgetUsed + amount });
     setForm({ description: "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10) });
     setShowAdd(false);
   };
 
   const handleDeleteExpense = (expense: Expense) => {
-    setExpenses((prev) => prev.filter((e) => e.id !== expense.id));
-    onUpdate({ budgetUsed: Math.max(0, budgetUsed - expense.amount) });
+    const newList = expenses.filter((e) => e.id !== expense.id);
+    setExpenses(newList);
+    onUpdate({ expenses: newList, budgetUsed: Math.max(0, budgetUsed - expense.amount) });
   };
 
   return (
