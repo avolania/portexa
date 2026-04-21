@@ -83,6 +83,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   profiles: {},
 
   initAuth: async () => {
+    // Önceki listener varsa temizle (hot-reload / çift çağrı koruma)
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
       const existing = await dbLoadProfile(session.user.id);
@@ -100,8 +101,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({ loading: false });
     }
 
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // signOut sonrası gelen SIGNED_IN olaylarını yoksay
+      if (event === "SIGNED_IN" && session?.user && get().isAuthenticated === false && get().user === null) {
+        // Kullanıcı gerçekten giriş yaptı (logout sonrası değil)
         const existing = await dbLoadProfile(session.user.id);
         if (existing) {
           set({ user: existing, isAuthenticated: true, loading: false });
@@ -121,6 +124,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         set({ user: null, isAuthenticated: false, loading: false, profiles: {} });
       }
     });
+
+    // Store'da subscription referansını sakla (gerekirse unsubscribe için)
+    void subscription;
   },
 
   signIn: async (email, password) => {
@@ -183,7 +189,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     } catch {
       // signOut hatası local state'i temizlememizi engellememeli
     }
-    if (typeof window !== "undefined") sessionStorage.clear();
+    // API başarısız olsa bile Supabase session token'larını localStorage'dan sil
+    if (typeof window !== "undefined") {
+      sessionStorage.clear();
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("sb-")) localStorage.removeItem(key);
+      });
+    }
     set({ user: null, isAuthenticated: false, profiles: {} });
   },
 
