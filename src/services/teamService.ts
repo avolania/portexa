@@ -1,8 +1,8 @@
 import type { TeamMember, UserRole } from "@/types";
 import { dbLoadAll, dbUpsert, dbDelete } from "@/lib/db";
 
-export async function loadTeamMembers(): Promise<TeamMember[]> {
-  return dbLoadAll<TeamMember>("team_members");
+export async function loadTeamMembers(orgId?: string): Promise<TeamMember[]> {
+  return dbLoadAll<TeamMember>("team_members", orgId);
 }
 
 export async function createMember(member: TeamMember, orgId: string): Promise<void> {

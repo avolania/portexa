@@ -34,7 +34,8 @@ export const useTeamStore = create<TeamState>()((set, get) => ({
   load: async () => {
     set({ loading: true, error: null });
     try {
-      const members = await loadTeamMembers();
+      const orgId = useAuthStore.getState().user?.orgId;
+      const members = await loadTeamMembers(orgId);
       set({ members, loading: false });
     } catch (err) {
       set({ loading: false, error: err instanceof Error ? err.message : "Yüklenemedi" });
