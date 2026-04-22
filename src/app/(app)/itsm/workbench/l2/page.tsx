@@ -395,10 +395,10 @@ const CR_STATE_LABEL: Record<string, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SpecialistWorkbenchPage() {
-  const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState, update: updateInc, addAttachment: addIncAttachment, loadTicketActivity: loadIncActivity, activeWorkNotes: incWorkNotes } = useIncidentStore();
+  const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState, update: updateInc, addAttachment: addIncAttachment, loadTicketActivity: loadIncActivity, activeWorkNotes: incWorkNotes, activeEvents: incEvents, activeComments: incComments } = useIncidentStore();
   const { user } = useAuthStore();
-  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR, addAttachment: addSRAttachment, loadTicketActivity: loadSRActivity, activeWorkNotes: srWorkNotes } = useServiceRequestStore();
-  const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR, addAttachment: addCRAttachment, loadTicketActivity: loadCRActivity, activeWorkNotes: crWorkNotes } = useChangeRequestStore();
+  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR, addAttachment: addSRAttachment, loadTicketActivity: loadSRActivity, activeWorkNotes: srWorkNotes, activeEvents: srEvents, activeComments: srComments } = useServiceRequestStore();
+  const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR, addAttachment: addCRAttachment, loadTicketActivity: loadCRActivity, activeWorkNotes: crWorkNotes, activeEvents: crEvents, activeComments: crComments } = useChangeRequestStore();
 
   // Gerçek incident'ları Ticket formatına dönüştür
   const realTickets: Ticket[] = incidents.map((inc) => ({
@@ -622,7 +622,26 @@ export default function SpecialistWorkbenchPage() {
   })();
   const selectedStoreType = selected?.type ?? null; // "INC" | "SR" | "CR" | null
   const activeWorkNotes = selectedStoreType === "INC" ? incWorkNotes : selectedStoreType === "SR" ? srWorkNotes : crWorkNotes;
+  const activeEvents    = selectedStoreType === "INC" ? incEvents    : selectedStoreType === "SR" ? srEvents    : crEvents;
+  const activeComments  = selectedStoreType === "INC" ? incComments  : selectedStoreType === "SR" ? srComments  : crComments;
   const activeTechNotes = activeWorkNotes.filter(n => n.content.startsWith("[TEKNİK]")).map(n => n.content.replace("[TEKNİK] ", "")).join("\n---\n");
+  const activeTimeline: { time: string; who: string; text: string }[] = [
+    ...activeEvents.map(e => ({
+      time: new Date(e.timestamp).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+      who: e.actorName,
+      text: e.note ?? e.type,
+    })),
+    ...activeWorkNotes.filter(n => !n.content.startsWith("[TEKNİK]") && !n.content.startsWith("[ROOT CAUSE]") && !n.content.startsWith("[RCA")).map(n => ({
+      time: new Date(n.createdAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+      who: n.authorName,
+      text: n.content,
+    })),
+    ...activeComments.map(c => ({
+      time: new Date(c.createdAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+      who: c.authorName,
+      text: `💬 ${c.content}`,
+    })),
+  ].sort((a, b) => a.time.localeCompare(b.time));
 
   useEffect(() => {
     if (!selectedStoreId || !selectedStoreType) return;
@@ -1243,17 +1262,20 @@ export default function SpecialistWorkbenchPage() {
                       </button>
                     </div>
                   </div>
-                  {selected.timeline.map((ev, i) => (
+                  {activeTimeline.length === 0 && (
+                    <p style={{ fontSize: 12, color: "#94A3B8", fontStyle: "italic", textAlign: "center", padding: "24px 0" }}>Henüz aktivite yok</p>
+                  )}
+                  {activeTimeline.map((ev, i) => (
                     <div key={i} style={{ display: "flex", gap: 12, animation: `slideUp .2s ease ${i * 0.04}s both` }}>
                       <div style={{ width: 50, textAlign: "right", paddingTop: 2, flexShrink: 0 }}>
                         <span style={{ fontSize: 11, fontWeight: 600, fontFamily: "'IBM Plex Mono',monospace", color: "#475569" }}>{ev.time}</span>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 16 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: ev.who === "Sistem" ? "#DC2626" : ev.who === "Ben" ? "#3B82F6" : ev.who === "CAB" ? "#7C3AED" : "#94A3B8" }} />
-                        {i < selected.timeline.length - 1 && <div style={{ width: 1, flex: 1, background: "#E2E8F0", minHeight: 24 }} />}
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: ev.who === "Sistem" ? "#DC2626" : ev.who === user?.name ? "#3B82F6" : ev.who === "CAB" ? "#7C3AED" : "#94A3B8" }} />
+                        {i < activeTimeline.length - 1 && <div style={{ width: 1, flex: 1, background: "#E2E8F0", minHeight: 24 }} />}
                       </div>
                       <div style={{ flex: 1, paddingBottom: 16 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: ev.who === "Ben" ? "#2563EB" : ev.who === "Sistem" ? "#DC2626" : ev.who === "CAB" ? "#7C3AED" : "#475569" }}>{ev.who}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: ev.who === user?.name ? "#2563EB" : ev.who === "Sistem" ? "#DC2626" : ev.who === "CAB" ? "#7C3AED" : "#475569" }}>{ev.who}</span>
                         <p style={{ fontSize: 12, color: "#475569", lineHeight: 1.45, marginTop: 2 }}>{ev.text}</p>
                       </div>
                     </div>
