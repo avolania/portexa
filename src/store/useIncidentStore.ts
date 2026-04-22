@@ -118,7 +118,7 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
     const updated = await assignIncident(id, dto, get().incidents, user.id, user.name, user.orgId);
     if (updated) {
       set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
-      if (dto.assignedToId && dto.assignedToId !== user.id) {
+      if (dto.assignedToId) {
         notifyEmail("ticket_assigned", {
           assignedToId:   dto.assignedToId,
           ticketNumber:   updated.number,

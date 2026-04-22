@@ -11,7 +11,7 @@ export async function notifyEmail(
     const token = session?.access_token;
     if (!token) return;
 
-    await fetch("/api/notify", {
+    const res = await fetch("/api/notify", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -19,7 +19,11 @@ export async function notifyEmail(
       },
       body: JSON.stringify({ type, payload }),
     });
-  } catch {
-    // Bildirim hatası ana işlemi kesmez
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      console.warn("[notifyEmail]", type, res.status, body);
+    }
+  } catch (e) {
+    console.warn("[notifyEmail] fetch error:", type, e);
   }
 }

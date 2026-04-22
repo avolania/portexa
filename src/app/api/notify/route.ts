@@ -25,9 +25,17 @@ export type NotifyType =
 async function getUserEmail(userId: string): Promise<string | null> {
   try {
     const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
-    if (error || !data?.user?.email) return null;
+    if (error) {
+      console.error("[notify] getUserEmail error:", error.message, "userId:", userId);
+      return null;
+    }
+    if (!data?.user?.email) {
+      console.warn("[notify] getUserEmail: no email found for userId:", userId);
+      return null;
+    }
     return data.user.email;
-  } catch {
+  } catch (e) {
+    console.error("[notify] getUserEmail exception:", e, "userId:", userId);
     return null;
   }
 }
