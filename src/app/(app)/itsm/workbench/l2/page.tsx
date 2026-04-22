@@ -982,7 +982,7 @@ export default function SpecialistWorkbenchPage() {
         <div style={{ width: 380, flexShrink: 0, background: "#fff", borderRight: "1px solid #E2E8F0", overflowY: "auto" }}>
           {filtered.map((t, i) => {
             const isSel = t.id === selectedId;
-            const tc = TYPE_C[t.type]; const pc = PRIO_C[t.priority]; const sc = STATE_C[t.state] || { c: "#94A3B8", i: "○" };
+            const tc = TYPE_C[t.type as keyof typeof TYPE_C] ?? { l: t.type, c: "#64748B", bg: "#F1F5F9" }; const pc = PRIO_C[String(t.priority) as keyof typeof PRIO_C] ?? { l: String(t.priority), c: "#fff", bg: "#6B7280" }; const sc = STATE_C[t.state] || { c: "#94A3B8", i: "○" };
             const sla = fmtSla(t.slaMin);
             return (
               <div key={t.id} onClick={() => { setSelectedId(t.id); setActiveTab("technical"); setDiagSession([]); setRootCauseText(""); setNoteText(""); setTimelineNoteText(""); }}
@@ -1016,8 +1016,8 @@ export default function SpecialistWorkbenchPage() {
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
-                    <Badge bg={TYPE_C[selected.type].bg} color={TYPE_C[selected.type].c}>{TYPE_C[selected.type].l}</Badge>
-                    <Badge bg={PRIO_C[selected.priority].bg} color={PRIO_C[selected.priority].c}>{PRIO_C[selected.priority].l}</Badge>
+                    <Badge bg={(TYPE_C[selected.type as keyof typeof TYPE_C] ?? { bg: "#F1F5F9", c: "#64748B", l: selected.type }).bg} color={(TYPE_C[selected.type as keyof typeof TYPE_C] ?? { bg: "#F1F5F9", c: "#64748B", l: selected.type }).c}>{(TYPE_C[selected.type as keyof typeof TYPE_C] ?? { l: selected.type }).l}</Badge>
+                    <Badge bg={(PRIO_C[String(selected.priority) as keyof typeof PRIO_C] ?? { bg: "#6B7280", c: "#fff", l: String(selected.priority) }).bg} color={(PRIO_C[String(selected.priority) as keyof typeof PRIO_C] ?? { bg: "#6B7280", c: "#fff", l: String(selected.priority) }).c}>{(PRIO_C[String(selected.priority) as keyof typeof PRIO_C] ?? { l: String(selected.priority) }).l}</Badge>
                     <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'IBM Plex Mono',monospace", color: "#475569" }}>{selected.id}</span>
                     {STATE_C[selected.state] && <Badge bg={`${STATE_C[selected.state].c}15`} color={STATE_C[selected.state].c}>{STATE_C[selected.state].i} {selected.state}</Badge>}
                     {selected.breached && <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 4, background: "#DC2626", color: "#fff", animation: "pulse 1.2s ease infinite" }}>SLA İHLALİ</span>}
