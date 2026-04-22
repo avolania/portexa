@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { notifyEmail } from "@/lib/notifyEmail";
 import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
@@ -854,6 +855,16 @@ export default function SpecialistWorkbenchPage() {
         }
       }
       await dispatchWorkNote(`[ESKALASYoN] ${group} grubuna eskalasyon yapıldı`);
+      if (selectedStoreType === "INC" && selected) {
+        notifyEmail("escalation", {
+          assignedToId:    user.id,
+          ticketNumber:    selected.id,
+          ticketTitle:     selected.title,
+          ticketType:      "INC",
+          escalatedByName: user.name,
+          targetGroup:     group,
+        });
+      }
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'Eskalasyon sırasında hata oluştu');
     } finally { setSaving(false); }

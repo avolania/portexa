@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useAuthStore } from './useAuthStore';
+import { notifyEmail } from '@/lib/notifyEmail';
 import { useITSMConfigStore } from './useITSMConfigStore';
 import { useWorkflowInstanceStore } from './useWorkflowInstanceStore';
 import { triggerWorkflow } from '@/services/workflowEngine';
@@ -195,21 +196,59 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
     const user = useAuthStore.getState().user;
     if (!user) return;
     const updated = await approveServiceRequest(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
-    if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
+    if (updated) {
+      set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
+      if (updated.requestedForId) {
+        notifyEmail("approval_decision", {
+          requesterId:  updated.requestedForId,
+          ticketNumber: updated.number,
+          ticketTitle:  updated.shortDescription,
+          ticketType:   "SR",
+          decision:     "approved",
+          approverName: user.name,
+          comments:     dto.comments,
+        });
+      }
+    }
   },
 
   reject: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
     const updated = await rejectServiceRequest(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
-    if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
+    if (updated) {
+      set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
+      if (updated.requestedForId) {
+        notifyEmail("approval_decision", {
+          requesterId:  updated.requestedForId,
+          ticketNumber: updated.number,
+          ticketTitle:  updated.shortDescription,
+          ticketType:   "SR",
+          decision:     "rejected",
+          approverName: user.name,
+          comments:     dto.comments,
+        });
+      }
+    }
   },
 
   fulfill: async (id, dto) => {
     const user = useAuthStore.getState().user;
     if (!user) return;
     const updated = await fulfillServiceRequest(id, dto, get().serviceRequests, user.id, user.name, user.orgId);
-    if (updated) set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
+    if (updated) {
+      set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
+      if (updated.requestedForId) {
+        notifyEmail("ticket_resolved", {
+          callerId:       updated.requestedForId,
+          ticketNumber:   updated.number,
+          ticketTitle:    updated.shortDescription,
+          ticketType:     "SR",
+          resolvedByName: user.name,
+          resolution:     dto.fulfillmentNotes,
+        });
+      }
+    }
   },
 
   close: async (id) => {

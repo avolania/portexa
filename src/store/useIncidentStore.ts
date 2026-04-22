@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useAuthStore } from './useAuthStore';
+import { notifyEmail } from '@/lib/notifyEmail';
 import {
   loadIncidents,
   createIncident,
@@ -115,7 +116,18 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
     const user = useAuthStore.getState().user;
     if (!user) return;
     const updated = await assignIncident(id, dto, get().incidents, user.id, user.name, user.orgId);
-    if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
+    if (updated) {
+      set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
+      if (dto.assignedToId && dto.assignedToId !== user.id) {
+        notifyEmail("ticket_assigned", {
+          assignedToId:   dto.assignedToId,
+          ticketNumber:   updated.number,
+          ticketTitle:    updated.shortDescription,
+          ticketType:     "INC",
+          assignedByName: user.name,
+        });
+      }
+    }
   },
 
   changeState: async (id, dto) => {
@@ -129,7 +141,19 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
     const user = useAuthStore.getState().user;
     if (!user) return;
     const updated = await resolveIncident(id, dto, get().incidents, user.id, user.name, user.orgId);
-    if (updated) set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
+    if (updated) {
+      set((s) => ({ incidents: s.incidents.map((i) => (i.id === id ? updated : i)) }));
+      if (updated.callerId) {
+        notifyEmail("ticket_resolved", {
+          callerId:       updated.callerId,
+          ticketNumber:   updated.number,
+          ticketTitle:    updated.shortDescription,
+          ticketType:     "INC",
+          resolvedByName: user.name,
+          resolution:     dto.resolutionNotes,
+        });
+      }
+    }
   },
 
   close: async (id, dto) => {
