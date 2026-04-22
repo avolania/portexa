@@ -200,13 +200,14 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
       set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
       if (updated.requestedForId) {
         notifyEmail("approval_decision", {
-          requesterId:  updated.requestedForId,
-          ticketNumber: updated.number,
-          ticketTitle:  updated.shortDescription,
-          ticketType:   "SR",
-          decision:     "approved",
-          approverName: user.name,
-          comments:     dto.comments,
+          requesterId:   updated.requestedForId,
+          ticketStoreId: updated.id,
+          ticketNumber:  updated.number,
+          ticketTitle:   updated.shortDescription,
+          ticketType:    "SR",
+          decision:      "approved",
+          approverName:  user.name,
+          comments:      dto.comments,
         });
       }
     }
@@ -220,13 +221,14 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
       set((s) => ({ serviceRequests: s.serviceRequests.map((sr) => (sr.id === id ? updated : sr)) }));
       if (updated.requestedForId) {
         notifyEmail("approval_decision", {
-          requesterId:  updated.requestedForId,
-          ticketNumber: updated.number,
-          ticketTitle:  updated.shortDescription,
-          ticketType:   "SR",
-          decision:     "rejected",
-          approverName: user.name,
-          comments:     dto.comments,
+          requesterId:   updated.requestedForId,
+          ticketStoreId: updated.id,
+          ticketNumber:  updated.number,
+          ticketTitle:   updated.shortDescription,
+          ticketType:    "SR",
+          decision:      "rejected",
+          approverName:  user.name,
+          comments:      dto.comments,
         });
       }
     }
@@ -241,6 +243,7 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
       if (updated.requestedForId) {
         notifyEmail("ticket_resolved", {
           callerId:       updated.requestedForId,
+          ticketStoreId:  updated.id,
           ticketNumber:   updated.number,
           ticketTitle:    updated.shortDescription,
           ticketType:     "SR",

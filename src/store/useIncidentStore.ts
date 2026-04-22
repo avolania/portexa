@@ -121,6 +121,7 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
       if (dto.assignedToId) {
         notifyEmail("ticket_assigned", {
           assignedToId:   dto.assignedToId,
+          ticketStoreId:  updated.id,
           ticketNumber:   updated.number,
           ticketTitle:    updated.shortDescription,
           ticketType:     "INC",
@@ -146,6 +147,7 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
       if (updated.callerId) {
         notifyEmail("ticket_resolved", {
           callerId:       updated.callerId,
+          ticketStoreId:  updated.id,
           ticketNumber:   updated.number,
           ticketTitle:    updated.shortDescription,
           ticketType:     "INC",

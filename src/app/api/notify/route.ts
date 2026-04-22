@@ -48,6 +48,15 @@ function getAppUrl(req: NextRequest): string {
   ).replace(/\s+/g, "");
 }
 
+function ticketUrl(appUrl: string, ticketType: string, ticketStoreId?: string): string {
+  if (!ticketStoreId) {
+    const section = ticketType === "INC" ? "incidents" : ticketType === "SR" ? "service-requests" : "change-requests";
+    return `${appUrl}/itsm/${section}`;
+  }
+  const section = ticketType === "INC" ? "incidents" : ticketType === "SR" ? "service-requests" : "change-requests";
+  return `${appUrl}/itsm/${section}/${ticketStoreId}`;
+}
+
 export async function POST(req: NextRequest) {
   // Caller doğrulama
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
@@ -71,11 +80,11 @@ export async function POST(req: NextRequest) {
         toEmail = await getUserEmail(recipientId);
         if (!toEmail) break;
         ({ subject, html } = ticketAssignedEmail({
-          ticketNumber:  payload.ticketNumber  as string,
-          ticketTitle:   payload.ticketTitle   as string,
-          ticketType:    payload.ticketType    as string,
+          ticketNumber:   payload.ticketNumber   as string,
+          ticketTitle:    payload.ticketTitle    as string,
+          ticketType:     payload.ticketType     as string,
+          ticketUrl:      ticketUrl(appUrl, payload.ticketType as string, payload.ticketStoreId as string | undefined),
           assignedByName: payload.assignedByName as string,
-          appUrl,
         }));
         break;
       }
@@ -88,8 +97,8 @@ export async function POST(req: NextRequest) {
           ticketNumber:  payload.ticketNumber  as string,
           ticketTitle:   payload.ticketTitle   as string,
           ticketType:    payload.ticketType    as string,
+          ticketUrl:     ticketUrl(appUrl, payload.ticketType as string, payload.ticketStoreId as string | undefined),
           requesterName: payload.requesterName as string,
-          appUrl,
         }));
         break;
       }
@@ -102,10 +111,10 @@ export async function POST(req: NextRequest) {
           ticketNumber:  payload.ticketNumber  as string,
           ticketTitle:   payload.ticketTitle   as string,
           ticketType:    payload.ticketType    as string,
+          ticketUrl:     ticketUrl(appUrl, payload.ticketType as string, payload.ticketStoreId as string | undefined),
           decision:      payload.decision      as "approved" | "rejected",
           approverName:  payload.approverName  as string,
           comments:      payload.comments      as string | undefined,
-          appUrl,
         }));
         break;
       }
@@ -118,9 +127,9 @@ export async function POST(req: NextRequest) {
           ticketNumber:   payload.ticketNumber   as string,
           ticketTitle:    payload.ticketTitle    as string,
           ticketType:     payload.ticketType     as string,
+          ticketUrl:      ticketUrl(appUrl, payload.ticketType as string, payload.ticketStoreId as string | undefined),
           resolvedByName: payload.resolvedByName as string,
           resolution:     payload.resolution     as string | undefined,
-          appUrl,
         }));
         break;
       }
@@ -133,9 +142,9 @@ export async function POST(req: NextRequest) {
           ticketNumber:    payload.ticketNumber    as string,
           ticketTitle:     payload.ticketTitle     as string,
           ticketType:      payload.ticketType      as string,
+          ticketUrl:       ticketUrl(appUrl, payload.ticketType as string, payload.ticketStoreId as string | undefined),
           escalatedByName: payload.escalatedByName as string,
           targetGroup:     payload.targetGroup     as string,
-          appUrl,
         }));
         break;
       }
@@ -148,9 +157,9 @@ export async function POST(req: NextRequest) {
           ticketNumber: payload.ticketNumber as string,
           ticketTitle:  payload.ticketTitle  as string,
           ticketType:   payload.ticketType   as string,
+          ticketUrl:    ticketUrl(appUrl, payload.ticketType as string, payload.ticketStoreId as string | undefined),
           agentName:    payload.agentName    as string,
           comment:      payload.comment      as string,
-          appUrl,
         }));
         break;
       }

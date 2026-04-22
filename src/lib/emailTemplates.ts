@@ -55,8 +55,8 @@ export function ticketAssignedEmail(p: {
   ticketNumber: string;
   ticketTitle: string;
   ticketType: string;
+  ticketUrl: string;
   assignedByName: string;
-  appUrl: string;
 }): { subject: string; html: string } {
   return {
     subject: `Size atandı: ${p.ticketNumber} — ${p.ticketTitle}`,
@@ -67,7 +67,7 @@ export function ticketAssignedEmail(p: {
           <strong>${p.assignedByName}</strong> aşağıdaki talebi size atadı:
         </p>
         ${ticket(p.ticketNumber, p.ticketTitle, p.ticketType)}
-        ${button("Talebi Görüntüle", `${p.appUrl}/itsm`)}
+        ${button("Talebi Görüntüle", p.ticketUrl)}
       </div>
       ${FOOTER}
     </div>`,
@@ -78,8 +78,8 @@ export function approvalNeededEmail(p: {
   ticketNumber: string;
   ticketTitle: string;
   ticketType: string;
+  ticketUrl: string;
   requesterName: string;
-  appUrl: string;
 }): { subject: string; html: string } {
   return {
     subject: `Onayınız bekleniyor: ${p.ticketNumber}`,
@@ -90,7 +90,7 @@ export function approvalNeededEmail(p: {
           <strong>${p.requesterName}</strong> tarafından oluşturulan aşağıdaki talep onayınızı bekliyor:
         </p>
         ${ticket(p.ticketNumber, p.ticketTitle, p.ticketType)}
-        ${button("Onaylamak için tıklayın", `${p.appUrl}/itsm`, "#d97706")}
+        ${button("Onaylamak için tıklayın", p.ticketUrl, "#d97706")}
       </div>
       ${FOOTER}
     </div>`,
@@ -101,10 +101,10 @@ export function approvalDecisionEmail(p: {
   ticketNumber: string;
   ticketTitle: string;
   ticketType: string;
+  ticketUrl: string;
   decision: "approved" | "rejected";
   approverName: string;
   comments?: string;
-  appUrl: string;
 }): { subject: string; html: string } {
   const approved = p.decision === "approved";
   const color = approved ? "#059669" : "#dc2626";
@@ -120,7 +120,7 @@ export function approvalDecisionEmail(p: {
         </p>
         ${ticket(p.ticketNumber, p.ticketTitle, p.ticketType)}
         ${p.comments ? `<div style="background:#f1f5f9;border-left:3px solid ${color};padding:10px 14px;border-radius:4px;font-size:13px;color:#374151;">"${p.comments}"</div>` : ""}
-        ${button("Talebi Görüntüle", `${p.appUrl}/itsm`)}
+        ${button("Talebi Görüntüle", p.ticketUrl)}
       </div>
       ${FOOTER}
     </div>`,
@@ -131,9 +131,9 @@ export function ticketResolvedEmail(p: {
   ticketNumber: string;
   ticketTitle: string;
   ticketType: string;
+  ticketUrl: string;
   resolvedByName: string;
   resolution?: string;
-  appUrl: string;
 }): { subject: string; html: string } {
   return {
     subject: `✓ Talebiniz çözüldü: ${p.ticketNumber}`,
@@ -145,7 +145,7 @@ export function ticketResolvedEmail(p: {
         </p>
         ${ticket(p.ticketNumber, p.ticketTitle, p.ticketType)}
         ${p.resolution ? `<div style="background:#f0fdf4;border-left:3px solid #059669;padding:10px 14px;border-radius:4px;font-size:13px;color:#374151;">${p.resolution}</div>` : ""}
-        ${button("Geri bildirim verin", `${p.appUrl}/itsm/my-tickets`)}
+        ${button("Geri bildirim verin", p.ticketUrl)}
       </div>
       ${FOOTER}
     </div>`,
@@ -156,9 +156,9 @@ export function escalationEmail(p: {
   ticketNumber: string;
   ticketTitle: string;
   ticketType: string;
+  ticketUrl: string;
   escalatedByName: string;
   targetGroup: string;
-  appUrl: string;
 }): { subject: string; html: string } {
   return {
     subject: `⬆ Eskalasyon: ${p.ticketNumber} — ${p.ticketTitle}`,
@@ -169,7 +169,7 @@ export function escalationEmail(p: {
           <strong>${p.escalatedByName}</strong> aşağıdaki talebi <strong>${p.targetGroup}</strong> grubuna eskalasyon yaptı:
         </p>
         ${ticket(p.ticketNumber, p.ticketTitle, p.ticketType)}
-        ${button("Workbench'i Aç", `${p.appUrl}/itsm/workbench/l2`, "#7c3aed")}
+        ${button("Workbench'i Aç", p.ticketUrl, "#7c3aed")}
       </div>
       ${FOOTER}
     </div>`,
@@ -180,9 +180,9 @@ export function newCommentEmail(p: {
   ticketNumber: string;
   ticketTitle: string;
   ticketType: string;
+  ticketUrl: string;
   agentName: string;
   comment: string;
-  appUrl: string;
 }): { subject: string; html: string } {
   return {
     subject: `Yeni yanıt: ${p.ticketNumber}`,
@@ -194,7 +194,7 @@ export function newCommentEmail(p: {
         </p>
         ${ticket(p.ticketNumber, p.ticketTitle, p.ticketType)}
         <div style="background:#eff6ff;border-left:3px solid #2563eb;padding:10px 14px;border-radius:4px;font-size:13px;color:#1e3a5f;">${p.comment}</div>
-        ${button("Yanıtla", `${p.appUrl}/itsm/my-tickets`)}
+        ${button("Yanıtla", p.ticketUrl)}
       </div>
       ${FOOTER}
     </div>`,
