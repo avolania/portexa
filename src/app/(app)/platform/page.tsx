@@ -6,7 +6,7 @@ import {
   Users, AlertCircle, Pencil, Save, Crown, ArrowLeftRight,
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { dbLoadAllOrgs, dbUpsertOrg, dbAssignUserToOrg, dbLoadProfiles } from "@/lib/db";
+import { dbLoadAllOrgs, dbUpsertOrg, dbAssignUserToOrg, dbUpdateUserOrgInTables, dbLoadProfiles } from "@/lib/db";
 import { ROLE_META } from "@/lib/permissions";
 import type { Organization, User, UserRole } from "@/types";
 import { useRouter } from "next/navigation";
@@ -247,12 +247,16 @@ function ChangeOrgModal({
     setLoading(true);
     setResult(null);
     const res = await dbAssignUserToOrg(targetUser.email, selectedOrgId);
+    if (res.ok) {
+      // auth_profiles güncellendi — diğer tablolardaki org_id'yi de güncelle
+      await dbUpdateUserOrgInTables(targetUser.id, selectedOrgId);
+      onSuccess();
+    }
     const newOrg = orgs.find((o) => o.id === selectedOrgId);
     setResult(res.ok
       ? { ok: true, msg: `Kullanıcı "${newOrg?.name ?? selectedOrgId}" organizasyonuna taşındı.` }
       : { ok: false, msg: res.error ?? "İşlem başarısız." }
     );
-    if (res.ok) onSuccess();
     setLoading(false);
   };
 

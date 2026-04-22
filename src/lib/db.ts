@@ -253,6 +253,24 @@ export async function dbAssignUserToOrg(email: string, newOrgId: string): Promis
   return result;
 }
 
+// Kullanıcının tüm ilgili tablolardaki org_id'sini günceller
+// (auth_profiles RPC ile güncellendikten sonra çağrılır)
+export async function dbUpdateUserOrgInTables(userId: string, newOrgId: string): Promise<void> {
+  // team_members tablosunda bu kullanıcı kaydı varsa org_id'yi güncelle
+  const { error: tmError } = await supabase
+    .from("team_members")
+    .update({ org_id: newOrgId })
+    .eq("id", userId);
+  if (tmError) console.warn("[db] team_members org update:", tmError.message);
+
+  // activity_entries tablosunda da güncelle (isteğe bağlı, eski kayıtlar tutarlı kalsın)
+  const { error: aeError } = await supabase
+    .from("activity_entries")
+    .update({ org_id: newOrgId })
+    .eq("id", userId);
+  if (aeError) console.warn("[db] activity_entries org update:", aeError.message);
+}
+
 // ─── Organizations ────────────────────────────────────────────────────────────
 
 export async function dbLoadAllOrgs(): Promise<Organization[]> {
