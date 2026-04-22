@@ -254,21 +254,29 @@ export async function dbAssignUserToOrg(email: string, newOrgId: string): Promis
 }
 
 // Kullanıcının tüm ilgili tablolardaki org_id'sini günceller
-// (auth_profiles RPC ile güncellendikten sonra çağrılır)
+// Service role key gerektiğinden API route üzerinden çağrılır (RLS bypass)
 export async function dbUpdateUserOrgInTables(userId: string, newOrgId: string): Promise<void> {
-  // team_members tablosunda bu kullanıcı kaydı varsa org_id'yi güncelle
-  const { error: tmError } = await supabase
-    .from("team_members")
-    .update({ org_id: newOrgId })
-    .eq("id", userId);
-  if (tmError) console.warn("[db] team_members org update:", tmError.message);
+  // Supabase session token'ını al
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) {
+    console.warn("[db] dbUpdateUserOrgInTables: session token yok");
+    return;
+  }
 
-  // activity_entries tablosunda da güncelle (isteğe bağlı, eski kayıtlar tutarlı kalsın)
-  const { error: aeError } = await supabase
-    .from("activity_entries")
-    .update({ org_id: newOrgId })
-    .eq("id", userId);
-  if (aeError) console.warn("[db] activity_entries org update:", aeError.message);
+  const res = await fetch("/api/admin/update-user-org", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: JSON.stringify({ userId, newOrgId }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    console.error("[db] update-user-org API error:", body);
+  }
 }
 
 // ─── Organizations ────────────────────────────────────────────────────────────
