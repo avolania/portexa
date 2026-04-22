@@ -395,10 +395,10 @@ const CR_STATE_LABEL: Record<string, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SpecialistWorkbenchPage() {
-  const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState, update: updateInc, addAttachment: addIncAttachment } = useIncidentStore();
+  const { incidents, load: loadInc, resolve: resolveInc, assign: assignInc, addWorkNote, changeState, update: updateInc, addAttachment: addIncAttachment, loadTicketActivity: loadIncActivity, activeWorkNotes: incWorkNotes } = useIncidentStore();
   const { user } = useAuthStore();
-  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR, addAttachment: addSRAttachment } = useServiceRequestStore();
-  const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR, addAttachment: addCRAttachment } = useChangeRequestStore();
+  const { serviceRequests, load: loadSR, addWorkNote: addSRWorkNote, fulfill: fulfillSR, addAttachment: addSRAttachment, loadTicketActivity: loadSRActivity, activeWorkNotes: srWorkNotes } = useServiceRequestStore();
+  const { changeRequests, load: loadCR, addWorkNote: addCRWorkNote, transition: transitionCR, addAttachment: addCRAttachment, loadTicketActivity: loadCRActivity, activeWorkNotes: crWorkNotes } = useChangeRequestStore();
 
   // Gerçek incident'ları Ticket formatına dönüştür
   const realTickets: Ticket[] = incidents.map((inc) => ({
@@ -621,6 +621,16 @@ export default function SpecialistWorkbenchPage() {
     return null;
   })();
   const selectedStoreType = selected?.type ?? null; // "INC" | "SR" | "CR" | null
+  const activeWorkNotes = selectedStoreType === "INC" ? incWorkNotes : selectedStoreType === "SR" ? srWorkNotes : crWorkNotes;
+  const activeTechNotes = activeWorkNotes.filter(n => n.content.startsWith("[TEKNİK]")).map(n => n.content.replace("[TEKNİK] ", "")).join("\n---\n");
+
+  useEffect(() => {
+    if (!selectedStoreId || !selectedStoreType) return;
+    if (selectedStoreType === "INC") loadIncActivity(selectedStoreId);
+    else if (selectedStoreType === "SR") loadSRActivity(selectedStoreId);
+    else if (selectedStoreType === "CR") loadCRActivity(selectedStoreId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStoreId, selectedStoreType]);
 
   const dispatchWorkNote = async (content: string): Promise<void> => {
     if (!selectedStoreId || !selectedStoreType) return;
@@ -1112,7 +1122,7 @@ export default function SpecialistWorkbenchPage() {
                     </div>
                     <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #BFDBFE", padding: "16px 20px", marginBottom: 14 }}>
                       <h4 style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>🔧 Teknik Notlar</h4>
-                      <p style={{ fontSize: 13, color: "#1E293B", lineHeight: 1.6, fontFamily: "'IBM Plex Mono',monospace", background: "#F8FAFC", padding: "10px 14px", borderRadius: 6, whiteSpace: "pre-wrap" }}>{selected.technicalNotes}</p>
+                      <p style={{ fontSize: 13, color: "#1E293B", lineHeight: 1.6, fontFamily: "'IBM Plex Mono',monospace", background: "#F8FAFC", padding: "10px 14px", borderRadius: 6, whiteSpace: "pre-wrap" }}>{activeTechNotes || <span style={{ color: "#94A3B8", fontStyle: "italic" }}>Henüz teknik not eklenmedi</span>}</p>
                     </div>
                     {selected.workaround && (
                       <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #FDE68A", padding: "16px 20px", marginBottom: 14 }}>
