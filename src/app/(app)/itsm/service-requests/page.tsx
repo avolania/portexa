@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Plus, Search, ClipboardList, Clock, XCircle, AlertTriangle,
   CheckCircle, Paperclip, X as XIcon, PanelLeftClose, PanelLeftOpen,
@@ -20,8 +20,11 @@ import type { CreateServiceRequestDto } from "@/lib/itsm/types/service-request.t
 import type { Attachment } from "@/types";
 import TicketTimeline from "@/components/itsm/TicketTimeline";
 import TicketTasks from "@/components/itsm/TicketTasks";
+import { ListPagination } from "@/components/ui/ListPagination";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 20;
 
 const STATE_FILTERS = [
   { value: "all",                                label: "Tümü"          },
@@ -858,13 +861,16 @@ export default function ServiceRequestsPage() {
   const [listCollapsed, setListCollapsed] = useState(false);
   const [showNew, setShowNew]             = useState(false);
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const [currentPage, setCurrentPage]     = useState(0);
+
+  useEffect(() => { setCurrentPage(0); }, [stateFilter, search, sortBy]);
 
   const stateCounts = serviceRequests.reduce<Record<string, number>>((acc, sr) => {
     acc[sr.state] = (acc[sr.state] ?? 0) + 1;
     return acc;
   }, {});
 
-  const filtered = serviceRequests
+  const filtered = useMemo(() => serviceRequests
     .filter((sr) => {
       if (stateFilter !== "all" && sr.state !== stateFilter) return false;
       if (search) {
@@ -873,7 +879,13 @@ export default function ServiceRequestsPage() {
       }
       return true;
     })
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [serviceRequests, stateFilter, search, sortBy]);
+
+  const paginated = useMemo(
+    () => filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [filtered, currentPage],
+  );
 
   const handleSelect = (id: string) => { setSelectedId(id); setMobileShowDetail(true); };
   const handleClose  = () => { setMobileShowDetail(false); setSelectedId(null); };
@@ -940,7 +952,7 @@ export default function ServiceRequestsPage() {
               <p className="text-xs">Talep bulunamadı</p>
             </div>
           ) : (
-            filtered.map((sr) => {
+            paginated.map((sr) => {
               const stateInfo    = SR_STATE_MAP[sr.state];
               const priorityInfo = ITSM_PRIORITY_MAP[sr.priority];
               const selected     = selectedId === sr.id;
@@ -979,6 +991,12 @@ export default function ServiceRequestsPage() {
             })
           )}
         </div>
+        <ListPagination
+          currentPage={currentPage}
+          totalCount={filtered.length}
+          pageSize={PAGE_SIZE}
+          onChange={setCurrentPage}
+        />
       </div>
 
       {/* Collapse toggle */}

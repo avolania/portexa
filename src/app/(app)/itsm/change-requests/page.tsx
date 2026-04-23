@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Plus, Search, GitPullRequest, Calendar, CheckCircle,
   Paperclip, X as XIcon, PanelLeftClose, PanelLeftOpen,
@@ -21,8 +21,12 @@ import type { CreateChangeRequestDto } from "@/lib/itsm/types/change-request.typ
 import type { Attachment } from "@/types";
 import TicketTimeline from "@/components/itsm/TicketTimeline";
 import TicketTasks from "@/components/itsm/TicketTasks";
+import { ListPagination } from "@/components/ui/ListPagination";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 20;
+
 
 const STATE_FILTERS = [
   { value: "all",                                label: "Tümü"          },
@@ -876,13 +880,16 @@ export default function ChangeRequestsPage() {
   const [listCollapsed, setListCollapsed] = useState(false);
   const [showNew, setShowNew]             = useState(false);
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const [currentPage, setCurrentPage]     = useState(0);
+
+  useEffect(() => { setCurrentPage(0); }, [stateFilter, search]);
 
   const stateCounts = changeRequests.reduce<Record<string, number>>((acc, cr) => {
     acc[cr.state] = (acc[cr.state] ?? 0) + 1;
     return acc;
   }, {});
 
-  const filtered = changeRequests
+  const filtered = useMemo(() => changeRequests
     .filter((cr) => {
       if (stateFilter !== "all" && cr.state !== stateFilter) return false;
       if (search) {
@@ -891,7 +898,13 @@ export default function ChangeRequestsPage() {
       }
       return true;
     })
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [changeRequests, stateFilter, search]);
+
+  const paginated = useMemo(
+    () => filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [filtered, currentPage],
+  );
 
   const handleSelect = (id: string) => { setSelectedId(id); setMobileShowDetail(true); };
   const handleClose  = () => { setMobileShowDetail(false); setSelectedId(null); };
@@ -958,7 +971,7 @@ export default function ChangeRequestsPage() {
               <p className="text-xs">Talep bulunamadı</p>
             </div>
           ) : (
-            filtered.map((cr) => {
+            paginated.map((cr) => {
               const stateInfo = CR_STATE_MAP[cr.state];
               const typeInfo  = CHANGE_TYPE_MAP[cr.type];
               const selected  = selectedId === cr.id;
@@ -1023,6 +1036,12 @@ export default function ChangeRequestsPage() {
             })
           )}
         </div>
+        <ListPagination
+          currentPage={currentPage}
+          totalCount={filtered.length}
+          pageSize={PAGE_SIZE}
+          onChange={setCurrentPage}
+        />
       </div>
 
       {/* Collapse toggle */}

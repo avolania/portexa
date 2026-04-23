@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, AlertCircle, Clock, XCircle, CheckCircle, AlertTriangle,
@@ -27,8 +27,11 @@ import { tr } from "date-fns/locale";
 import type { CreateIncidentDto } from "@/lib/itsm/types/incident.types";
 import type { Attachment } from "@/types";
 import TicketTimeline from "@/components/itsm/TicketTimeline";
+import { ListPagination } from "@/components/ui/ListPagination";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 20;
 
 const STATE_FILTERS = [
   { value: "all",                     label: "Tümü"      },
@@ -853,18 +856,21 @@ export default function IncidentsPage() {
   const [selectedId, setSelectedId]       = useState<string | null>(null);
   const [listCollapsed, setListCollapsed] = useState(false);
   const [showNew, setShowNew]             = useState(false);
+  const [currentPage, setCurrentPage]     = useState(0);
 
   // Mobile: when incident is selected, hide list panel
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
+  useEffect(() => { setCurrentPage(0); }, [stateFilter, priorityFilter, search, sortBy]);
+
   const stateCounts = incidents.reduce<Record<string, number>>((acc, inc) => {
     acc[inc.state] = (acc[inc.state] ?? 0) + 1;
     return acc;
   }, {});
 
-  const filtered = incidents
+  const filtered = useMemo(() => incidents
     .filter((inc) => {
       if (stateFilter !== "all" && inc.state !== stateFilter) return false;
       if (priorityFilter !== "all" && inc.priority !== priorityFilter) return false;
@@ -880,7 +886,12 @@ export default function IncidentsPage() {
         return priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority);
       }
       return b.updatedAt.localeCompare(a.updatedAt);
-    });
+    }), [incidents, stateFilter, priorityFilter, search, sortBy]);
+
+  const paginated = useMemo(
+    () => filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [filtered, currentPage],
+  );
 
   const handleSelectIncident = (id: string) => {
     setSelectedId(id);
@@ -973,7 +984,7 @@ export default function IncidentsPage() {
               <p className="text-xs">Incident bulunamadı</p>
             </div>
           ) : (
-            filtered.map((inc) => {
+            paginated.map((inc) => {
               const stateInfo    = INCIDENT_STATE_MAP[inc.state];
               const priorityInfo = ITSM_PRIORITY_MAP[inc.priority];
               const isBreached   = inc.sla.resolutionBreached;
@@ -1006,6 +1017,12 @@ export default function IncidentsPage() {
             })
           )}
         </div>
+        <ListPagination
+          currentPage={currentPage}
+          totalCount={filtered.length}
+          pageSize={PAGE_SIZE}
+          onChange={setCurrentPage}
+        />
       </div>
 
       {/* ── Collapsed toggle ─────────────────────────────────────────────────── */}
