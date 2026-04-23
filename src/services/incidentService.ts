@@ -5,7 +5,8 @@ const makeNote = (authorId: string, authorName: string, content: string, now: st
   ({ id: uuid(), authorId, authorName, content, createdAt: now });
 import { createIncidentSLA, checkIncidentSLABreaches, pauseIncidentSLA, resumeIncidentSLA } from '@/lib/itsm/utils/sla.engine';
 import { generateTicketNumber } from '@/lib/itsm/utils/ticket-number';
-import { calculatePriority, DEFAULT_BUSINESS_HOURS } from '@/lib/itsm/types/interfaces';
+import { calculatePriority, DEFAULT_BUSINESS_HOURS, DEFAULT_SLA_POLICIES } from '@/lib/itsm/types/interfaces';
+import { useITSMConfigStore } from '@/store/useITSMConfigStore';
 import { IncidentState, TicketEventType, IncidentResolutionCode } from '@/lib/itsm/types/enums';
 import type { Impact, Urgency, ChangeType, ChangeRisk } from '@/lib/itsm/types/enums';
 import type {
@@ -79,7 +80,13 @@ export async function createIncident(
   const priority = dto.priorityOverride
     ?? calculatePriority(dto.impact, dto.urgency);
 
-  const sla = createIncidentSLA(now, priority);
+  const { config } = useITSMConfigStore.getState();
+  const sla = createIncidentSLA(
+    now,
+    priority,
+    config.businessHours ?? DEFAULT_BUSINESS_HOURS,
+    config.incidentSLAPolicies?.length ? config.incidentSLAPolicies : DEFAULT_SLA_POLICIES,
+  );
 
   const incident: Incident = {
     id,

@@ -3,7 +3,9 @@ import type { Attachment } from '@/types';
 const uuid = () => crypto.randomUUID();
 import { createServiceRequestSLA, checkSRSLABreach } from '@/lib/itsm/utils/sla.engine';
 import { generateTicketNumber } from '@/lib/itsm/utils/ticket-number';
-import { calculatePriority } from '@/lib/itsm/types/interfaces';
+import { calculatePriority, DEFAULT_BUSINESS_HOURS } from '@/lib/itsm/types/interfaces';
+import { DEFAULT_SR_SLA_POLICIES } from '@/lib/itsm/types/config.types';
+import { useITSMConfigStore } from '@/store/useITSMConfigStore';
 import { ApprovalState, ServiceRequestState, TicketEventType, Priority } from '@/lib/itsm/types/enums';
 import type {
   ServiceRequest,
@@ -78,7 +80,15 @@ export async function createServiceRequest(
   // Service requests never get CRITICAL priority — cap at HIGH
   const priority = rawPriority === Priority.CRITICAL ? Priority.HIGH : rawPriority;
 
-  const sla = createServiceRequestSLA(now, priority);
+  const { config } = useITSMConfigStore.getState();
+  const srPolicies = (config.srSLAPolicies?.length ? config.srSLAPolicies : DEFAULT_SR_SLA_POLICIES)
+    .map((p) => ({ priority: p.priority, responseMinutes: p.fulfillmentMinutes, resolutionMinutes: p.fulfillmentMinutes, useBusinessHours: p.useBusinessHours }));
+  const sla = createServiceRequestSLA(
+    now,
+    priority,
+    config.businessHours ?? DEFAULT_BUSINESS_HOURS,
+    srPolicies,
+  );
 
   const sr: ServiceRequest = {
     id,
