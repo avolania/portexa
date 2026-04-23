@@ -8,6 +8,7 @@ import {
 import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { IncidentState, ServiceRequestState, ChangeRequestState, Priority } from "@/lib/itsm/types/enums";
 import { cn } from "@/lib/utils";
 import { subWeeks, startOfWeek, format, isAfter, parseISO, differenceInMinutes } from "date-fns";
@@ -91,7 +92,10 @@ export default function ReportsPage() {
   const { incidents }       = useIncidentStore();
   const { serviceRequests } = useServiceRequestStore();
   const { changeRequests }  = useChangeRequestStore();
+  const profiles            = useAuthStore((s) => s.profiles);
   const [tab, setTab] = useState<Tab>("ozet");
+
+  const resolveName = (id: string) => profiles[id]?.name ?? id.slice(0, 8);
 
   // ── Özet hesapları ─────────────────────────────────────────────────────────
 
@@ -209,7 +213,7 @@ export default function ReportsPage() {
     for (const inc of incidents) {
       if (!inc.assignedToId) continue;
       const key = inc.assignedToId;
-      if (!agents[key]) agents[key] = { name: inc.assignedTo?.fullName ?? inc.assignedToId, assigned: 0, resolved: 0, totalMinutes: 0 };
+      if (!agents[key]) agents[key] = { name: resolveName(key), assigned: 0, resolved: 0, totalMinutes: 0 };
       agents[key].assigned++;
       if (inc.resolvedAt) {
         agents[key].resolved++;
@@ -219,7 +223,7 @@ export default function ReportsPage() {
     for (const sr of serviceRequests) {
       if (!sr.assignedToId) continue;
       const key = sr.assignedToId;
-      if (!agents[key]) agents[key] = { name: sr.assignedTo?.fullName ?? sr.assignedToId, assigned: 0, resolved: 0, totalMinutes: 0 };
+      if (!agents[key]) agents[key] = { name: resolveName(key), assigned: 0, resolved: 0, totalMinutes: 0 };
       agents[key].assigned++;
       if (sr.fulfilledAt) {
         agents[key].resolved++;
@@ -234,7 +238,7 @@ export default function ReportsPage() {
       }))
       .sort((a, b) => b.assigned - a.assigned)
       .slice(0, 15);
-  }, [incidents, serviceRequests]);
+  }, [incidents, serviceRequests, profiles]);
 
   // ── Kategori breakdown ─────────────────────────────────────────────────────
 
