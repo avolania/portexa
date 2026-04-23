@@ -4,7 +4,7 @@ import { loadITSMConfig, saveITSMConfig } from '@/services/itsmConfigService';
 import { DEFAULT_ITSM_CONFIG } from '@/lib/itsm/types/config.types';
 import type {
   ITSMConfig, ITSMConfigGroup, SRSLAEntry,
-  ApprovalWorkflowTemplate, CRApprovalWorkflows, SRApprovalConfig,
+  ApprovalWorkflowTemplate, CRApprovalWorkflows, SRApprovalConfig, IntegrationConfig,
 } from '@/lib/itsm/types/config.types';
 import type { ITSMRole } from '@/lib/itsm/types/enums';
 import type { SLAPolicyEntry, BusinessHoursConfig } from '@/lib/itsm/types/interfaces';
@@ -23,6 +23,7 @@ interface ITSMConfigState {
   saveApprovalWorkflows: (workflows: ApprovalWorkflowTemplate[]) => Promise<void>;
   saveCRApprovalWorkflows: (crWorkflows: CRApprovalWorkflows) => Promise<void>;
   saveSRApprovalConfig: (srConfig: SRApprovalConfig) => Promise<void>;
+  saveIntegrations: (integrations: IntegrationConfig) => Promise<void>;
 }
 
 async function persist(get: () => ITSMConfigState, set: (s: Partial<ITSMConfigState>) => void, updated: ITSMConfig) {
@@ -56,6 +57,7 @@ export const useITSMConfigStore = create<ITSMConfigState>()((set, get) => ({
   saveSRSLA:             async (srSLAPolicies)       => persist(get, set, { ...get().config, srSLAPolicies }),
   saveBusinessHours:     async (businessHours)       => persist(get, set, { ...get().config, businessHours }),
   saveApprovalWorkflows: async (approvalWorkflows)   => persist(get, set, { ...get().config, approvalWorkflows }),
+  saveIntegrations:      async (integrations)        => persist(get, set, { ...get().config, integrations }),
   saveCRApprovalWorkflows: async (crApprovalWorkflows) => persist(get, set, { ...get().config, crApprovalWorkflows }),
   saveSRApprovalConfig:  async (srApprovalConfig)   => persist(get, set, { ...get().config, srApprovalConfig }),
 }));

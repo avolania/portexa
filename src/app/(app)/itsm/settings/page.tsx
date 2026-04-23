@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Users, UserCog, Tag, Clock, Building2, GitMerge,
   Plus, Trash2, Pencil, X, ArrowUp, ArrowDown, ChevronRight,
-  CheckCircle2, AlertCircle,
+  CheckCircle2, AlertCircle, Plug,
 } from "lucide-react";
 import { useITSMConfigStore } from "@/store/useITSMConfigStore";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -17,8 +17,9 @@ import type {
   ITSMConfigGroup, ITSMGroupType,
   ApprovalWorkflowTemplate, ApprovalWorkflowStep,
   ApproverStepType, ApprovalStepMode,
-  CRApprovalWorkflows, SRApprovalConfig,
+  CRApprovalWorkflows, SRApprovalConfig, IntegrationConfig,
 } from "@/lib/itsm/types/config.types";
+import { DEFAULT_INTEGRATION_CONFIG } from "@/lib/itsm/types/config.types";
 import type { SLAPolicyEntry, BusinessHoursConfig } from "@/lib/itsm/types/interfaces";
 import { cn } from "@/lib/utils";
 
@@ -71,15 +72,16 @@ function SaveButton({ status, errorMsg, onClick }: { status: SaveStatus; errorMs
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type TabId = "groups" | "users" | "categories" | "sla" | "hours" | "approval";
+type TabId = "groups" | "users" | "categories" | "sla" | "hours" | "approval" | "integrations";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: "groups",     label: "Ekipler",       icon: Users      },
-  { id: "users",      label: "Kullanıcılar",   icon: UserCog    },
-  { id: "categories", label: "Kategoriler",    icon: Tag        },
-  { id: "sla",        label: "SLA",           icon: Clock      },
-  { id: "hours",      label: "İş Saatleri",   icon: Building2  },
-  { id: "approval",   label: "Onay Akışları",  icon: GitMerge   },
+  { id: "groups",       label: "Ekipler",         icon: Users      },
+  { id: "users",        label: "Kullanıcılar",     icon: UserCog    },
+  { id: "categories",   label: "Kategoriler",      icon: Tag        },
+  { id: "sla",          label: "SLA",             icon: Clock      },
+  { id: "hours",        label: "İş Saatleri",     icon: Building2  },
+  { id: "approval",     label: "Onay Akışları",    icon: GitMerge   },
+  { id: "integrations", label: "Entegrasyonlar",   icon: Plug       },
 ];
 
 const WEEKDAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
@@ -1136,6 +1138,145 @@ function ApprovalTab() {
   );
 }
 
+// ─── Integrations Tab ────────────────────────────────────────────────────────
+
+function IntegrationsTab() {
+  const { config, saveIntegrations } = useITSMConfigStore();
+  const current = config.integrations ?? DEFAULT_INTEGRATION_CONFIG;
+  const [form, setForm] = useState<IntegrationConfig>(current);
+  const { run: trigger, status } = useSave(() => saveIntegrations(form));
+
+  const set = (patch: Partial<IntegrationConfig>) => setForm((f) => ({ ...f, ...patch }));
+
+  const [testStatus, setTestStatus] = useState<Record<string, 'idle'|'sending'|'ok'|'error'>>({});
+
+  async function testWebhook(type: "slack" | "teams") {
+    const url = type === "slack" ? form.slackWebhookUrl : form.teamsWebhookUrl;
+    if (!url.trim()) return;
+    setTestStatus((s) => ({ ...s, [type]: "sending" }));
+    try {
+      const { supabase } = await import("@/lib/supabase");
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          slackUrl: type === "slack" ? url : undefined,
+          teamsUrl: type === "teams" ? url : undefined,
+          ticketId: "test",
+          payload: {
+            event: "incident_p1_created",
+            ticketNumber: "INC-TEST",
+            ticketTitle: "Pixanto webhook testi — bu bir test mesajıdır",
+            ticketType: "INC",
+            ticketUrl: "",
+            priority: "1-Critical",
+          },
+        }),
+      });
+      setTestStatus((s) => ({ ...s, [type]: res.ok ? "ok" : "error" }));
+    } catch {
+      setTestStatus((s) => ({ ...s, [type]: "error" }));
+    }
+    setTimeout(() => setTestStatus((s) => ({ ...s, [type]: "idle" })), 3000);
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <p className="text-sm text-gray-500">
+        Slack veya Microsoft Teams kanalına ticket bildirimleri gönderin.
+        Her platform için Incoming Webhook URL'si yapılandırın.
+      </p>
+
+      {/* Slack */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-[#4A154B] flex items-center justify-center text-white text-xs font-bold">S</div>
+          <h3 className="text-sm font-semibold text-gray-800">Slack</h3>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-600 mb-1 block">Incoming Webhook URL</label>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={form.slackWebhookUrl}
+              onChange={(e) => set({ slackWebhookUrl: e.target.value })}
+              placeholder="https://hooks.slack.com/services/..."
+              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+            <button
+              onClick={() => testWebhook("slack")}
+              disabled={!form.slackWebhookUrl.trim() || testStatus.slack === "sending"}
+              className="px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
+              {testStatus.slack === "sending" ? "…" : testStatus.slack === "ok" ? "✓ Gönderildi" : testStatus.slack === "error" ? "✗ Hata" : "Test Et"}
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1">Slack'te Apps → Incoming Webhooks'tan alabilirsiniz.</p>
+        </div>
+      </div>
+
+      {/* Teams */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-[#464EB8] flex items-center justify-center text-white text-xs font-bold">T</div>
+          <h3 className="text-sm font-semibold text-gray-800">Microsoft Teams</h3>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-600 mb-1 block">Incoming Webhook URL</label>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={form.teamsWebhookUrl}
+              onChange={(e) => set({ teamsWebhookUrl: e.target.value })}
+              placeholder="https://xxx.webhook.office.com/webhookb2/..."
+              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+            <button
+              onClick={() => testWebhook("teams")}
+              disabled={!form.teamsWebhookUrl.trim() || testStatus.teams === "sending"}
+              className="px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
+              {testStatus.teams === "sending" ? "…" : testStatus.teams === "ok" ? "✓ Gönderildi" : testStatus.teams === "error" ? "✗ Hata" : "Test Et"}
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1">Teams kanalı → Connectors → Incoming Webhook'tan alabilirsiniz.</p>
+        </div>
+      </div>
+
+      {/* Event toggles */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <h3 className="text-sm font-semibold text-gray-800">Hangi olaylar bildirilsin?</h3>
+        {([
+          { key: "notifyOnP1",        label: "Yeni P1 (Kritik) Incident açıldığında" },
+          { key: "notifyOnAssign",    label: "Ticket atandığında" },
+          { key: "notifyOnResolve",   label: "Ticket çözüldüğünde" },
+          { key: "notifyOnSLABreach", label: "SLA ihlali tespit edildiğinde" },
+        ] as { key: keyof IntegrationConfig; label: string }[]).map(({ key, label }) => (
+          <label key={key} className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!form[key]}
+              onChange={(e) => set({ [key]: e.target.checked })}
+              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span className="text-sm text-gray-700">{label}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={trigger} disabled={status === "saving"}
+          className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+          {status === "saving" ? "Kaydediliyor…" : "Kaydet"}
+        </button>
+        {status === "ok"    && <span className="text-sm text-emerald-600">✓ Kaydedildi</span>}
+        {status === "error" && <span className="text-sm text-red-600">Hata oluştu</span>}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ITSMSettingsPage() {
@@ -1188,7 +1329,8 @@ export default function ITSMSettingsPage() {
           {activeTab === "categories" && <CategoriesTab />}
           {activeTab === "sla"        && <SLATab />}
           {activeTab === "hours"      && <BusinessHoursTab />}
-          {activeTab === "approval"   && <ApprovalTab />}
+          {activeTab === "approval"     && <ApprovalTab />}
+          {activeTab === "integrations" && <IntegrationsTab />}
         </>
       )}
     </div>

@@ -3,6 +3,26 @@ import type { SLAPolicyEntry, BusinessHoursConfig } from './interfaces';
 import { DEFAULT_SLA_POLICIES, DEFAULT_BUSINESS_HOURS } from './interfaces';
 import { Priority } from './enums';
 
+// ─── Integrations ─────────────────────────────────────────────────────────────
+
+export interface IntegrationConfig {
+  slackWebhookUrl:  string;
+  teamsWebhookUrl:  string;
+  notifyOnP1:       boolean;
+  notifyOnAssign:   boolean;
+  notifyOnResolve:  boolean;
+  notifyOnSLABreach: boolean;
+}
+
+export const DEFAULT_INTEGRATION_CONFIG: IntegrationConfig = {
+  slackWebhookUrl:   '',
+  teamsWebhookUrl:   '',
+  notifyOnP1:        true,
+  notifyOnAssign:    false,
+  notifyOnResolve:   false,
+  notifyOnSLABreach: true,
+};
+
 // ─── ITSM Group ───────────────────────────────────────────────────────────────
 
 export type ITSMGroupType = 'all' | 'incident' | 'service_request' | 'change_request';
@@ -87,6 +107,7 @@ export interface ITSMConfig {
   approvalWorkflows: ApprovalWorkflowTemplate[];
   crApprovalWorkflows: CRApprovalWorkflows;
   srApprovalConfig: SRApprovalConfig;
+  integrations: IntegrationConfig;
 }
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
@@ -125,6 +146,7 @@ export const DEFAULT_ITSM_CONFIG: ITSMConfig = {
   approvalWorkflows: [],
   crApprovalWorkflows: DEFAULT_CR_APPROVAL_WORKFLOWS,
   srApprovalConfig: DEFAULT_SR_APPROVAL_CONFIG,
+  integrations: DEFAULT_INTEGRATION_CONFIG,
 };
 
 // ─── UI label maps ────────────────────────────────────────────────────────────

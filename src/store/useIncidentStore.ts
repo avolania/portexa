@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useAuthStore } from './useAuthStore';
 import { notifyEmail } from '@/lib/notifyEmail';
+import { notifyWebhook } from '@/lib/notifyWebhook';
 import {
   loadIncidents,
   createIncident,
@@ -102,6 +103,14 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
     if (!user) return null;
     const incident = await createIncident(dto, user.orgId, user.id, user.name);
     set((s) => ({ incidents: [...s.incidents, incident] }));
+    if (incident.priority === "1-Critical") {
+      notifyWebhook({
+        event: "incident_p1_created",
+        ticketId: incident.id, ticketNumber: incident.number,
+        ticketTitle: incident.shortDescription, ticketType: "INC",
+        priority: incident.priority,
+      });
+    }
     return incident;
   },
 
@@ -126,6 +135,12 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
           ticketTitle:    updated.shortDescription,
           ticketType:     "INC",
           assignedByName: user.name,
+        });
+        notifyWebhook({
+          event: "ticket_assigned",
+          ticketId: updated.id, ticketNumber: updated.number,
+          ticketTitle: updated.shortDescription, ticketType: "INC",
+          assignedTo: useAuthStore.getState().profiles[dto.assignedToId]?.name ?? dto.assignedToId,
         });
       }
     }
@@ -155,6 +170,12 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
           resolution:     dto.resolutionNotes,
         });
       }
+      notifyWebhook({
+        event: "ticket_resolved",
+        ticketId: updated.id, ticketNumber: updated.number,
+        ticketTitle: updated.shortDescription, ticketType: "INC",
+        resolvedBy: user.name,
+      });
     }
   },
 
