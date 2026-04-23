@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -9,24 +9,36 @@ import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useCustomReportStore } from "@/store/useCustomReportStore";
 import { IncidentState, ServiceRequestState, ChangeRequestState, Priority } from "@/lib/itsm/types/enums";
 import { cn } from "@/lib/utils";
 import { subWeeks, startOfWeek, format, isAfter, parseISO, differenceInMinutes } from "date-fns";
 import { tr } from "date-fns/locale";
 import {
   AlertCircle, ClipboardList, GitPullRequest,
-  TrendingUp, Clock, ShieldCheck, Users,
+  TrendingUp, Clock, ShieldCheck, Users, Plus, Trash2, ChevronRight, ChevronLeft,
+  BarChart2, PieChart as PieIcon, Table2, Play,
 } from "lucide-react";
+import { computeReport } from "@/lib/itsm/utils/report.engine";
+import type {
+  CustomReport, BuilderState, ReportSource, ReportGroupBy,
+  ReportMetric, ReportChartType, ReportDateRange,
+} from "@/lib/itsm/types/custom-report.types";
+import {
+  DEFAULT_BUILDER, SOURCE_LABELS, GROUP_LABELS, METRIC_LABELS,
+  CHART_LABELS, DATE_RANGE_LABELS,
+} from "@/lib/itsm/types/custom-report.types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = "ozet" | "trend" | "sla" | "ekip";
+type Tab = "ozet" | "trend" | "sla" | "ekip" | "custom";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: "ozet",  label: "Özet",      icon: TrendingUp  },
-  { id: "trend", label: "Trend",     icon: Clock       },
-  { id: "sla",   label: "SLA",       icon: ShieldCheck },
-  { id: "ekip",  label: "Ekip",      icon: Users       },
+  { id: "ozet",   label: "Özet",           icon: TrendingUp  },
+  { id: "trend",  label: "Trend",          icon: Clock       },
+  { id: "sla",    label: "SLA",            icon: ShieldCheck },
+  { id: "ekip",   label: "Ekip",           icon: Users       },
+  { id: "custom", label: "Özel Raporlar",  icon: BarChart2   },
 ];
 
 const INC_TERMINAL = [IncidentState.RESOLVED, IncidentState.CLOSED];
@@ -93,7 +105,10 @@ export default function ReportsPage() {
   const { serviceRequests } = useServiceRequestStore();
   const { changeRequests }  = useChangeRequestStore();
   const profiles            = useAuthStore((s) => s.profiles);
+  const { reports, load: loadReports } = useCustomReportStore();
   const [tab, setTab] = useState<Tab>("ozet");
+
+  useEffect(() => { loadReports(); }, [loadReports]);
 
   const resolveName = (id: string) => profiles[id]?.name ?? id.slice(0, 8);
 
@@ -536,6 +551,354 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── ÖZEL RAPORLAR TAB ──────────────────────────────────────────────── */}
+      {tab === "custom" && (
+        <CustomReportsTab
+          incidents={incidents}
+          serviceRequests={serviceRequests}
+          changeRequests={changeRequests}
+          profiles={profiles}
+          reports={reports}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Custom Reports Tab ───────────────────────────────────────────────────────
+
+const PIE_COLORS = ["#3B82F6","#DC2626","#7C3AED","#059669","#D97706","#0891B2","#374151","#EC4899"];
+
+function ReportViewer({ report, incidents, serviceRequests, changeRequests, profiles }: {
+  report: CustomReport;
+  incidents: ReturnType<typeof useIncidentStore.getState>["incidents"];
+  serviceRequests: ReturnType<typeof useServiceRequestStore.getState>["serviceRequests"];
+  changeRequests: ReturnType<typeof useChangeRequestStore.getState>["changeRequests"];
+  profiles: Record<string, { name: string }>;
+}) {
+  const data = useMemo(
+    () => computeReport(report, incidents, serviceRequests, changeRequests, profiles),
+    [report, incidents, serviceRequests, changeRequests, profiles],
+  );
+
+  if (data.length === 0) return (
+    <div className="flex items-center justify-center h-32 text-xs text-gray-400">Seçilen filtreler için veri yok</div>
+  );
+
+  if (report.chartType === "table") return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50 text-gray-500 uppercase text-[10px]">
+            <th className="px-3 py-2 text-left font-semibold">{GROUP_LABELS[report.groupBy]}</th>
+            <th className="px-3 py-2 text-right font-semibold">{METRIC_LABELS[report.metric]}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, i) => (
+            <tr key={i} className="border-t border-gray-50 hover:bg-gray-50">
+              <td className="px-3 py-2 text-gray-700">{row.name}</td>
+              <td className="px-3 py-2 text-right font-semibold text-gray-900">{row.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  if (report.chartType === "pie") return (
+    <ResponsiveContainer width="100%" height={220}>
+      <PieChart>
+        <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}
+          label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
+          labelLine={false} fontSize={10}>
+          {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+        </Pie>
+        <Tooltip />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart data={data} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+        <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+        <Tooltip />
+        <Bar dataKey="value" name={METRIC_LABELS[report.metric]} fill="#3B82F6" radius={[3, 3, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ─── Step Builder ─────────────────────────────────────────────────────────────
+
+const STEPS = ["Kaynak", "Grupla", "Metrik", "Grafik", "Filtreler", "İsim"];
+
+function ReportBuilder({ onSave, onCancel, initial }: {
+  onSave: (b: BuilderState) => void;
+  onCancel: () => void;
+  initial?: BuilderState;
+}) {
+  const [step, setStep] = useState(0);
+  const [b, setB] = useState<BuilderState>(initial ?? DEFAULT_BUILDER);
+  const set = (patch: Partial<BuilderState>) => setB((s) => ({ ...s, ...patch }));
+
+  const canNext = () => {
+    if (step === 5) return b.name.trim().length > 0;
+    return true;
+  };
+
+  const OptionBtn = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+    <button onClick={onClick} className={cn(
+      "flex-1 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-all text-left",
+      active ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-600 hover:border-indigo-200 hover:bg-gray-50"
+    )}>{children}</button>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-gray-900">Rapor Oluştur</h2>
+            <button onClick={onCancel} className="text-gray-400 hover:text-gray-600"><span className="text-lg">✕</span></button>
+          </div>
+          {/* Progress */}
+          <div className="flex gap-1.5">
+            {STEPS.map((s, i) => (
+              <div key={i} className={cn("flex-1 h-1.5 rounded-full transition-colors",
+                i < step ? "bg-indigo-500" : i === step ? "bg-indigo-300" : "bg-gray-200"
+              )} />
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Adım {step + 1}/{STEPS.length} — {STEPS[step]}</p>
+        </div>
+
+        {/* Step content */}
+        <div className="px-6 py-5 min-h-[200px]">
+          {step === 0 && (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600 mb-3">Hangi ticket türünü analiz etmek istiyorsunuz?</p>
+              {(["INC","SR","CR","ALL"] as ReportSource[]).map((s) => (
+                <OptionBtn key={s} active={b.source === s} onClick={() => set({ source: s })}>
+                  <span className="font-semibold">{s}</span>
+                  <span className="text-gray-400 ml-2 text-xs">— {SOURCE_LABELS[s]}</span>
+                </OptionBtn>
+              ))}
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600 mb-3">Verileri nasıl gruplamak istersiniz?</p>
+              {(["state","priority","assignee","category","week","month"] as ReportGroupBy[]).map((g) => (
+                <OptionBtn key={g} active={b.groupBy === g} onClick={() => set({ groupBy: g })}>
+                  {GROUP_LABELS[g]}
+                </OptionBtn>
+              ))}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600 mb-3">Ne ölçmek istiyorsunuz?</p>
+              {(["count","avg_resolution_hours","sla_compliance_pct"] as ReportMetric[]).map((m) => (
+                <OptionBtn key={m} active={b.metric === m} onClick={() => set({ metric: m })}>
+                  {METRIC_LABELS[m]}
+                </OptionBtn>
+              ))}
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600 mb-3">Nasıl görselleştireyim?</p>
+              {(["bar","pie","table"] as ReportChartType[]).map((c) => {
+                const Icon = c === "bar" ? BarChart2 : c === "pie" ? PieIcon : Table2;
+                return (
+                  <OptionBtn key={c} active={b.chartType === c} onClick={() => set({ chartType: c })}>
+                    <span className="inline-flex items-center gap-2"><Icon className="w-4 h-4" />{CHART_LABELS[c]}</span>
+                  </OptionBtn>
+                );
+              })}
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-2">Tarih aralığı</label>
+                <div className="flex flex-wrap gap-2">
+                  {(["7d","30d","90d","all"] as ReportDateRange[]).map((d) => (
+                    <button key={d} onClick={() => set({ filters: { ...b.filters, dateRange: d } })}
+                      className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                        b.filters.dateRange === d ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-600 hover:border-indigo-200"
+                      )}>{DATE_RANGE_LABELS[d]}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-2">Öncelik filtresi (opsiyonel)</label>
+                <div className="flex flex-wrap gap-2">
+                  {["1-Critical","2-High","3-Medium","4-Low"].map((p) => {
+                    const active = b.filters.priorities?.includes(p);
+                    return (
+                      <button key={p} onClick={() => {
+                        const cur = b.filters.priorities ?? [];
+                        set({ filters: { ...b.filters, priorities: active ? cur.filter((x) => x !== p) : [...cur, p] } });
+                      }} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+                        active ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-600 hover:border-indigo-200"
+                      )}>{p}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">Raporunuza bir isim verin.</p>
+              <input
+                autoFocus
+                type="text"
+                value={b.name}
+                onChange={(e) => set({ name: e.target.value })}
+                onKeyDown={(e) => { if (e.key === "Enter" && canNext()) onSave(b); }}
+                placeholder="örn. Haftalık P1 Trend"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 space-y-1">
+                <div><span className="font-medium">Kaynak:</span> {SOURCE_LABELS[b.source]}</div>
+                <div><span className="font-medium">Gruplama:</span> {GROUP_LABELS[b.groupBy]}</div>
+                <div><span className="font-medium">Metrik:</span> {METRIC_LABELS[b.metric]}</div>
+                <div><span className="font-medium">Grafik:</span> {CHART_LABELS[b.chartType]}</div>
+                <div><span className="font-medium">Tarih:</span> {DATE_RANGE_LABELS[b.filters.dateRange]}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 pb-6 flex items-center justify-between gap-3">
+          <button onClick={() => step > 0 ? setStep(step - 1) : onCancel()}
+            className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+            <ChevronLeft className="w-4 h-4" />
+            {step === 0 ? "İptal" : "Geri"}
+          </button>
+          <button
+            onClick={() => step < STEPS.length - 1 ? setStep(step + 1) : onSave(b)}
+            disabled={!canNext()}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+          >
+            {step === STEPS.length - 1 ? (
+              <><Play className="w-3.5 h-3.5" /> Kaydet & Çalıştır</>
+            ) : (
+              <>İleri <ChevronRight className="w-4 h-4" /></>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Custom Reports Tab ───────────────────────────────────────────────────────
+
+function CustomReportsTab({ incidents, serviceRequests, changeRequests, profiles, reports }: {
+  incidents: ReturnType<typeof useIncidentStore.getState>["incidents"];
+  serviceRequests: ReturnType<typeof useServiceRequestStore.getState>["serviceRequests"];
+  changeRequests: ReturnType<typeof useChangeRequestStore.getState>["changeRequests"];
+  profiles: Record<string, { name: string }>;
+  reports: CustomReport[];
+}) {
+  const { save, remove } = useCustomReportStore();
+  const user = useAuthStore((s) => s.user);
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = useCallback(async (b: BuilderState) => {
+    if (!user) return;
+    setSaving(true);
+    const report: CustomReport = {
+      id:        crypto.randomUUID(),
+      name:      b.name,
+      createdBy: user.id,
+      createdAt: new Date().toISOString(),
+      source:    b.source,
+      groupBy:   b.groupBy,
+      metric:    b.metric,
+      chartType: b.chartType,
+      filters:   b.filters,
+    };
+    try { await save(report); } finally { setSaving(false); setShowBuilder(false); }
+  }, [user, save]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">Kendi metriklerinizi ve görselleştirmelerinizi oluşturun.</p>
+        <button onClick={() => setShowBuilder(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors">
+          <Plus className="w-4 h-4" /> Yeni Rapor
+        </button>
+      </div>
+
+      {reports.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400 bg-white rounded-xl border border-dashed border-gray-200">
+          <BarChart2 className="w-10 h-10 opacity-30" />
+          <p className="text-sm">Henüz özel rapor yok</p>
+          <button onClick={() => setShowBuilder(true)}
+            className="text-sm text-indigo-600 hover:underline font-medium">
+            İlk raporu oluştur
+          </button>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-5">
+          {reports.map((report) => (
+            <div key={report.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+                <span className="text-sm font-semibold text-gray-800 flex-1 truncate">{report.name}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
+                  {SOURCE_LABELS[report.source]}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 font-medium">
+                  {DATE_RANGE_LABELS[report.filters.dateRange]}
+                </span>
+                <button onClick={() => remove(report.id)}
+                  className="p-1 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="p-4">
+                <p className="text-[10px] text-gray-400 mb-3">
+                  {GROUP_LABELS[report.groupBy]} · {METRIC_LABELS[report.metric]} · {CHART_LABELS[report.chartType]}
+                </p>
+                <ReportViewer
+                  report={report}
+                  incidents={incidents}
+                  serviceRequests={serviceRequests}
+                  changeRequests={changeRequests}
+                  profiles={profiles}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(showBuilder || saving) && !saving && (
+        <ReportBuilder onSave={handleSave} onCancel={() => setShowBuilder(false)} />
+      )}
+      {showBuilder && saving && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-8 text-sm text-gray-600">Kaydediliyor…</div>
         </div>
       )}
     </div>
