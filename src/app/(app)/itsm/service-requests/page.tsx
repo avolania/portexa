@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Plus, Search, ClipboardList, Clock, XCircle, AlertTriangle,
   CheckCircle, Paperclip, X as XIcon, PanelLeftClose, PanelLeftOpen,
@@ -853,6 +854,7 @@ function SRDetail({ srId, onClose }: { srId: string; onClose?: () => void }) {
 
 export default function ServiceRequestsPage() {
   const { serviceRequests, loading } = useServiceRequestStore();
+  const searchParams = useSearchParams();
 
   const [stateFilter, setStateFilter]     = useState("all");
   const [search, setSearch]               = useState("");
@@ -862,6 +864,11 @@ export default function ServiceRequestsPage() {
   const [showNew, setShowNew]             = useState(false);
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [currentPage, setCurrentPage]     = useState(0);
+
+  useEffect(() => {
+    const ticketId = searchParams.get("ticketId");
+    if (ticketId) { setSelectedId(ticketId); setMobileShowDetail(true); setStateFilter("all"); }
+  }, [searchParams]);
 
   useEffect(() => { setCurrentPage(0); }, [stateFilter, search, sortBy]);
 

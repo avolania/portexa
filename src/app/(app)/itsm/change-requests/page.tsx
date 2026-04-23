@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Plus, Search, GitPullRequest, Calendar, CheckCircle,
   Paperclip, X as XIcon, PanelLeftClose, PanelLeftOpen,
@@ -873,6 +874,7 @@ function CRDetail({ crId, onClose }: { crId: string; onClose?: () => void }) {
 
 export default function ChangeRequestsPage() {
   const { changeRequests, loading } = useChangeRequestStore();
+  const searchParams = useSearchParams();
 
   const [stateFilter, setStateFilter]     = useState("all");
   const [search, setSearch]               = useState("");
@@ -883,6 +885,11 @@ export default function ChangeRequestsPage() {
   const [currentPage, setCurrentPage]     = useState(0);
 
   useEffect(() => { setCurrentPage(0); }, [stateFilter, search]);
+
+  useEffect(() => {
+    const ticketId = searchParams.get("ticketId");
+    if (ticketId) { setSelectedId(ticketId); setMobileShowDetail(true); setStateFilter("all"); }
+  }, [searchParams]);
 
   const stateCounts = changeRequests.reduce<Record<string, number>>((acc, cr) => {
     acc[cr.state] = (acc[cr.state] ?? 0) + 1;

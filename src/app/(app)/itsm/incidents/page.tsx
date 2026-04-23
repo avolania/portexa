@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus, Search, AlertCircle, Clock, XCircle, CheckCircle, AlertTriangle,
   Paperclip, X as XIcon, PanelLeftClose, PanelLeftOpen, ArrowLeft,
@@ -848,6 +848,7 @@ function IncidentDetail({ incidentId, onClose }: { incidentId: string; onClose?:
 export default function IncidentsPage() {
   const { incidents, loading } = useIncidentStore();
   const { load: loadConfig } = useITSMConfigStore();
+  const searchParams = useSearchParams();
 
   const [stateFilter, setStateFilter]     = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -862,6 +863,16 @@ export default function IncidentsPage() {
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
+
+  // Auto-select ticket from URL param (global search navigation)
+  useEffect(() => {
+    const ticketId = searchParams.get("ticketId");
+    if (ticketId) {
+      setSelectedId(ticketId);
+      setMobileShowDetail(true);
+      setStateFilter("all");
+    }
+  }, [searchParams]);
 
   useEffect(() => { setCurrentPage(0); }, [stateFilter, priorityFilter, search, sortBy]);
 
