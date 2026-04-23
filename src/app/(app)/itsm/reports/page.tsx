@@ -639,10 +639,12 @@ function ReportViewer({ report, incidents, serviceRequests, changeRequests, prof
 
 const STEPS = ["Kaynak", "Grupla", "Metrik", "Grafik", "Filtreler", "İsim"];
 
-function ReportBuilder({ onSave, onCancel, initial }: {
+function ReportBuilder({ onSave, onCancel, initial, saving, saveError }: {
   onSave: (b: BuilderState) => void;
   onCancel: () => void;
   initial?: BuilderState;
+  saving?: boolean;
+  saveError?: string | null;
 }) {
   const [step, setStep] = useState(0);
   const [b, setB] = useState<BuilderState>(initial ?? DEFAULT_BUILDER);
@@ -786,19 +788,27 @@ function ReportBuilder({ onSave, onCancel, initial }: {
         </div>
 
         {/* Footer */}
+        {saveError && (
+          <div className="mx-6 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+            {saveError}
+          </div>
+        )}
         <div className="px-6 pb-6 flex items-center justify-between gap-3">
           <button onClick={() => step > 0 ? setStep(step - 1) : onCancel()}
-            className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+            disabled={saving}
+            className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-40">
             <ChevronLeft className="w-4 h-4" />
             {step === 0 ? "İptal" : "Geri"}
           </button>
           <button
             onClick={() => step < STEPS.length - 1 ? setStep(step + 1) : onSave(b)}
-            disabled={!canNext()}
+            disabled={!canNext() || saving}
             className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
           >
             {step === STEPS.length - 1 ? (
-              <><Play className="w-3.5 h-3.5" /> Kaydet & Çalıştır</>
+              saving
+                ? <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Kaydediliyor...</>
+                : <><Play className="w-3.5 h-3.5" /> Kaydet & Çalıştır</>
             ) : (
               <>İleri <ChevronRight className="w-4 h-4" /></>
             )}
@@ -822,10 +832,12 @@ function CustomReportsTab({ incidents, serviceRequests, changeRequests, profiles
   const user = useAuthStore((s) => s.user);
   const [showBuilder, setShowBuilder] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSave = useCallback(async (b: BuilderState) => {
     if (!user) return;
     setSaving(true);
+    setSaveError(null);
     const report: CustomReport = {
       id:        crypto.randomUUID(),
       name:      b.name,
@@ -837,7 +849,14 @@ function CustomReportsTab({ incidents, serviceRequests, changeRequests, profiles
       chartType: b.chartType,
       filters:   b.filters,
     };
-    try { await save(report); } finally { setSaving(false); setShowBuilder(false); }
+    try {
+      await save(report);
+      setShowBuilder(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Kaydetme başarısız oldu");
+    } finally {
+      setSaving(false);
+    }
   }, [user, save]);
 
   return (
@@ -894,7 +913,7 @@ function CustomReportsTab({ incidents, serviceRequests, changeRequests, profiles
       )}
 
       {(showBuilder || saving) && !saving && (
-        <ReportBuilder onSave={handleSave} onCancel={() => setShowBuilder(false)} />
+        <ReportBuilder onSave={handleSave} onCancel={() => { setShowBuilder(false); setSaveError(null); }} saving={saving} saveError={saveError} />
       )}
       {showBuilder && saving && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
