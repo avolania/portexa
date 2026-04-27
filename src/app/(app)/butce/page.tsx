@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { Plus, TrendingUp, TrendingDown, AlertTriangle, DollarSign, X, Upload, Download, CheckCircle2, AlertCircle as AlertCircleIcon } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
+import { useBudgetStore } from "@/store/useBudgetStore";
+import type { Expense } from "@/store/useBudgetStore";
 import { ProjectStatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -13,33 +15,6 @@ const EXPENSE_CATEGORIES = ["İşgücü", "Yazılım", "Donanım", "Hizmet", "Di
 const PIE_COLORS = ["#4f46e5", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
 
 const REQUIRED_COLS = ["Açıklama", "Proje", "Kategori", "Tarih", "Tutar"];
-
-interface Expense {
-  id: string;
-  projectId: string;
-  category: string;
-  description: string;
-  amount: number;
-  date: string;
-}
-
-const initialExpenses: Expense[] = [
-  { id: "e1", projectId: "1", category: "İşgücü", description: "Mart ayı maaşları", amount: 28000, date: "2026-03-01" },
-  { id: "e2", projectId: "1", category: "Yazılım", description: "AWS aboneliği", amount: 4500, date: "2026-03-05" },
-  { id: "e3", projectId: "2", category: "İşgücü", description: "Tasarım danışmanlığı", amount: 15000, date: "2026-03-10" },
-  { id: "e4", projectId: "2", category: "Hizmet", description: "Figma Pro lisansları", amount: 2400, date: "2026-03-12" },
-  { id: "e5", projectId: "3", category: "Yazılım", description: "API entegrasyon aracı", amount: 3200, date: "2026-03-15" },
-  { id: "e6", projectId: "1", category: "Donanım", description: "Test cihazları", amount: 8500, date: "2026-03-18" },
-];
-
-const monthlyData = [
-  { ay: "Oca", harcama: 38000, butce: 41667 },
-  { ay: "Şub", harcama: 42000, butce: 41667 },
-  { ay: "Mar", harcama: 61600, butce: 41667 },
-  { ay: "Nis", harcama: 0, butce: 41667 },
-  { ay: "May", harcama: 0, butce: 41667 },
-  { ay: "Haz", harcama: 0, butce: 41667 },
-];
 
 
 function parseDateValue(raw: unknown): string {
@@ -68,28 +43,61 @@ interface ImportResult {
 
 export default function ButcePage() {
   const { projects } = useProjectStore();
+  const { expenses, add: addExpense, load: loadExpenses } = useBudgetStore();
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState(DEFAULT_CURRENCY);
   const [form, setForm] = useState({ description: "", projectId: projects[0]?.id ?? "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10) });
   const fileRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => { loadExpenses(); }, [loadExpenses]);
+
   // Para birimine göre filtrele — currency tanımsız projeleri varsayılan TRY kabul et
   const filteredProjects = projects.filter((p) => (p.currency ?? DEFAULT_CURRENCY) === selectedCurrency);
   const usedCurrencies = Array.from(new Set(projects.map((p) => p.currency ?? DEFAULT_CURRENCY)));
+  const filteredProjectIds = useMemo(() => new Set(filteredProjects.map((p) => p.id)), [filteredProjects]);
 
-  const totalBudget = filteredProjects.reduce((s, p) => s + (p.budget ?? 0), 0);
-  const totalUsed = filteredProjects.reduce((s, p) => s + (p.budgetUsed ?? 0), 0);
+  // Gider toplamları expenses store'dan hesaplanır (p.budgetUsed değil)
+  const filteredExpenses = useMemo(
+    () => expenses.filter((e) => filteredProjectIds.has(e.projectId)),
+    [expenses, filteredProjectIds],
+  );
+  const totalBudget    = filteredProjects.reduce((s, p) => s + (p.budget ?? 0), 0);
+  const totalUsed      = filteredExpenses.reduce((s, e) => s + e.amount, 0);
   const totalRemaining = totalBudget - totalUsed;
-  const overallPct = totalBudget > 0 ? Math.round((totalUsed / totalBudget) * 100) : 0;
+  const overallPct     = totalBudget > 0 ? Math.round((totalUsed / totalBudget) * 100) : 0;
   const fmt = (n: number) => formatCurrency(n, selectedCurrency);
+
+  // Proje başına gerçek harcama toplamı
+  const projectExpenseMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const e of filteredExpenses) {
+      map[e.projectId] = (map[e.projectId] ?? 0) + e.amount;
+    }
+    return map;
+  }, [filteredExpenses]);
+
+  // Son 6 ay aylık harcama vs bütçe (gerçek veriden)
+  const monthlyData = useMemo(() => {
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - (5 - i));
+      const key   = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("tr-TR", { month: "short" });
+      const harcama = filteredExpenses
+        .filter((e) => e.date.startsWith(key))
+        .reduce((s, e) => s + e.amount, 0);
+      return { ay: label, harcama, butce: totalBudget > 0 ? Math.round(totalBudget / 12) : 0 };
+    });
+    return months;
+  }, [filteredExpenses, totalBudget]);
 
   const categoryData = EXPENSE_CATEGORIES.map((cat) => ({
     name: cat,
-    value: expenses.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0),
+    value: filteredExpenses.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0),
   })).filter((d) => d.value > 0);
 
   // ── Template download ──────────────────────────────────────────────────────
@@ -114,7 +122,7 @@ export default function ButcePage() {
     setImportResult(null);
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const wb = XLSX.read(ev.target?.result, { type: "binary", cellDates: false });
         const ws = wb.Sheets[wb.SheetNames[0]];
@@ -166,7 +174,7 @@ export default function ButcePage() {
           });
         });
 
-        setExpenses((prev) => [...newExpenses, ...prev]);
+        await Promise.all(newExpenses.map((e) => addExpense(e)));
         setImportResult({ imported: newExpenses.length, skipped, errors });
       } catch {
         setImportResult({ imported: 0, skipped: 0, errors: ["Dosya okunamadı. Geçerli bir Excel dosyası seçin."] });
@@ -179,17 +187,17 @@ export default function ButcePage() {
   }
 
   // ── Add single expense ─────────────────────────────────────────────────────
-  function handleAddExpense() {
+  async function handleAddExpense() {
     const amount = parseFloat(form.amount);
     if (!form.description.trim() || isNaN(amount) || amount <= 0) return;
-    setExpenses((prev) => [{
-      id: crypto.randomUUID(),
-      projectId: form.projectId,
-      category: form.category,
+    await addExpense({
+      id:          crypto.randomUUID(),
+      projectId:   form.projectId,
+      category:    form.category,
       description: form.description.trim(),
       amount,
       date: form.date,
-    }, ...prev]);
+    });
     setShowAddExpense(false);
     setForm({ description: "", projectId: projects[0]?.id ?? "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10) });
   }
@@ -303,7 +311,8 @@ export default function ButcePage() {
         ) : (
           <div className="space-y-4">
             {filteredProjects.filter((p) => p.budget).map((p) => {
-              const pct = Math.round(((p.budgetUsed ?? 0) / (p.budget ?? 1)) * 100);
+              const pUsed = projectExpenseMap[p.id] ?? 0;
+              const pct   = Math.round((pUsed / (p.budget ?? 1)) * 100);
               return (
                 <div key={p.id}>
                   <div className="flex items-center justify-between mb-1.5">
@@ -313,7 +322,7 @@ export default function ButcePage() {
                       {pct >= 90 && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full flex items-center gap-1"><AlertTriangle className="w-3 h-3" />Risk</span>}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {fmt(p.budgetUsed ?? 0)} / {fmt(p.budget ?? 0)}
+                      {fmt(pUsed)} / {fmt(p.budget ?? 0)}
                       <span className={`ml-2 font-semibold ${pct >= 90 ? "text-red-600" : pct >= 75 ? "text-amber-600" : "text-emerald-600"}`}>%{pct}</span>
                     </div>
                   </div>
@@ -333,7 +342,7 @@ export default function ButcePage() {
       {/* Expense list */}
       <div className="card p-0 overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Giderler ({expenses.length})</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Giderler ({filteredExpenses.length})</h2>
         </div>
         <div className="overflow-x-auto">
         <table className="w-full min-w-[540px]">
@@ -347,7 +356,7 @@ export default function ButcePage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {expenses.map((e) => (
+            {filteredExpenses.map((e) => (
               <tr key={e.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm text-gray-900">{e.description}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{projects.find((p) => p.id === e.projectId)?.name ?? <span className="text-gray-400">—</span>}</td>
