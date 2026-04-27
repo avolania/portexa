@@ -1,10 +1,8 @@
 "use client";
 
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useMemo } from "react";
 import { Plus, TrendingUp, TrendingDown, AlertTriangle, DollarSign, X, Upload, Download, CheckCircle2, AlertCircle as AlertCircleIcon } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { useBudgetStore } from "@/store/useBudgetStore";
-import type { Expense } from "@/store/useBudgetStore";
 import { ProjectStatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -15,6 +13,15 @@ const EXPENSE_CATEGORIES = ["İşgücü", "Yazılım", "Donanım", "Hizmet", "Di
 const PIE_COLORS = ["#4f46e5", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
 
 const REQUIRED_COLS = ["Açıklama", "Proje", "Kategori", "Tarih", "Tutar"];
+
+interface FlatExpense {
+  id: string;
+  projectId: string;
+  category: string;
+  description: string;
+  amount: number;
+  date: string;
+}
 
 
 function parseDateValue(raw: unknown): string {
@@ -42,8 +49,7 @@ interface ImportResult {
 }
 
 export default function ButcePage() {
-  const { projects } = useProjectStore();
-  const { expenses, add: addExpense, load: loadExpenses } = useBudgetStore();
+  const { projects, updateProject } = useProjectStore();
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -52,52 +58,41 @@ export default function ButcePage() {
   const [form, setForm] = useState({ description: "", projectId: projects[0]?.id ?? "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10) });
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { loadExpenses(); }, [loadExpenses]);
-
   // Para birimine göre filtrele — currency tanımsız projeleri varsayılan TRY kabul et
   const filteredProjects = projects.filter((p) => (p.currency ?? DEFAULT_CURRENCY) === selectedCurrency);
   const usedCurrencies = Array.from(new Set(projects.map((p) => p.currency ?? DEFAULT_CURRENCY)));
-  const filteredProjectIds = useMemo(() => new Set(filteredProjects.map((p) => p.id)), [filteredProjects]);
 
-  // Gider toplamları expenses store'dan hesaplanır (p.budgetUsed değil)
-  const filteredExpenses = useMemo(
-    () => expenses.filter((e) => filteredProjectIds.has(e.projectId)),
-    [expenses, filteredProjectIds],
-  );
+  // Giderler project.expenses'dan gelir (project detail sayfasıyla aynı kaynak)
+  const flatExpenses = useMemo<FlatExpense[]>(() => {
+    return filteredProjects.flatMap((p) =>
+      (p.expenses ?? []).map((e) => ({ ...e, projectId: p.id }))
+    );
+  }, [filteredProjects]);
+
   const totalBudget    = filteredProjects.reduce((s, p) => s + (p.budget ?? 0), 0);
-  const totalUsed      = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+  const totalUsed      = filteredProjects.reduce((s, p) => s + (p.budgetUsed ?? 0), 0);
   const totalRemaining = totalBudget - totalUsed;
   const overallPct     = totalBudget > 0 ? Math.round((totalUsed / totalBudget) * 100) : 0;
   const fmt = (n: number) => formatCurrency(n, selectedCurrency);
 
-  // Proje başına gerçek harcama toplamı
-  const projectExpenseMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const e of filteredExpenses) {
-      map[e.projectId] = (map[e.projectId] ?? 0) + e.amount;
-    }
-    return map;
-  }, [filteredExpenses]);
-
   // Son 6 ay aylık harcama vs bütçe (gerçek veriden)
   const monthlyData = useMemo(() => {
-    const months = Array.from({ length: 6 }, (_, i) => {
+    return Array.from({ length: 6 }, (_, i) => {
       const d = new Date();
       d.setDate(1);
       d.setMonth(d.getMonth() - (5 - i));
       const key   = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const label = d.toLocaleDateString("tr-TR", { month: "short" });
-      const harcama = filteredExpenses
+      const harcama = flatExpenses
         .filter((e) => e.date.startsWith(key))
         .reduce((s, e) => s + e.amount, 0);
       return { ay: label, harcama, butce: totalBudget > 0 ? Math.round(totalBudget / 12) : 0 };
     });
-    return months;
-  }, [filteredExpenses, totalBudget]);
+  }, [flatExpenses, totalBudget]);
 
   const categoryData = EXPENSE_CATEGORIES.map((cat) => ({
     name: cat,
-    value: filteredExpenses.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0),
+    value: flatExpenses.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0),
   })).filter((d) => d.value > 0);
 
   // ── Template download ──────────────────────────────────────────────────────
@@ -143,7 +138,7 @@ export default function ButcePage() {
           return;
         }
 
-        const newExpenses: Expense[] = [];
+        const newExpenses: FlatExpense[] = [];
         const errors: string[] = [];
         let skipped = 0;
 
@@ -174,7 +169,19 @@ export default function ButcePage() {
           });
         });
 
-        await Promise.all(newExpenses.map((e) => addExpense(e)));
+        // Group by project and update each project's expenses list
+        const byProject = newExpenses.reduce<Record<string, typeof newExpenses>>((acc, e) => {
+          if (!acc[e.projectId]) acc[e.projectId] = [];
+          acc[e.projectId].push(e);
+          return acc;
+        }, {});
+        await Promise.all(Object.entries(byProject).map(async ([projectId, expList]) => {
+          const proj = projects.find((p) => p.id === projectId);
+          const existing = proj?.expenses ?? [];
+          const merged = [...expList.map(({ projectId: _pid, ...rest }) => rest), ...existing];
+          const newBudgetUsed = merged.reduce((s, e) => s + e.amount, 0);
+          await updateProject(projectId, { expenses: merged, budgetUsed: newBudgetUsed });
+        }));
         setImportResult({ imported: newExpenses.length, skipped, errors });
       } catch {
         setImportResult({ imported: 0, skipped: 0, errors: ["Dosya okunamadı. Geçerli bir Excel dosyası seçin."] });
@@ -190,14 +197,12 @@ export default function ButcePage() {
   async function handleAddExpense() {
     const amount = parseFloat(form.amount);
     if (!form.description.trim() || isNaN(amount) || amount <= 0) return;
-    await addExpense({
-      id:          crypto.randomUUID(),
-      projectId:   form.projectId,
-      category:    form.category,
-      description: form.description.trim(),
-      amount,
-      date: form.date,
-    });
+    const project = projects.find((p) => p.id === form.projectId);
+    if (!project) return;
+    const newExpense = { id: crypto.randomUUID(), category: form.category, description: form.description.trim(), amount, date: form.date };
+    const newList = [newExpense, ...(project.expenses ?? [])];
+    const newBudgetUsed = newList.reduce((s, e) => s + e.amount, 0);
+    await updateProject(form.projectId, { expenses: newList, budgetUsed: newBudgetUsed });
     setShowAddExpense(false);
     setForm({ description: "", projectId: projects[0]?.id ?? "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10) });
   }
@@ -311,7 +316,7 @@ export default function ButcePage() {
         ) : (
           <div className="space-y-4">
             {filteredProjects.filter((p) => p.budget).map((p) => {
-              const pUsed = projectExpenseMap[p.id] ?? 0;
+              const pUsed = p.budgetUsed ?? 0;
               const pct   = Math.round((pUsed / (p.budget ?? 1)) * 100);
               return (
                 <div key={p.id}>
@@ -342,7 +347,7 @@ export default function ButcePage() {
       {/* Expense list */}
       <div className="card p-0 overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Giderler ({filteredExpenses.length})</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Giderler ({flatExpenses.length})</h2>
         </div>
         <div className="overflow-x-auto">
         <table className="w-full min-w-[540px]">
@@ -356,7 +361,7 @@ export default function ButcePage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filteredExpenses.map((e) => (
+            {flatExpenses.map((e) => (
               <tr key={e.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm text-gray-900">{e.description}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{projects.find((p) => p.id === e.projectId)?.name ?? <span className="text-gray-400">—</span>}</td>
