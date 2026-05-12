@@ -53,28 +53,27 @@ export default function InnovationSettings() {
 
   useEffect(() => {
     async function init() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.push("/giris"); return; }
-      setToken(session.access_token);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { setLoading(false); router.push("/giris"); return; }
+        setToken(session.access_token);
 
-      const statsRes = await fetch("/api/innovation/stats", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (statsRes.ok) {
+        const statsRes = await fetch("/api/innovation/stats", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!statsRes.ok) { setLoading(false); router.push("/innovation"); return; }
         const stats = await statsRes.json();
-        if (stats.user_role !== "innovation_admin") {
-          router.push("/innovation");
-          return;
-        }
-      }
+        if (stats.user_role !== "innovation_admin") { setLoading(false); router.push("/innovation"); return; }
 
-      const [stagesRes, criteriaRes] = await Promise.all([
-        fetch("/api/innovation/stages?all=1", { headers: { Authorization: `Bearer ${session.access_token}` } }),
-        fetch("/api/innovation/criteria", { headers: { Authorization: `Bearer ${session.access_token}` } }),
-      ]);
-      if (stagesRes.ok) setStages(await stagesRes.json());
-      if (criteriaRes.ok) setCriteria(await criteriaRes.json());
-      setLoading(false);
+        const [stagesRes, criteriaRes] = await Promise.all([
+          fetch("/api/innovation/stages?all=1", { headers: { Authorization: `Bearer ${session.access_token}` } }),
+          fetch("/api/innovation/criteria", { headers: { Authorization: `Bearer ${session.access_token}` } }),
+        ]);
+        if (stagesRes.ok) setStages(await stagesRes.json());
+        if (criteriaRes.ok) setCriteria(await criteriaRes.json());
+      } finally {
+        setLoading(false);
+      }
     }
     init();
   }, [router]);
@@ -237,7 +236,7 @@ export default function InnovationSettings() {
         {(["stages", "criteria"] as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => { setTab(t); setStageError(""); setCriterionError(""); }}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
               tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
@@ -318,7 +317,7 @@ export default function InnovationSettings() {
                   {stageSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   Kaydet
                 </button>
-                <button onClick={() => setShowNewStage(false)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                <button onClick={() => { setShowNewStage(false); setNewStageForm({ name: "", color: "#6B7280", min_score_to_advance: 0, required_evaluations: 0 }); }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
                   İptal
                 </button>
               </div>
@@ -497,7 +496,7 @@ export default function InnovationSettings() {
                   {criterionSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   Kaydet
                 </button>
-                <button onClick={() => setShowNewCriterion(false)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                <button onClick={() => { setShowNewCriterion(false); setNewCriterionForm({ name: "", description: "", weight: 0.25, max_score: 10 }); }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
                   İptal
                 </button>
               </div>
