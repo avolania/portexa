@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Plus, Search, X, ChevronUp, ChevronDown,
-  Loader2, MessageCircle, Star, ArrowRight,
+  Loader2, MessageCircle, Star, ArrowRight, LayoutList, LayoutGrid,
 } from "lucide-react";
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/useAuthStore";
 import type { InnovationIdea, InnovationStage, InnovationRole } from "@/lib/innovation/types";
@@ -406,6 +407,69 @@ function NewIdeaModal({ onClose, onCreated, token }: {
   );
 }
 
+// ── Advance Reason Modal ──────────────────────────────────────────────────────
+
+function AdvanceReasonModal({
+  onConfirm,
+  onCancel,
+  error,
+}: {
+  onConfirm: (reason: string) => Promise<void>;
+  onCancel: () => void;
+  error: string;
+}) {
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    if (!reason.trim()) return;
+    setSubmitting(true);
+    await onConfirm(reason);
+    setSubmitting(false);
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={onCancel} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <h3 className="text-base font-bold text-gray-900 mb-1">Aşama İlerlet</h3>
+          <p className="text-sm text-gray-500 mb-4">Bu fikri bir sonraki aşamaya taşımak için gerekçe girin.</p>
+          {error && (
+            <div className="mb-3 flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <span className="flex-shrink-0">⚠</span>
+              {error}
+            </div>
+          )}
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Gerekçe girin..."
+            rows={3}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 resize-none"
+          />
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={onCancel}
+              className="flex-1 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              İptal
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!reason.trim() || submitting}
+              className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            >
+              {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              İlerlet
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InnovationPipeline() {
@@ -420,6 +484,12 @@ export default function InnovationPipeline() {
   const [selectedIdea, setSelectedIdea] = useState<InnovationIdea | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [userRole, setUserRole] = useState<InnovationRole>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [pendingAdvance, setPendingAdvance] = useState<{
+    ideaId: string;
+    originalStage: InnovationStage;
+  } | null>(null);
+  const [advanceError, setAdvanceError] = useState("");
 
   const [filters, setFilters] = useState({
     stage: searchParams.get("stage") ?? "",
@@ -479,10 +549,53 @@ export default function InnovationPipeline() {
     if (token) loadIdeas(token, filters);
   }, [filters, token, loadIdeas]);
 
+  useEffect(() => {
+    const saved = localStorage.getItem('innovation_view_mode');
+    if (saved === 'kanban') setViewMode('kanban');
+  }, []);
+
   function handleVote(ideaId: string, newCount: number, userVote: number | null) {
     setIdeas((prev) =>
       prev.map((i) => (i.id === ideaId ? { ...i, vote_count: newCount, user_vote: userVote } : i))
     );
+  }
+
+  function handleDragEnd(result: DropResult) {
+    if (!result.destination) return;
+    if (result.source.droppableId === result.destination.droppableId) return;
+
+    const fromStage = stages.find((s) => s.id === result.source.droppableId);
+    const toStage = stages.find((s) => s.id === result.destination!.droppableId);
+    if (!fromStage || !toStage) return;
+    if (toStage.order_index !== fromStage.order_index + 1) return;
+
+    const idea = ideas.find((i) => i.id === result.draggableId);
+    if (!idea) return;
+
+    setIdeas((prev) =>
+      prev.map((i) => i.id === idea.id ? { ...i, stage_id: toStage.id, stage: toStage } : i)
+    );
+    setAdvanceError("");
+    setPendingAdvance({ ideaId: idea.id, originalStage: fromStage });
+  }
+
+  async function handleConfirmAdvance(reason: string) {
+    if (!pendingAdvance) return;
+    const res = await fetch(`/api/innovation/ideas/${pendingAdvance.ideaId}/advance`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      setAdvanceError(err.error ?? 'Stage ilerletme başarısız');
+      const orig = pendingAdvance.originalStage;
+      setIdeas((prev) =>
+        prev.map((i) => i.id === pendingAdvance.ideaId ? { ...i, stage_id: orig.id, stage: orig } : i)
+      );
+      return;
+    }
+    setPendingAdvance(null);
   }
 
   return (
@@ -547,29 +660,133 @@ export default function InnovationPipeline() {
           <option value="votes">Oy</option>
           <option value="score">Puan</option>
         </select>
+        <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+          <button
+            onClick={() => { setViewMode('list'); localStorage.setItem('innovation_view_mode', 'list'); }}
+            className={`px-2.5 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1 ${
+              viewMode === 'list' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+            title="Liste görünümü"
+          >
+            <LayoutList className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => { setViewMode('kanban'); localStorage.setItem('innovation_view_mode', 'kanban'); }}
+            className={`px-2.5 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1 ${
+              viewMode === 'kanban' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+            title="Kanban görünümü"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Ideas List */}
+      {/* Ideas List / Kanban */}
       {loading ? (
         <div className="flex items-center justify-center h-40">
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
         </div>
-      ) : ideas.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-lg">
-          <p className="text-gray-400 text-sm italic">Henüz fikir bulunmuyor.</p>
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="mt-3 text-sm text-blue-600 hover:underline"
-          >
-            İlk fikri siz gönderin
-          </button>
-        </div>
+      ) : viewMode === 'list' ? (
+        ideas.length === 0 ? (
+          <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-lg">
+            <p className="text-gray-400 text-sm italic">Henüz fikir bulunmuyor.</p>
+            <button
+              onClick={() => setShowNewModal(true)}
+              className="mt-3 text-sm text-blue-600 hover:underline"
+            >
+              İlk fikri siz gönderin
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {ideas.map((idea) => (
+              <IdeaCard key={idea.id} idea={idea} onOpen={setSelectedIdea} />
+            ))}
+          </div>
+        )
       ) : (
-        <div className="space-y-3">
-          {ideas.map((idea) => (
-            <IdeaCard key={idea.id} idea={idea} onOpen={setSelectedIdea} />
-          ))}
-        </div>
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {stages.map((stage) => {
+              const colIdeas = ideas.filter((i) => i.stage_id === stage.id);
+              return (
+                <div
+                  key={stage.id}
+                  className="flex-shrink-0 w-[280px] bg-gray-50 rounded-lg border border-gray-200"
+                >
+                  <div
+                    className="p-3 border-b border-gray-200 flex items-center gap-2"
+                    style={{ borderLeftWidth: 3, borderLeftColor: stage.color }}
+                  >
+                    <span className="text-sm font-semibold text-gray-700 flex-1 truncate">{stage.name}</span>
+                    <span
+                      className="text-xs font-bold px-2 py-0.5 rounded-full text-white flex-shrink-0"
+                      style={{ background: stage.color }}
+                    >
+                      {colIdeas.length}
+                    </span>
+                  </div>
+                  <Droppable droppableId={stage.id}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`p-2 min-h-[96px] space-y-2 transition-colors ${
+                          snapshot.isDraggingOver ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        {colIdeas.map((idea, index) => (
+                          <Draggable
+                            key={idea.id}
+                            draggableId={idea.id}
+                            index={index}
+                            isDragDisabled={userRole !== 'innovation_admin'}
+                          >
+                            {(dragProvided, dragSnapshot) => (
+                              <div
+                                ref={dragProvided.innerRef}
+                                {...dragProvided.draggableProps}
+                                {...dragProvided.dragHandleProps}
+                                onClick={() => setSelectedIdea(idea)}
+                                className={`bg-white border border-gray-200 rounded-lg p-3 transition-all ${
+                                  dragSnapshot.isDragging ? 'shadow-lg rotate-1 border-blue-300' : 'hover:border-blue-200'
+                                } ${userRole === 'innovation_admin' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                              >
+                                <p className="font-mono text-xs text-gray-400 mb-1">{idea.idea_number}</p>
+                                <p className="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug">{idea.title}</p>
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                  <span
+                                    className="text-xs font-bold"
+                                    style={{ color: idea.vote_count >= 0 ? '#059669' : '#DC2626' }}
+                                  >
+                                    {idea.vote_count >= 0 ? '↑' : '↓'}{Math.abs(idea.vote_count)}
+                                  </span>
+                                  {idea.composite_score > 0 && (
+                                    <span className="text-xs text-amber-600">⭐ {idea.composite_score}</span>
+                                  )}
+                                  {idea.submitter && (
+                                    <span className="text-xs text-gray-400 ml-auto truncate max-w-[80px]">
+                                      {idea.submitter.name}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                        {colIdeas.length === 0 && (
+                          <p className="text-xs text-gray-400 italic text-center py-4">Boş</p>
+                        )}
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
+              );
+            })}
+          </div>
+        </DragDropContext>
       )}
 
       {/* Detail Slide-Over */}
@@ -593,6 +810,22 @@ export default function InnovationPipeline() {
             setShowNewModal(false);
             loadIdeas(token, filters);
           }}
+        />
+      )}
+
+      {/* Advance Reason Modal */}
+      {pendingAdvance && (
+        <AdvanceReasonModal
+          onConfirm={handleConfirmAdvance}
+          onCancel={() => {
+            const orig = pendingAdvance.originalStage;
+            setIdeas((prev) =>
+              prev.map((i) => i.id === pendingAdvance.ideaId ? { ...i, stage_id: orig.id, stage: orig } : i)
+            );
+            setPendingAdvance(null);
+            setAdvanceError("");
+          }}
+          error={advanceError}
         />
       )}
     </div>
