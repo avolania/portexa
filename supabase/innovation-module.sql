@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS innovation_ideas (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   idea_number       TEXT UNIQUE NOT NULL,
   org_id            TEXT NOT NULL,
-  submitter_id      UUID NOT NULL REFERENCES auth_profiles(id) ON DELETE CASCADE,
+  submitter_id      TEXT NOT NULL REFERENCES auth_profiles(id) ON DELETE CASCADE,
   stage_id          UUID NOT NULL REFERENCES innovation_stages(id),
   status            TEXT NOT NULL DEFAULT 'submitted'
                     CHECK (status IN ('draft','submitted','under_review','approved','rejected','implemented','archived')),
@@ -49,26 +49,26 @@ ALTER TABLE innovation_ideas ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "ideas_select" ON innovation_ideas FOR SELECT TO authenticated
   USING (
     (status != 'draft')
-    OR (submitter_id = auth.uid())
+    OR (submitter_id = auth.uid()::text)
   );
 CREATE POLICY "ideas_insert" ON innovation_ideas FOR INSERT TO authenticated
-  WITH CHECK (submitter_id = auth.uid());
+  WITH CHECK (submitter_id = auth.uid()::text);
 CREATE POLICY "ideas_update" ON innovation_ideas FOR UPDATE TO authenticated
   USING (
-    submitter_id = auth.uid()
-    OR (SELECT innovation_role FROM auth_profiles WHERE id = auth.uid()) = 'innovation_admin'
+    submitter_id = auth.uid()::text
+    OR (SELECT innovation_role FROM auth_profiles WHERE id = auth.uid()::text) = 'innovation_admin'
   );
 CREATE POLICY "ideas_delete" ON innovation_ideas FOR DELETE TO authenticated
   USING (
-    (submitter_id = auth.uid() AND status = 'draft')
-    OR (SELECT innovation_role FROM auth_profiles WHERE id = auth.uid()) = 'innovation_admin'
+    (submitter_id = auth.uid()::text AND status = 'draft')
+    OR (SELECT innovation_role FROM auth_profiles WHERE id = auth.uid()::text) = 'innovation_admin'
   );
 
 -- ── 4. innovation_votes ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS innovation_votes (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   idea_id    UUID NOT NULL REFERENCES innovation_ideas(id) ON DELETE CASCADE,
-  user_id    UUID NOT NULL REFERENCES auth_profiles(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES auth_profiles(id) ON DELETE CASCADE,
   value      SMALLINT NOT NULL CHECK (value IN (1, -1)),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(idea_id, user_id)
@@ -76,15 +76,15 @@ CREATE TABLE IF NOT EXISTS innovation_votes (
 
 ALTER TABLE innovation_votes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "votes_select" ON innovation_votes FOR SELECT TO authenticated USING (true);
-CREATE POLICY "votes_insert" ON innovation_votes FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
-CREATE POLICY "votes_update" ON innovation_votes FOR UPDATE TO authenticated USING (user_id = auth.uid());
-CREATE POLICY "votes_delete" ON innovation_votes FOR DELETE TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "votes_insert" ON innovation_votes FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid()::text);
+CREATE POLICY "votes_update" ON innovation_votes FOR UPDATE TO authenticated USING (user_id = auth.uid()::text);
+CREATE POLICY "votes_delete" ON innovation_votes FOR DELETE TO authenticated USING (user_id = auth.uid()::text);
 
 -- ── 5. innovation_comments ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS innovation_comments (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   idea_id    UUID NOT NULL REFERENCES innovation_ideas(id) ON DELETE CASCADE,
-  author_id  UUID NOT NULL REFERENCES auth_profiles(id) ON DELETE CASCADE,
+  author_id  TEXT NOT NULL REFERENCES auth_profiles(id) ON DELETE CASCADE,
   parent_id  UUID REFERENCES innovation_comments(id) ON DELETE CASCADE,
   body       TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS innovation_comments (
 
 ALTER TABLE innovation_comments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "comments_select" ON innovation_comments FOR SELECT TO authenticated USING (true);
-CREATE POLICY "comments_insert" ON innovation_comments FOR INSERT TO authenticated WITH CHECK (author_id = auth.uid());
+CREATE POLICY "comments_insert" ON innovation_comments FOR INSERT TO authenticated WITH CHECK (author_id = auth.uid()::text);
 
 -- ── 6. innovation_evaluation_criteria (global) ────────────────────────────────
 CREATE TABLE IF NOT EXISTS innovation_evaluation_criteria (
@@ -112,7 +112,7 @@ CREATE POLICY "criteria_select" ON innovation_evaluation_criteria FOR SELECT TO 
 CREATE TABLE IF NOT EXISTS innovation_evaluations (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   idea_id      UUID NOT NULL REFERENCES innovation_ideas(id) ON DELETE CASCADE,
-  evaluator_id UUID NOT NULL REFERENCES auth_profiles(id) ON DELETE CASCADE,
+  evaluator_id TEXT NOT NULL REFERENCES auth_profiles(id) ON DELETE CASCADE,
   stage_id     UUID NOT NULL REFERENCES innovation_stages(id),
   notes        TEXT NOT NULL DEFAULT '',
   total_score  NUMERIC(5,2) NOT NULL DEFAULT 0,
@@ -123,8 +123,8 @@ ALTER TABLE innovation_evaluations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "evals_select" ON innovation_evaluations FOR SELECT TO authenticated USING (true);
 CREATE POLICY "evals_insert" ON innovation_evaluations FOR INSERT TO authenticated
   WITH CHECK (
-    evaluator_id = auth.uid()
-    AND (SELECT innovation_role FROM auth_profiles WHERE id = auth.uid()) IN ('innovation_evaluator','innovation_admin')
+    evaluator_id = auth.uid()::text
+    AND (SELECT innovation_role FROM auth_profiles WHERE id = auth.uid()::text) IN ('innovation_evaluator','innovation_admin')
   );
 
 -- ── 8. innovation_evaluation_scores ──────────────────────────────────────────
@@ -146,13 +146,13 @@ CREATE TABLE IF NOT EXISTS innovation_tags (
   name       TEXT NOT NULL,
   color      TEXT NOT NULL DEFAULT '#6B7280',
   org_id     TEXT NOT NULL,
-  created_by UUID REFERENCES auth_profiles(id),
+  created_by TEXT REFERENCES auth_profiles(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE innovation_tags ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "tags_select" ON innovation_tags FOR SELECT TO authenticated USING (true);
-CREATE POLICY "tags_insert" ON innovation_tags FOR INSERT TO authenticated WITH CHECK (created_by = auth.uid());
+CREATE POLICY "tags_insert" ON innovation_tags FOR INSERT TO authenticated WITH CHECK (created_by = auth.uid()::text);
 
 -- ── 10. innovation_idea_tags ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS innovation_idea_tags (
@@ -171,14 +171,14 @@ CREATE TABLE IF NOT EXISTS innovation_stage_history (
   idea_id       UUID NOT NULL REFERENCES innovation_ideas(id) ON DELETE CASCADE,
   from_stage_id UUID REFERENCES innovation_stages(id),
   to_stage_id   UUID NOT NULL REFERENCES innovation_stages(id),
-  changed_by    UUID NOT NULL REFERENCES auth_profiles(id),
+  changed_by    TEXT NOT NULL REFERENCES auth_profiles(id),
   reason        TEXT NOT NULL DEFAULT '',
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE innovation_stage_history ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "history_select" ON innovation_stage_history FOR SELECT TO authenticated USING (true);
-CREATE POLICY "history_insert" ON innovation_stage_history FOR INSERT TO authenticated WITH CHECK (changed_by = auth.uid());
+CREATE POLICY "history_insert" ON innovation_stage_history FOR INSERT TO authenticated WITH CHECK (changed_by = auth.uid()::text);
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_innovation_ideas_org_id      ON innovation_ideas(org_id);
