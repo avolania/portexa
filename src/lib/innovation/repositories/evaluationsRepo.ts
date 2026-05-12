@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import type { EvaluationCriterion, IdeaEvaluation, CreateEvaluationDto } from '../types';
+import type { EvaluationCriterion, IdeaEvaluation, CreateEvaluationDto, CreateCriterionDto, UpdateCriterionDto } from '../types';
 
 export async function findActiveCriteria(): Promise<EvaluationCriterion[]> {
   const { data, error } = await supabaseAdmin
@@ -93,4 +93,63 @@ export async function getAvgCompositeScore(ideaId: string): Promise<number> {
   if (error || !data?.length) return 0;
   const avg = data.reduce((sum, r) => sum + Number(r.total_score), 0) / data.length;
   return Math.round(avg * 100) / 100;
+}
+
+export async function findAllCriteria(): Promise<EvaluationCriterion[]> {
+  const { data, error } = await supabaseAdmin
+    .from('innovation_evaluation_criteria')
+    .select('*')
+    .order('order_index');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as EvaluationCriterion[];
+}
+
+export async function createCriterion(dto: CreateCriterionDto): Promise<EvaluationCriterion> {
+  const { data: maxRow } = await supabaseAdmin
+    .from('innovation_evaluation_criteria')
+    .select('order_index')
+    .order('order_index', { ascending: false })
+    .limit(1)
+    .single();
+  const nextOrder = ((maxRow as { order_index: number } | null)?.order_index ?? 0) + 1;
+
+  const { data, error } = await supabaseAdmin
+    .from('innovation_evaluation_criteria')
+    .insert({
+      id: crypto.randomUUID(),
+      order_index: nextOrder,
+      name: dto.name,
+      description: dto.description ?? '',
+      weight: dto.weight,
+      max_score: dto.max_score,
+      is_active: true,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as EvaluationCriterion;
+}
+
+export async function updateCriterion(id: string, dto: UpdateCriterionDto): Promise<EvaluationCriterion> {
+  const { data, error } = await supabaseAdmin
+    .from('innovation_evaluation_criteria')
+    .update(dto)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as EvaluationCriterion;
+}
+
+export async function deleteCriterion(id: string): Promise<void> {
+  const { count } = await supabaseAdmin
+    .from('innovation_evaluation_scores')
+    .select('id', { count: 'exact', head: true })
+    .eq('criterion_id', id);
+  if (count && count > 0) throw new Error('Bu kritere ait değerlendirme var, silinemez');
+  const { error } = await supabaseAdmin
+    .from('innovation_evaluation_criteria')
+    .delete()
+    .eq('id', id);
+  if (error) throw new Error(error.message);
 }
