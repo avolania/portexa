@@ -176,6 +176,38 @@ export interface AdvanceStageDto {
   reason: string;
 }
 
+export interface CreateStageDto {
+  name: string;
+  color: string;
+  min_score_to_advance: number;
+  required_evaluations: number;
+}
+
+export interface UpdateStageDto {
+  name?: string;
+  color?: string;
+  min_score_to_advance?: number;
+  required_evaluations?: number;
+  is_active?: boolean;
+  order_index?: number;
+}
+
+export interface CreateCriterionDto {
+  name: string;
+  description?: string;
+  weight: number;
+  max_score: number;
+}
+
+export interface UpdateCriterionDto {
+  name?: string;
+  description?: string;
+  weight?: number;
+  max_score?: number;
+  is_active?: boolean;
+  order_index?: number;
+}
+
 export interface IdeasListParams {
   org_id: string;
   stage_id?: string;
