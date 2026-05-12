@@ -561,15 +561,16 @@ export default function InnovationPipeline() {
   }
 
   function handleDragEnd(result: DropResult) {
-    if (!result.destination) return;
-    if (result.source.droppableId === result.destination.droppableId) return;
+    const { destination, source, draggableId } = result;
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId) return;
 
-    const fromStage = stages.find((s) => s.id === result.source.droppableId);
-    const toStage = stages.find((s) => s.id === result.destination!.droppableId);
+    const fromStage = stages.find((s) => s.id === source.droppableId);
+    const toStage = stages.find((s) => s.id === destination.droppableId);
     if (!fromStage || !toStage) return;
     if (toStage.order_index !== fromStage.order_index + 1) return;
 
-    const idea = ideas.find((i) => i.id === result.draggableId);
+    const idea = ideas.find((i) => i.id === draggableId);
     if (!idea) return;
 
     setIdeas((prev) =>
@@ -732,7 +733,7 @@ export default function InnovationPipeline() {
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`p-2 min-h-[96px] space-y-2 transition-colors ${
+                        className={`p-2 min-h-[96px] max-h-[calc(100vh-240px)] overflow-y-auto space-y-2 transition-colors ${
                           snapshot.isDraggingOver ? 'bg-blue-50' : ''
                         }`}
                       >
