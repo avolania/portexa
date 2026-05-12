@@ -32,10 +32,13 @@ export async function POST(req: NextRequest) {
   if (ctx.role !== 'innovation_admin')
     return NextResponse.json({ error: 'Sadece innovation_admin yapabilir' }, { status: 403 });
 
-  const dto = await req.json() as CreateStageDto;
-  if (!dto.name?.trim()) return NextResponse.json({ error: 'İsim zorunlu' }, { status: 400 });
-
   try {
+    const dto = await req.json() as CreateStageDto;
+    if (!dto.name?.trim()) return NextResponse.json({ error: 'İsim zorunlu' }, { status: 400 });
+    if (!dto.color?.trim()) return NextResponse.json({ error: 'Renk zorunlu' }, { status: 400 });
+    if (typeof dto.min_score_to_advance !== 'number') return NextResponse.json({ error: 'Min skor sayı olmalı' }, { status: 400 });
+    if (typeof dto.required_evaluations !== 'number') return NextResponse.json({ error: 'Zorunlu değerlendirme sayısı sayı olmalı' }, { status: 400 });
+
     const stage = await createStage(dto);
     return NextResponse.json(stage, { status: 201 });
   } catch (err) {
