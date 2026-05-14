@@ -117,6 +117,7 @@ export interface User {
   language: "tr" | "en";
   rememberMe?: boolean;
   orgId: string;
+  innovation_role?: 'innovation_evaluator' | 'innovation_admin' | null;
 }
 
 export interface Organization {
