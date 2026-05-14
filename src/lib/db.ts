@@ -227,14 +227,22 @@ export async function dbLoadProfiles(orgId?: string): Promise<Record<string, Use
 }
 
 export async function dbLoadProfile(userId: string): Promise<User | null> {
-  const { data, error } = await supabase.from("auth_profiles").select("data").eq("id", userId).single();
+  const { data, error } = await supabase
+    .from("auth_profiles")
+    .select("data, innovation_role")
+    .eq("id", userId)
+    .single();
   if (error || !data) return null;
-  return data.data as User;
+  const profile = data.data as User;
+  return { ...profile, innovation_role: (data.innovation_role ?? null) as User['innovation_role'] };
 }
 
 export async function dbUpsertProfile(userId: string, data: unknown): Promise<void> {
-  const orgId = (data as Record<string, unknown>)?.orgId as string | undefined;
-  const row = orgId ? { id: userId, data, org_id: orgId } : { id: userId, data };
+  const d = data as Record<string, unknown>;
+  const orgId = d?.orgId as string | undefined;
+  const row: Record<string, unknown> = { id: userId, data };
+  if (orgId) row.org_id = orgId;
+  if ('innovation_role' in d) row.innovation_role = d.innovation_role ?? null;
   const { error } = await supabase.from("auth_profiles").upsert([row], { defaultToNull: false });
   if (error) {
     console.error("[db] upsert auth_profiles:", error.message);
