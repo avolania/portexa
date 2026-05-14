@@ -36,8 +36,25 @@ export async function PATCH(
   }
 
   const validRoles: Array<InnovationRole> = ['innovation_evaluator', 'innovation_admin', null];
-  if (!validRoles.includes(body.innovation_role)) {
+  if (body.innovation_role === undefined || !validRoles.includes(body.innovation_role)) {
     return NextResponse.json({ error: 'Geçersiz rol değeri' }, { status: 400 });
+  }
+
+  // Verify target user belongs to the same org as the caller
+  const { data: callerRow } = await supabaseAdmin
+    .from('auth_profiles')
+    .select('org_id')
+    .eq('id', ctx.userId)
+    .single();
+
+  const { data: targetRow } = await supabaseAdmin
+    .from('auth_profiles')
+    .select('org_id')
+    .eq('id', id)
+    .single();
+
+  if (!callerRow?.org_id || callerRow.org_id !== targetRow?.org_id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
   const { data, error } = await supabaseAdmin
