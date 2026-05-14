@@ -11,9 +11,18 @@ import type {
   InnovationStage, EvaluationCriterion,
   CreateStageDto, UpdateStageDto,
   CreateCriterionDto, UpdateCriterionDto,
+  InnovationRole,
 } from "@/lib/innovation/types";
 
-type Tab = "stages" | "criteria";
+type Tab = "stages" | "criteria" | "users";
+
+type OrgUser = {
+  id: string;
+  name: string;
+  email: string;
+  department: string | null;
+  innovation_role: InnovationRole;
+};
 
 function apiCall(url: string, method: string, token: string, body?: unknown) {
   return fetch(url, {
@@ -21,6 +30,28 @@ function apiCall(url: string, method: string, token: string, body?: unknown) {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
+}
+
+function RoleBadge({ role }: { role: InnovationRole }) {
+  if (role === 'innovation_admin') {
+    return (
+      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "#F3E8FF", color: "#7C3AED" }}>
+        Admin
+      </span>
+    );
+  }
+  if (role === 'innovation_evaluator') {
+    return (
+      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "#DBEAFE", color: "#2563EB" }}>
+        Değerlendirici
+      </span>
+    );
+  }
+  return (
+    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "#F3F4F6", color: "#9CA3AF" }}>
+      Yok
+    </span>
+  );
 }
 
 export default function InnovationSettings() {
@@ -51,12 +82,19 @@ export default function InnovationSettings() {
   const [criterionSaving, setCriterionSaving] = useState(false);
   const [criterionError, setCriterionError] = useState("");
 
+  // Users state
+  const [users, setUsers] = useState<OrgUser[]>([]);
+  const [userSavingId, setUserSavingId] = useState<string | null>(null);
+  const [userErrors, setUserErrors] = useState<Record<string, string>>({});
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+
   useEffect(() => {
     async function init() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) { setLoading(false); router.push("/giris"); return; }
         setToken(session.access_token);
+        setCurrentUserId(session.user.id);
 
         const statsRes = await fetch("/api/innovation/stats", {
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -65,12 +103,14 @@ export default function InnovationSettings() {
         const stats = await statsRes.json();
         if (stats.user_role !== "innovation_admin") { setLoading(false); router.push("/innovation"); return; }
 
-        const [stagesRes, criteriaRes] = await Promise.all([
+        const [stagesRes, criteriaRes, usersRes] = await Promise.all([
           fetch("/api/innovation/stages?all=1", { headers: { Authorization: `Bearer ${session.access_token}` } }),
           fetch("/api/innovation/criteria", { headers: { Authorization: `Bearer ${session.access_token}` } }),
+          fetch("/api/innovation/users", { headers: { Authorization: `Bearer ${session.access_token}` } }),
         ]);
         if (stagesRes.ok) setStages(await stagesRes.json());
         if (criteriaRes.ok) setCriteria(await criteriaRes.json());
+        if (usersRes.ok) setUsers(await usersRes.json());
       } finally {
         setLoading(false);
       }
@@ -214,6 +254,20 @@ export default function InnovationSettings() {
     });
   }, [token, criteria]);
 
+  const handleRoleChange = useCallback(async (userId: string, newRole: InnovationRole) => {
+    const prevRole = users.find((u) => u.id === userId)?.innovation_role ?? null;
+    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, innovation_role: newRole } : u));
+    setUserSavingId(userId);
+    setUserErrors((prev) => { const next = { ...prev }; delete next[userId]; return next; });
+    const res = await apiCall(`/api/innovation/users/${userId}`, "PATCH", token, { innovation_role: newRole });
+    setUserSavingId(null);
+    if (!res.ok) {
+      const err = await res.json();
+      setUserErrors((prev) => ({ ...prev, [userId]: err.error ?? "Hata" }));
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, innovation_role: prevRole } : u));
+    }
+  }, [token, users]);
+
   const totalWeight = criteria.filter((c) => c.is_active).reduce((sum, c) => sum + c.weight, 0);
 
   if (loading) {
@@ -228,12 +282,12 @@ export default function InnovationSettings() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900">İnovasyon Ayarları</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Aşama ve değerlendirme kriteri yönetimi</p>
+        <p className="text-sm text-gray-500 mt-0.5">Aşama, değerlendirme kriteri ve kullanıcı rol yönetimi</p>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
-        {(["stages", "criteria"] as Tab[]).map((t) => (
+        {(["stages", "criteria", "users"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => { setTab(t); setStageError(""); setCriterionError(""); }}
@@ -241,7 +295,7 @@ export default function InnovationSettings() {
               tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            {t === "stages" ? "Aşamalar" : "Değerlendirme Kriterleri"}
+            {t === "stages" ? "Aşamalar" : t === "criteria" ? "Değerlendirme Kriterleri" : "Kullanıcılar"}
           </button>
         ))}
       </div>
@@ -596,6 +650,87 @@ export default function InnovationSettings() {
               <p className="p-6 text-sm text-gray-400 italic text-center">Henüz kriter yok.</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Users Tab ─────────────────────────────────────────────────────── */}
+      {tab === "users" && (
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">Kullanıcılar</h2>
+            <span className="text-xs text-gray-400">{users.length} kullanıcı</span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="text-left px-4 py-2">Kullanıcı</th>
+                <th className="text-left px-4 py-2">E-posta</th>
+                <th className="text-left px-4 py-2">Departman</th>
+                <th className="text-left px-4 py-2">İnovasyon Rolü</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => {
+                const isSelf = u.id === currentUserId;
+                const isSaving = userSavingId === u.id;
+                const errMsg = userErrors[u.id];
+                const initials = u.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+                return (
+                  <tr key={u.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold flex-shrink-0">
+                          {initials}
+                        </div>
+                        <span className="font-medium text-gray-800">{u.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">{u.email}</td>
+                    <td className="px-4 py-3 text-gray-500">{u.department ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {isSaving ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                        ) : (
+                          <RoleBadge role={u.innovation_role} />
+                        )}
+                        <div className="relative group">
+                          <select
+                            disabled={isSelf || isSaving}
+                            value={u.innovation_role ?? ""}
+                            onChange={(e) => handleRoleChange(u.id, (e.target.value || null) as InnovationRole)}
+                            className="text-xs border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">Yok</option>
+                            <option value="innovation_evaluator">Değerlendirici</option>
+                            <option value="innovation_admin">Admin</option>
+                          </select>
+                          {isSelf && (
+                            <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                              Kendi rolünüzü değiştiremezsiniz
+                            </span>
+                          )}
+                        </div>
+                        {errMsg && (
+                          <span className="text-xs text-red-600 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            {errMsg}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {users.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-400">
+                    Kullanıcı bulunamadı
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
