@@ -255,8 +255,11 @@ export default function InnovationSettings() {
   }, [token, criteria]);
 
   const handleRoleChange = useCallback(async (userId: string, newRole: InnovationRole) => {
-    const prevRole = users.find((u) => u.id === userId)?.innovation_role ?? null;
-    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, innovation_role: newRole } : u));
+    let prevRole: InnovationRole | null = null;
+    setUsers((prev) => {
+      prevRole = prev.find((u) => u.id === userId)?.innovation_role ?? null;
+      return prev.map((u) => u.id === userId ? { ...u, innovation_role: newRole } : u);
+    });
     setUserSavingId(userId);
     setUserErrors((prev) => { const next = { ...prev }; delete next[userId]; return next; });
     const res = await apiCall(`/api/innovation/users/${userId}`, "PATCH", token, { innovation_role: newRole });
@@ -266,7 +269,7 @@ export default function InnovationSettings() {
       setUserErrors((prev) => ({ ...prev, [userId]: err.error ?? "Hata" }));
       setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, innovation_role: prevRole } : u));
     }
-  }, [token, users]);
+  }, [token]);
 
   const totalWeight = criteria.filter((c) => c.is_active).reduce((sum, c) => sum + c.weight, 0);
 
@@ -290,7 +293,7 @@ export default function InnovationSettings() {
         {(["stages", "criteria", "users"] as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => { setTab(t); setStageError(""); setCriterionError(""); }}
+            onClick={() => { setTab(t); setStageError(""); setCriterionError(""); setUserErrors({}); }}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
               tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
