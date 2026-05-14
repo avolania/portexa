@@ -35,6 +35,7 @@ interface NavItem {
   icon: React.ElementType;
   label: string;
   adminOnly?: boolean;
+  innovationAdminOnly?: boolean;
 }
 
 interface NavSection {
@@ -87,7 +88,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/innovation",          icon: LayoutDashboard, label: "Dashboard" },
       { href: "/innovation/pipeline", icon: Lightbulb,       label: "Pipeline"  },
-      { href: "/innovation/settings", icon: SlidersHorizontal, label: "Ayarlar" },
+      { href: "/innovation/settings", icon: SlidersHorizontal, label: "Ayarlar", innovationAdminOnly: true },
     ],
   },
   {
@@ -238,9 +239,12 @@ export default function Sidebar() {
               const isOpen = collapsed || (openSections[section.id] ?? section.defaultOpen);
               const SectionIcon = section.icon;
               const sectionActive = section.items.some((i) => pathname.startsWith(i.href));
-              const visibleItems = section.items.filter(
-                (i) => !i.adminOnly || isAdmin || isSystemAdmin
-              );
+              const isInnovationAdmin = user?.innovation_role === 'innovation_admin';
+              const visibleItems = section.items.filter((i) => {
+                if (i.adminOnly && !isAdmin && !isSystemAdmin) return false;
+                if (i.innovationAdminOnly && !isInnovationAdmin) return false;
+                return true;
+              });
 
               return (
                 <div key={section.id} className="pt-2">
