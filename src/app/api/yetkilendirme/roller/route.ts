@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { ROLE_PERMISSIONS } from '@/lib/permissions';
+import { hasPermission, ROLE_PERMISSIONS } from '@/lib/permissions';
 import type { UserRole, Permission } from '@/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -31,8 +31,8 @@ async function getSettingsCtx(req: NextRequest): Promise<
     .eq('id', user.id)
     .single();
 
-  const role = (profile?.data as Record<string, unknown> | null)?.role as string | undefined;
-  if (role !== 'admin' && role !== 'system_admin') return { ok: false, status: 403 };
+  const role = (profile?.data as Record<string, unknown> | null)?.role as UserRole | undefined;
+  if (!role || !hasPermission(role, 'settings.manage')) return { ok: false, status: 403 };
   if (!profile?.org_id) return { ok: false, status: 403 };
 
   return { ok: true, orgId: profile.org_id as string };
@@ -88,6 +88,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'system_admin rolü düzenlenemez' }, { status: 400 });
   }
 
+  let dedupedPermissions: Permission[] | null = null;
   if (permissions !== null) {
     if (
       !Array.isArray(permissions) ||
@@ -95,16 +96,16 @@ export async function PATCH(req: NextRequest) {
     ) {
       return NextResponse.json({ error: 'Geçersiz yetki listesi' }, { status: 400 });
     }
+    dedupedPermissions = [...new Set(permissions as string[])] as Permission[];
   }
 
   // If stored permissions match the static default, treat as reset (don't store a no-op override)
   const staticDefault = ROLE_PERMISSIONS[role as UserRole];
   const isDefault =
-    permissions !== null &&
-    Array.isArray(permissions) &&
-    permissions.length === staticDefault.length &&
-    (permissions as string[]).every((p) => staticDefault.includes(p as Permission));
-  const effectivePermissions = isDefault ? null : permissions;
+    dedupedPermissions !== null &&
+    dedupedPermissions.length === staticDefault.length &&
+    dedupedPermissions.every((p) => staticDefault.includes(p));
+  const effectivePermissions = isDefault ? null : dedupedPermissions;
 
   // Fetch or initialize the org's override row
   const { data: existing } = await supabaseAdmin

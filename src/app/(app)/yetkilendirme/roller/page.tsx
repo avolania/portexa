@@ -199,6 +199,10 @@ export default function RollerPage() {
         setCustomized((prev) => { const next = new Set(prev); next.delete(role); return next; });
         setPendingChanges((prev) => { const next = { ...prev }; delete next[role]; return next; });
         setSaveErrors((prev) => { const next = { ...prev }; delete next[role]; return next; });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        const msg = ((err as { error?: string }).error ?? "Sıfırlanamadı") as string;
+        setSaveErrors((prev) => ({ ...prev, [role]: msg }));
       }
     } finally {
       setResetting(false);
