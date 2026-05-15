@@ -267,29 +267,32 @@ export default function InnovationSettings() {
 
   const handleSaveRoles = useCallback(async () => {
     setUserSaving(true);
-    const entries = Object.entries(pendingRoles) as [string, InnovationRole][];
-    const results = await Promise.all(
-      entries.map(async ([userId, newRole]) => {
-        const res = await apiCall(`/api/innovation/users/${userId}`, "PATCH", token, { innovation_role: newRole });
-        if (res.ok) return { userId, newRole, ok: true as const, error: null };
-        const err = await res.json();
-        return { userId, newRole, ok: false as const, error: (err.error ?? "Hata") as string };
-      })
-    );
-    const succeeded: Record<string, InnovationRole> = {};
-    const failed: Record<string, string> = {};
-    for (const r of results) {
-      if (r.ok) succeeded[r.userId] = r.newRole;
-      else failed[r.userId] = r.error;
+    try {
+      const entries = Object.entries(pendingRoles) as [string, InnovationRole][];
+      const results = await Promise.all(
+        entries.map(async ([userId, newRole]) => {
+          const res = await apiCall(`/api/innovation/users/${userId}`, "PATCH", token, { innovation_role: newRole });
+          if (res.ok) return { userId, newRole, ok: true as const, error: null };
+          const err = await res.json().catch(() => ({}));
+          return { userId, newRole, ok: false as const, error: ((err as { error?: string }).error ?? "Hata") as string };
+        })
+      );
+      const succeeded: Record<string, InnovationRole> = {};
+      const failed: Record<string, string> = {};
+      for (const r of results) {
+        if (r.ok) succeeded[r.userId] = r.newRole;
+        else failed[r.userId] = r.error;
+      }
+      setUsers((prev) => prev.map((u) => u.id in succeeded ? { ...u, innovation_role: succeeded[u.id] } : u));
+      setPendingRoles((prev) => {
+        const next = { ...prev };
+        for (const id of Object.keys(succeeded)) delete next[id];
+        return next;
+      });
+      setUserErrors(failed);
+    } finally {
+      setUserSaving(false);
     }
-    setUsers((prev) => prev.map((u) => u.id in succeeded ? { ...u, innovation_role: succeeded[u.id] } : u));
-    setPendingRoles((prev) => {
-      const next = { ...prev };
-      for (const id of Object.keys(succeeded)) delete next[id];
-      return next;
-    });
-    setUserErrors(failed);
-    setUserSaving(false);
   }, [pendingRoles, token]);
 
   const handleCancelRoles = useCallback(() => {
@@ -319,7 +322,7 @@ export default function InnovationSettings() {
         {(["stages", "criteria", "users"] as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => { setTab(t); setStageError(""); setCriterionError(""); setUserErrors({}); }}
+            onClick={() => { setTab(t); setStageError(""); setCriterionError(""); setUserErrors({}); setPendingRoles({}); }}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
               tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
@@ -708,9 +711,9 @@ export default function InnovationSettings() {
                 return (
                   <tr
                     key={u.id}
-                    className={`border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors ${isPending ? "border-l-4 border-l-yellow-400" : ""}`}
+                    className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-4 py-3">
+                    <td className={`px-4 py-3 ${isPending ? "border-l-4 border-l-yellow-400" : ""}`}>
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold flex-shrink-0">
                           {initials}
