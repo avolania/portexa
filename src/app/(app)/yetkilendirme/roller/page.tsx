@@ -92,6 +92,7 @@ export default function RollerPage() {
 
   // Loading / saving
   const [apiLoading, setApiLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -119,6 +120,8 @@ export default function RollerPage() {
         };
         setEffectivePerms(json.permissions);
         setCustomized(new Set(json.customized as UserRole[]));
+      } else {
+        setLoadError("Yetki verileri yüklenemedi. Sayfayı yenileyin.");
       }
       setApiLoading(false);
     }
@@ -167,7 +170,13 @@ export default function RollerPage() {
       });
       setCustomized((prev) => {
         const next = new Set(prev);
-        for (const [role] of succeeded) next.add(role as UserRole);
+        for (const [role, perms] of succeeded) {
+          if (permsEqual(perms, ROLE_PERMISSIONS[role as UserRole])) {
+            next.delete(role as UserRole);
+          } else {
+            next.add(role as UserRole);
+          }
+        }
         return next;
       });
       setPendingChanges((prev) => {
@@ -308,6 +317,8 @@ export default function RollerPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
           </div>
+        ) : loadError ? (
+          <div className="px-5 py-12 text-center text-sm text-red-500">{loadError}</div>
         ) : (
           <div className="divide-y divide-gray-100">
             {GROUPS.map(({ label, prefix }) => {
@@ -327,6 +338,7 @@ export default function RollerPage() {
                       return (
                         <label
                           key={action}
+                          htmlFor={isSystemAdmin ? undefined : `perm-${perm}`}
                           className={`flex items-center gap-2 rounded-md px-2 py-1 transition-colors ${
                             isSystemAdmin ? "cursor-not-allowed" : "cursor-pointer hover:bg-gray-50"
                           } ${changed ? "border-l-2 border-yellow-400 pl-1.5" : ""}`}
@@ -339,6 +351,7 @@ export default function RollerPage() {
                             )
                           ) : (
                             <input
+                              id={`perm-${perm}`}
                               type="checkbox"
                               checked={has}
                               disabled={saving || resetting}
