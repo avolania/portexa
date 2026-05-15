@@ -33,19 +33,28 @@ const ACTION_LABELS: Record<string, string> = {
   manage:  "Yönet",
 };
 
-function getActionsForPrefix(prefix: string): string[] {
-  const actions = new Set<string>();
+const ACTIONS_BY_PREFIX: Record<string, string[]> = (() => {
+  const map: Record<string, string[]> = {};
   for (const perms of Object.values(ROLE_PERMISSIONS)) {
     for (const p of perms) {
-      if (p.startsWith(prefix + ".")) actions.add(p.slice(prefix.length + 1));
+      const dot = p.indexOf(".");
+      if (dot === -1) continue;
+      const prefix = p.slice(0, dot);
+      const action = p.slice(dot + 1);
+      if (!map[prefix]) map[prefix] = [];
+      if (!map[prefix].includes(action)) map[prefix].push(action);
     }
   }
-  return [...actions].sort((a, b) => ACTION_ORDER.indexOf(a) - ACTION_ORDER.indexOf(b));
-}
+  for (const actions of Object.values(map)) {
+    actions.sort((a, b) => ACTION_ORDER.indexOf(a) - ACTION_ORDER.indexOf(b));
+  }
+  return map;
+})();
 
 export default function RollerPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const loading = useAuthStore((s) => s.loading);
   const [selected, setSelected] = useState<UserRole>("admin");
 
   useEffect(() => {
@@ -54,6 +63,7 @@ export default function RollerPage() {
     }
   }, [user, router]);
 
+  if (loading) return null;
   if (!user || !hasPermission(user.role, "settings.manage")) return null;
 
   const selectedPerms = ROLE_PERMISSIONS[selected];
@@ -107,7 +117,7 @@ export default function RollerPage() {
         </div>
         <div className="divide-y divide-gray-100">
           {GROUPS.map(({ label, prefix }) => {
-            const actions = getActionsForPrefix(prefix);
+            const actions = ACTIONS_BY_PREFIX[prefix] ?? [];
             if (actions.length === 0) return null;
             return (
               <div key={prefix} className="px-5 py-4">
