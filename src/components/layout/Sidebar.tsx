@@ -9,7 +9,7 @@ import {
   ChevronRight, ShieldCheck, HeadphonesIcon,
   AlertCircle, GitPullRequest, LifeBuoy, Ticket,
   SlidersHorizontal, ClipboardList, ChevronDown, Wallet,
-  Globe, Building2, MonitorCheck, ClipboardCheck, Lightbulb,
+  Globe, Building2, MonitorCheck, ClipboardCheck, Lightbulb, KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -36,6 +36,7 @@ interface NavItem {
   label: string;
   adminOnly?: boolean;
   innovationAdminOnly?: boolean;
+  exact?: boolean;
 }
 
 interface NavSection {
@@ -97,9 +98,10 @@ const navSections: NavSection[] = [
     icon: ShieldCheck,
     defaultOpen: false,
     items: [
-      { href: "/yetkilendirme",          icon: ShieldCheck,       label: "Yetkilendirme"  },
-      { href: "/sistem/proje-ayarlari",  icon: FolderKanban,      label: "Proje Ayarları", adminOnly: true },
-      { href: "/itsm/settings",          icon: SlidersHorizontal, label: "ITSM Ayarları",  adminOnly: true },
+      { href: "/yetkilendirme",         icon: ShieldCheck,       label: "Yetkilendirme", exact: true },
+      { href: "/yetkilendirme/roller",  icon: KeyRound,          label: "Roller",        adminOnly: true },
+      { href: "/sistem/proje-ayarlari", icon: FolderKanban,      label: "Proje Ayarları", adminOnly: true },
+      { href: "/itsm/settings",         icon: SlidersHorizontal, label: "ITSM Ayarları",  adminOnly: true },
     ],
   },
 ];
@@ -275,7 +277,9 @@ export default function Sidebar() {
                     <div className="space-y-0.5 mt-0.5">
                       {visibleItems.map((item) => {
                         const Icon = item.icon;
-                        const active = pathname.startsWith(item.href);
+                        const active = item.exact
+                          ? pathname === item.href
+                          : pathname.startsWith(item.href);
                         return (
                           <Link
                             key={item.href}
