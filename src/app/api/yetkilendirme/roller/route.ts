@@ -97,6 +97,15 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // If stored permissions match the static default, treat as reset (don't store a no-op override)
+  const staticDefault = ROLE_PERMISSIONS[role as UserRole];
+  const isDefault =
+    permissions !== null &&
+    Array.isArray(permissions) &&
+    permissions.length === staticDefault.length &&
+    (permissions as string[]).every((p) => staticDefault.includes(p as Permission));
+  const effectivePermissions = isDefault ? null : permissions;
+
   // Fetch or initialize the org's override row
   const { data: existing } = await supabaseAdmin
     .from('org_role_permissions')
@@ -106,24 +115,19 @@ export async function PATCH(req: NextRequest) {
 
   const current = (existing?.data ?? {}) as Record<string, unknown>;
 
-  if (permissions === null) {
+  if (effectivePermissions === null) {
     delete current[role];
   } else {
-    current[role] = permissions;
+    current[role] = effectivePermissions;
   }
 
-  if (existing?.id) {
-    const { error } = await supabaseAdmin
-      .from('org_role_permissions')
-      .update({ data: current, updated_at: new Date().toISOString() })
-      .eq('id', existing.id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  } else {
-    const { error } = await supabaseAdmin
-      .from('org_role_permissions')
-      .insert({ org_id: ctx.orgId, data: current });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  const { error: upsertError } = await supabaseAdmin
+    .from('org_role_permissions')
+    .upsert(
+      { org_id: ctx.orgId, data: current, updated_at: new Date().toISOString() },
+      { onConflict: 'org_id' }
+    );
+  if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }
