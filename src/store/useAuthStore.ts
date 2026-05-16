@@ -84,8 +84,8 @@ async function fetchEffectivePermissions(token: string, role: UserRole): Promise
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return [...ROLE_PERMISSIONS[role]];
-    const json = await res.json() as { effectivePermissions: Permission[] };
-    return json.effectivePermissions;
+    const json = await res.json() as { effectivePermissions?: Permission[] };
+    return json.effectivePermissions ?? [...ROLE_PERMISSIONS[role]];
   } catch {
     return [...ROLE_PERMISSIONS[role]];
   }
@@ -124,6 +124,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       // signOut sonrası gelen SIGNED_IN olaylarını yoksay
       if (event === "SIGNED_IN" && session?.user && get().isAuthenticated === false && get().user === null) {
+        set({ isAuthenticated: true }); // claim the slot before any await to prevent re-entry
         // Kullanıcı gerçekten giriş yaptı (logout sonrası değil)
         const existing = await dbLoadProfile(session.user.id);
         if (existing) {
