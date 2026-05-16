@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     .eq('org_id', ctx.orgId)
     .maybeSingle();
 
-  const overrides = (data?.data ?? {}) as Record<string, Permission[]>;
+  const overrides = (data?.data ?? {}) as Record<UserRole, Permission[]>;
 
   const permissions: Record<string, Permission[]> = {};
   const customized: string[] = [];

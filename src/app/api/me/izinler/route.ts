@@ -21,13 +21,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Profil bulunamadı' }, { status: 403 });
   }
 
-  const { data: orgPermsRow } = await supabaseAdmin
+  const { data: orgPermsRow, error: orgPermsError } = await supabaseAdmin
     .from('org_role_permissions')
     .select('data')
     .eq('org_id', profile.org_id)
     .maybeSingle();
 
-  const overrides = (orgPermsRow?.data ?? null) as Record<UserRole, Permission[]> | null;
+  const overrides = orgPermsError ? null : (orgPermsRow?.data ?? null) as Record<UserRole, Permission[]> | null;
   const effectivePermissions = resolveEffectivePermissions(role, overrides);
 
   return NextResponse.json({ effectivePermissions });
