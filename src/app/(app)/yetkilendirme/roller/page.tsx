@@ -76,6 +76,7 @@ export default function RollerPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const authLoading = useAuthStore((s) => s.loading);
+  const effectivePermissions = useAuthStore((s) => s.effectivePermissions);
 
   const [token, setToken] = useState("");
   const [selected, setSelected] = useState<UserRole>("admin");
@@ -99,7 +100,7 @@ export default function RollerPage() {
   // ── Init ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (user && !hasPermission(user.role, "settings.manage")) {
+    if (user && !effectivePermissions.includes("settings.manage")) {
       router.replace("/dashboard");
       return;
     }
@@ -217,7 +218,7 @@ export default function RollerPage() {
   // ── Guards ────────────────────────────────────────────────────────────────
 
   if (authLoading) return null;
-  if (!user || !hasPermission(user.role, "settings.manage")) return null;
+  if (!user || !effectivePermissions.includes("settings.manage")) return null;
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
