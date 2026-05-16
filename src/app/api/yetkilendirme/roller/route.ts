@@ -25,23 +25,24 @@ async function getSettingsCtx(req: NextRequest): Promise<
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return { ok: false, status: 401 };
 
-  const { data: profile } = await supabaseAdmin
+  const { data: profile, error: profileError } = await supabaseAdmin
     .from('auth_profiles')
     .select('data, org_id')
     .eq('id', user.id)
     .single();
+  if (profileError || !profile) return { ok: false, status: 403 };
 
   const role = (profile?.data as Record<string, unknown> | null)?.role as UserRole | undefined;
   if (!role) return { ok: false, status: 403 };
   if (!profile?.org_id) return { ok: false, status: 403 };
 
-  const { data: orgPermsRow } = await supabaseAdmin
+  const { data: orgPermsRow, error: orgPermsError } = await supabaseAdmin
     .from('org_role_permissions')
     .select('data')
     .eq('org_id', profile.org_id)
     .maybeSingle();
 
-  const overrides = (orgPermsRow?.data ?? null) as Record<UserRole, Permission[]> | null;
+  const overrides = orgPermsError ? null : (orgPermsRow?.data ?? null) as Record<UserRole, Permission[]> | null;
   const effectivePerms = resolveEffectivePermissions(role, overrides);
   if (!effectivePerms.includes('settings.manage')) return { ok: false, status: 403 };
 
