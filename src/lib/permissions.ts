@@ -73,7 +73,7 @@ export function hasAnyPermission(role: UserRole | undefined, permissions: Permis
 
 export function resolveEffectivePermissions(
   role: UserRole,
-  overrides: Record<string, Permission[]> | null
+  overrides: Record<UserRole, Permission[]> | null
 ): Permission[] {
   return overrides?.[role] ?? [...ROLE_PERMISSIONS[role]];
 }
