@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, X, Lock, Loader2, RotateCcw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/useAuthStore";
-import { hasPermission, ROLE_PERMISSIONS, ROLE_META } from "@/lib/permissions";
+import { ROLE_PERMISSIONS, ROLE_META } from "@/lib/permissions";
 import type { UserRole, Permission } from "@/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -127,7 +127,7 @@ export default function RollerPage() {
       setApiLoading(false);
     }
     init();
-  }, [user, router]);
+  }, [user, router, effectivePermissions]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
