@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { hasPermission, ROLE_PERMISSIONS } from '@/lib/permissions';
+import { resolveEffectivePermissions, ROLE_PERMISSIONS } from '@/lib/permissions';
 import type { UserRole, Permission } from '@/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -32,8 +32,18 @@ async function getSettingsCtx(req: NextRequest): Promise<
     .single();
 
   const role = (profile?.data as Record<string, unknown> | null)?.role as UserRole | undefined;
-  if (!role || !hasPermission(role, 'settings.manage')) return { ok: false, status: 403 };
+  if (!role) return { ok: false, status: 403 };
   if (!profile?.org_id) return { ok: false, status: 403 };
+
+  const { data: orgPermsRow } = await supabaseAdmin
+    .from('org_role_permissions')
+    .select('data')
+    .eq('org_id', profile.org_id)
+    .maybeSingle();
+
+  const overrides = (orgPermsRow?.data ?? null) as Record<UserRole, Permission[]> | null;
+  const effectivePerms = resolveEffectivePermissions(role, overrides);
+  if (!effectivePerms.includes('settings.manage')) return { ok: false, status: 403 };
 
   return { ok: true, orgId: profile.org_id as string };
 }
