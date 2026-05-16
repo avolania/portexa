@@ -70,3 +70,10 @@ export function hasPermission(role: UserRole | undefined, permission: Permission
 export function hasAnyPermission(role: UserRole | undefined, permissions: Permission[]): boolean {
   return permissions.some((p) => hasPermission(role, p));
 }
+
+export function resolveEffectivePermissions(
+  role: UserRole,
+  overrides: Record<string, Permission[]> | null
+): Permission[] {
+  return overrides?.[role] ?? [...ROLE_PERMISSIONS[role]];
+}
