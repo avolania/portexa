@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { User, Organization } from "@/types";
+import type { User, Organization, UserRole, Permission } from "@/types";
 import { supabase } from "@/lib/supabase";
+import { ROLE_PERMISSIONS } from "@/lib/permissions";
 import { dbLoadProfiles, dbLoadProfile, dbUpsertProfile, dbLoadOrg, dbUpsertOrg } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 
@@ -9,6 +10,7 @@ interface AuthState {
   isAuthenticated: boolean;
   loading: boolean;
   profiles: Record<string, User>;
+  effectivePermissions: Permission[];
 
   initAuth: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<string | null>;
@@ -74,6 +76,21 @@ async function buildAndSaveProfile(
   return profile;
 }
 
+// ─── Yetki yükleme helper ─────────────────────────────────────────────────────
+
+async function fetchEffectivePermissions(token: string, role: UserRole): Promise<Permission[]> {
+  try {
+    const res = await fetch('/api/me/izinler', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return [...ROLE_PERMISSIONS[role]];
+    const json = await res.json() as { effectivePermissions: Permission[] };
+    return json.effectivePermissions;
+  } catch {
+    return [...ROLE_PERMISSIONS[role]];
+  }
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
@@ -81,6 +98,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   isAuthenticated: false,
   loading: true,
   profiles: {},
+  effectivePermissions: [],
 
   initAuth: async () => {
     // Önceki listener varsa temizle (hot-reload / çift çağrı koruma)
@@ -88,14 +106,16 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (session?.user) {
       const existing = await dbLoadProfile(session.user.id);
       if (existing) {
-        set({ user: existing, isAuthenticated: true, loading: false });
+        const effectivePermissions = await fetchEffectivePermissions(session.access_token, existing.role);
+        set({ user: existing, isAuthenticated: true, loading: false, effectivePermissions });
       } else {
         const profile = await buildAndSaveProfile(
           session.user.id,
           session.user.email ?? "",
           session.user.user_metadata ?? {}
         );
-        set({ user: profile, isAuthenticated: true, loading: false });
+        const effectivePermissions = await fetchEffectivePermissions(session.access_token, profile.role);
+        set({ user: profile, isAuthenticated: true, loading: false, effectivePermissions });
       }
     } else {
       set({ loading: false });
@@ -107,7 +127,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         // Kullanıcı gerçekten giriş yaptı (logout sonrası değil)
         const existing = await dbLoadProfile(session.user.id);
         if (existing) {
-          set({ user: existing, isAuthenticated: true, loading: false });
+          const effectivePermissions = await fetchEffectivePermissions(session.access_token, existing.role);
+          set({ user: existing, isAuthenticated: true, loading: false, effectivePermissions });
           logAudit(existing, "user.login");
         } else {
           const profile = await buildAndSaveProfile(
@@ -115,13 +136,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             session.user.email ?? "",
             session.user.user_metadata ?? {}
           );
-          set({ user: profile, isAuthenticated: true, loading: false });
+          const effectivePermissions = await fetchEffectivePermissions(session.access_token, profile.role);
+          set({ user: profile, isAuthenticated: true, loading: false, effectivePermissions });
           logAudit(profile, "user.login");
         }
       } else if (event === "SIGNED_OUT") {
         const current = get().user;
         if (current) logAudit(current, "user.logout");
-        set({ user: null, isAuthenticated: false, loading: false, profiles: {} });
+        set({ user: null, isAuthenticated: false, loading: false, profiles: {}, effectivePermissions: [] });
       }
     });
 
@@ -196,7 +218,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         if (key.startsWith("sb-")) localStorage.removeItem(key);
       });
     }
-    set({ user: null, isAuthenticated: false, profiles: {} });
+    set({ user: null, isAuthenticated: false, profiles: {}, effectivePermissions: [] });
   },
 
   resetPassword: async (email) => {
