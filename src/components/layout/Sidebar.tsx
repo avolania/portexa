@@ -9,7 +9,7 @@ import {
   ChevronRight, ShieldCheck, HeadphonesIcon,
   AlertCircle, GitPullRequest, LifeBuoy, Ticket,
   SlidersHorizontal, ClipboardList, ChevronDown, Wallet,
-  Globe, Building2, MonitorCheck, ClipboardCheck, Lightbulb, KeyRound,
+  Globe, Building2, MonitorCheck, ClipboardCheck, Lightbulb, KeyRound, Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -89,6 +89,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/innovation",          icon: LayoutDashboard, label: "Dashboard" },
       { href: "/innovation/pipeline", icon: Lightbulb,       label: "Pipeline"  },
+      { href: "/innovation/kampanyalar",  icon: Megaphone,         label: "Kampanyalar" },
       { href: "/innovation/settings", icon: SlidersHorizontal, label: "Ayarlar", innovationAdminOnly: true },
     ],
   },

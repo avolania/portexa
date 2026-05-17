@@ -502,6 +502,7 @@ export default function InnovationPipeline() {
     if (f.stage) params.set("stage", f.stage);
     if (f.search) params.set("search", f.search);
     params.set("sort", f.sort);
+    params.set("campaign_id", "none");
 
     const res = await fetch(`/api/innovation/ideas?${params}`, {
       headers: { Authorization: `Bearer ${tok}` },
