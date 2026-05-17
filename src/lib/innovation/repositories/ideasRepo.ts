@@ -21,6 +21,11 @@ export async function findIdeas(params: IdeasListParams): Promise<{ ideas: Innov
 
   if (stage_id) query = query.eq('stage_id', stage_id);
   if (status) query = query.eq('status', status);
+  if (params.campaign_id === 'none') {
+    query = query.is('campaign_id', null);
+  } else if (params.campaign_id) {
+    query = query.eq('campaign_id', params.campaign_id);
+  }
   if (search) query = query.ilike('title', `%${search}%`);
 
   if (sort === 'score') query = query.order('composite_score', { ascending: false });
@@ -97,6 +102,7 @@ export async function createIdea(params: {
   category: string;
   estimatedValue?: number;
   currencyCode: string;
+  campaignId?: string;
 }): Promise<InnovationIdea> {
   const { data, error } = await supabaseAdmin
     .from('innovation_ideas')
@@ -112,6 +118,7 @@ export async function createIdea(params: {
       category: params.category,
       estimated_value: params.estimatedValue ?? null,
       currency_code: params.currencyCode,
+      campaign_id: params.campaignId ?? null,
       impact_score: 0,
       feasibility_score: 0,
       composite_score: 0,

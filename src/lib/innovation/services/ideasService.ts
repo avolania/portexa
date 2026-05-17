@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import * as ideasRepo from '../repositories/ideasRepo';
 import * as stagesRepo from '../repositories/stagesRepo';
 import type { InnovationIdea, CreateIdeaDto, AdvanceStageDto, InnovationRole } from '../types';
+import { getCampaign, checkSubmissionAccess } from './campaignService';
 
 async function generateIdeaNumber(orgId: string): Promise<string> {
   const { data, error } = await supabaseAdmin.rpc('next_ticket_number', {
@@ -23,7 +24,22 @@ export async function createIdea(params: {
   orgId: string;
   submitterId: string;
   dto: CreateIdeaDto;
+  innovationRole: string | null;
 }): Promise<InnovationIdea> {
+  let campaignId: string | undefined;
+  if (params.dto.campaign_id) {
+    const campaign = await getCampaign(params.dto.campaign_id);
+    if (!campaign) throw new Error('Kampanya bulunamadı');
+
+    const access = await checkSubmissionAccess({
+      campaign,
+      userId: params.submitterId,
+      innovationRole: params.innovationRole,
+    });
+    if (!access.allowed) throw new Error(access.reason ?? 'Bu kampanyaya fikir gönderemezsiniz');
+    campaignId = campaign.id;
+  }
+
   const [ideaNumber, stageId] = await Promise.all([
     generateIdeaNumber(params.orgId),
     getFirstStageId(),
@@ -39,6 +55,7 @@ export async function createIdea(params: {
     category: params.dto.category ?? '',
     estimatedValue: params.dto.estimated_value,
     currencyCode: params.dto.currency_code ?? 'TRY',
+    campaignId,
   });
 
   await ideasRepo.addStageHistoryEntry({

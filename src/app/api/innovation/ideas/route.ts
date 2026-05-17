@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       sort: (searchParams.get('sort') as 'date' | 'score' | 'votes') ?? 'date',
       page: parseInt(searchParams.get('page') ?? '1'),
       limit: parseInt(searchParams.get('limit') ?? '20'),
+      campaign_id: (searchParams.get('campaign_id') ?? undefined) as string | 'none' | undefined,
     });
     return NextResponse.json(result);
   } catch (err) {
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
   if (!dto.title?.trim()) return NextResponse.json({ error: 'Başlık zorunludur' }, { status: 400 });
 
   try {
-    const idea = await createIdea({ orgId: ctx.orgId, submitterId: ctx.userId, dto });
+    const idea = await createIdea({ orgId: ctx.orgId, submitterId: ctx.userId, dto, innovationRole: ctx.innovationRole });
     return NextResponse.json(idea, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
