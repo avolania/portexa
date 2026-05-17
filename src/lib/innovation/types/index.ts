@@ -240,6 +240,8 @@ export interface InnovationCampaign {
   status: CampaignStatus;
   idea_count: number;
   invite_count?: number;
+  // Only present on detail (GET /campaigns/[id]) — indicates whether the current user is invited
+  is_invited?: boolean;
 }
 
 export interface CampaignInvite {

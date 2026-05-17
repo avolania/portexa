@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import {
   getCampaign, updateCampaign, deleteCampaign,
 } from '@/lib/innovation/services/campaignService';
+import { isInvited } from '@/lib/innovation/repositories/campaignsRepo';
 import type { UpdateCampaignDto } from '@/lib/innovation/types';
 
 async function getCtx(req: NextRequest) {
@@ -40,7 +41,10 @@ export async function GET(
     if (campaign.org_id !== ctx.orgId) {
       return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 });
     }
-    return NextResponse.json(campaign);
+    const invited = campaign.is_invite_only
+      ? await isInvited(campaign.id, ctx.userId)
+      : true;
+    return NextResponse.json({ ...campaign, is_invited: invited });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }

@@ -10,7 +10,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import type {
   InnovationCampaign, InnovationIdea, InnovationStage,
-  CampaignInvite, CreateIdeaDto,
+  CampaignInvite, CreateIdeaDto, UpdateCampaignDto,
 } from "@/lib/innovation/types";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -185,6 +185,156 @@ function NewIdeaModal({
   );
 }
 
+// ── Edit Campaign Modal ───────────────────────────────────────────────────────
+
+function EditCampaignModal({
+  campaign,
+  token,
+  onUpdated,
+  onClose,
+}: {
+  campaign: InnovationCampaign;
+  token: string;
+  onUpdated: (c: InnovationCampaign) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState<UpdateCampaignDto>({
+    title: campaign.title,
+    description: campaign.description ?? "",
+    goal: campaign.goal ?? "",
+    start_date: campaign.start_date,
+    end_date: campaign.end_date,
+    is_invite_only: campaign.is_invite_only,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    if (!form.title?.trim() || !form.start_date || !form.end_date) {
+      setError("Başlık, başlangıç ve bitiş tarihleri zorunludur");
+      return;
+    }
+    if (form.end_date < form.start_date!) {
+      setError("Bitiş tarihi başlangıç tarihinden önce olamaz");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const res = await fetch(`/api/innovation/campaigns/${campaign.id}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    setSaving(false);
+    if (res.ok) {
+      // Reload the campaign to get updated data with derived status
+      const refreshRes = await fetch(`/api/innovation/campaigns/${campaign.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (refreshRes.ok) {
+        onUpdated(await refreshRes.json() as InnovationCampaign);
+      } else {
+        onClose();
+      }
+    } else {
+      const err = await res.json().catch(() => ({ error: "Bir hata oluştu" }));
+      setError((err as { error: string }).error);
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+          <h2 className="text-lg font-bold text-gray-900">Kampanyayı Düzenle</h2>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+          )}
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Başlık *</label>
+              <input
+                value={form.title ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                placeholder="Kampanya başlığı"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Açıklama</label>
+              <textarea
+                value={form.description ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                rows={2}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none"
+                placeholder="Kampanya açıklaması"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Hedef</label>
+              <input
+                value={form.goal ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, goal: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                placeholder="Bu kampanyanın hedefi nedir?"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Başlangıç *</label>
+                <input
+                  type="date"
+                  value={form.start_date ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Bitiş *</label>
+                <input
+                  type="date"
+                  value={form.end_date ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.is_invite_only ?? false}
+                onChange={(e) => setForm((f) => ({ ...f, is_invite_only: e.target.checked }))}
+                className="w-4 h-4 rounded"
+              />
+              <span className="text-sm text-gray-700">Sadece davetlilere açık</span>
+            </label>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              İptal
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Kaydet
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Invites Tab ───────────────────────────────────────────────────────────────
 
 function InvitesTab({ campaignId, token }: { campaignId: string; token: string }) {
@@ -295,6 +445,7 @@ export default function CampaignDetailPage() {
   const [isInvited, setIsInvited] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("pipeline");
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [search, setSearch] = useState("");
 
   // Suppress unused variable warning for stages (fetched but not yet rendered)
@@ -334,20 +485,12 @@ export default function CampaignDetailPage() {
         const stats = await statsRes.json();
         const role = stats.user_role;
         setIsAdmin(role === "innovation_admin");
-        if (role === "innovation_admin") setIsInvited(true);
-      }
-
-      if (c.is_invite_only) {
-        const invitesRes = await fetch(`/api/innovation/campaigns/${campaignId}/invites`, {
-          headers: { Authorization: `Bearer ${tok}` },
-        }).catch(() => null);
-        if (invitesRes?.ok) {
-          const inv = await invitesRes.json() as CampaignInvite[];
-          const { data: { user } } = await supabase.auth.getUser();
-          setIsInvited(inv.some((i) => i.user_id === user?.id));
+        if (role === "innovation_admin") {
+          setIsInvited(true);
+        } else {
+          // is_invited is embedded in the campaign response — no extra fetch needed
+          setIsInvited(c.is_invited ?? !c.is_invite_only);
         }
-      } else {
-        setIsInvited(true);
       }
 
       await loadIdeas(tok, "");
@@ -418,6 +561,14 @@ export default function CampaignDetailPage() {
               <span>{campaign.idea_count} fikir</span>
             </div>
           </div>
+          {isAdmin && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors flex-shrink-0"
+            >
+              Düzenle
+            </button>
+          )}
         </div>
       </div>
 
@@ -458,19 +609,32 @@ export default function CampaignDetailPage() {
       {activeTab === "pipeline" && (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            {canSubmit && (
+            {/* "Fikir Gönder" button logic */}
+            {campaign.status === "active" ? (
+              (isAdmin || isInvited) ? (
+                <button
+                  onClick={() => setShowNewModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Fikir Gönder
+                </button>
+              ) : null  // invite-only and not invited → hide completely (banner shown above)
+            ) : (
               <button
-                onClick={() => setShowNewModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+                disabled
+                title="Kampanya aktif değil"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-400 rounded-lg text-sm font-semibold cursor-not-allowed"
               >
                 <Plus className="w-4 h-4" />
                 Fikir Gönder
               </button>
             )}
-            {campaign.status !== "active" && (
-              <span className="text-sm text-gray-400 italic">
-                {campaign.status === "ended" ? "Kampanya sona erdi — yeni fikir gönderilemez." : "Kampanya henüz başlamadı."}
-              </span>
+            {campaign.status === "ended" && (
+              <span className="text-sm text-gray-400 italic">Kampanya sona erdi — yeni fikir gönderilemez.</span>
+            )}
+            {campaign.status === "draft" && (
+              <span className="text-sm text-gray-400 italic">Kampanya henüz başlamadı.</span>
             )}
             <div className="flex-1" />
             <div className="relative">
@@ -521,6 +685,18 @@ export default function CampaignDetailPage() {
             setShowNewModal(false);
           }}
           onClose={() => setShowNewModal(false)}
+        />
+      )}
+
+      {showEditModal && (
+        <EditCampaignModal
+          campaign={campaign}
+          token={token}
+          onUpdated={(updated) => {
+            setCampaign(updated);
+            setShowEditModal(false);
+          }}
+          onClose={() => setShowEditModal(false)}
         />
       )}
     </div>
