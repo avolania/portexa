@@ -151,6 +151,7 @@ export interface CreateIdeaDto {
   estimated_value?: number;
   currency_code?: string;
   tag_ids?: string[];
+  campaign_id?: string;
 }
 
 export interface UpdateIdeaDto {
@@ -216,4 +217,53 @@ export interface IdeasListParams {
   sort?: 'date' | 'score' | 'votes';
   page?: number;
   limit?: number;
+  campaign_id?: string | 'none';
+}
+
+// ── Campaign types ────────────────────────────────────────────────────────────
+
+export type CampaignStatus = 'draft' | 'active' | 'ended';
+
+export interface InnovationCampaign {
+  id: string;
+  org_id: string;
+  created_by: string;
+  title: string;
+  description: string | null;
+  goal: string | null;
+  start_date: string;    // YYYY-MM-DD
+  end_date: string;      // YYYY-MM-DD
+  is_invite_only: boolean;
+  created_at: string;
+  updated_at: string;
+  // Derived — not stored in DB
+  status: CampaignStatus;
+  idea_count: number;
+  invite_count?: number;
+}
+
+export interface CampaignInvite {
+  campaign_id: string;
+  user_id: string;
+  name: string;
+  avatar?: string;
+  created_at: string;
+}
+
+export interface CreateCampaignDto {
+  title: string;
+  description?: string;
+  goal?: string;
+  start_date: string;
+  end_date: string;
+  is_invite_only?: boolean;
+}
+
+export interface UpdateCampaignDto {
+  title?: string;
+  description?: string;
+  goal?: string;
+  start_date?: string;
+  end_date?: string;
+  is_invite_only?: boolean;
 }
