@@ -46,7 +46,8 @@ export async function GET(
       : true;
     return NextResponse.json({ ...campaign, is_invited: invited });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
@@ -68,9 +69,11 @@ export async function PATCH(
     }
     const dto = await req.json() as UpdateCampaignDto;
     await updateCampaign({ campaign, dto });
-    return NextResponse.json({ ok: true });
+    const updated = await getCampaign(id);
+    return NextResponse.json(updated);
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
 
@@ -93,6 +96,7 @@ export async function DELETE(
     await deleteCampaign(id);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

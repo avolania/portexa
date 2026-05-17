@@ -9,19 +9,19 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type {
-  InnovationCampaign, InnovationIdea, InnovationStage,
-  CampaignInvite, CreateIdeaDto, UpdateCampaignDto,
+  InnovationCampaign, InnovationIdea,
+  CampaignInvite, CreateIdeaDto, UpdateCampaignDto, CampaignStatus,
 } from "@/lib/innovation/types";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 
-const STATUS_LABEL: Record<string, string> = {
+const STATUS_LABEL: Record<CampaignStatus, string> = {
   draft:  "Taslak",
   active: "Aktif",
   ended:  "Sona Erdi",
 };
 
-const STATUS_STYLE: Record<string, { bg: string; text: string }> = {
+const STATUS_STYLE: Record<CampaignStatus, { bg: string; text: string }> = {
   draft:  { bg: "#F3F4F6", text: "#6B7280" },
   active: { bg: "#D1FAE5", text: "#065F46" },
   ended:  { bg: "#F3E8FF", text: "#6D28D9" },
@@ -128,7 +128,7 @@ function NewIdeaModal({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/30 z-40" onClick={saving ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4">
           <h2 className="text-lg font-bold text-gray-900">Fikir Gönder</h2>
@@ -227,24 +227,16 @@ function EditCampaignModal({
     });
     setSaving(false);
     if (res.ok) {
-      // Reload the campaign to get updated data with derived status
-      const refreshRes = await fetch(`/api/innovation/campaigns/${campaign.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (refreshRes.ok) {
-        onUpdated(await refreshRes.json() as InnovationCampaign);
-      } else {
-        onClose();
-      }
+      onUpdated(await res.json() as InnovationCampaign);
     } else {
-      const err = await res.json().catch(() => ({ error: "Bir hata oluştu" }));
+      const err = await res.json().catch(() => ({ error: "Güncelleme başarısız oldu" }));
       setError((err as { error: string }).error);
     }
   }
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/30 z-40" onClick={saving ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-4">
           <h2 className="text-lg font-bold text-gray-900">Kampanyayı Düzenle</h2>
@@ -348,8 +340,15 @@ function InvitesTab({ campaignId, token }: { campaignId: string; token: string }
     fetch(`/api/innovation/campaigns/${campaignId}/invites`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => r.ok && r.json())
-      .then((d) => d && setInvites(d))
+      .then(async (r) => {
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ error: "Davetliler yüklenemedi" }));
+          setError((err as { error: string }).error);
+          return;
+        }
+        setInvites(await r.json());
+      })
+      .catch(() => setError("Davetliler yüklenemedi"))
       .finally(() => setLoading(false));
   }, [campaignId, token]);
 
@@ -382,7 +381,12 @@ function InvitesTab({ campaignId, token }: { campaignId: string; token: string }
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: userId }),
     });
-    if (res.ok) setInvites((prev) => prev.filter((i) => i.user_id !== userId));
+    if (res.ok) {
+      setInvites((prev) => prev.filter((i) => i.user_id !== userId));
+    } else {
+      const err = await res.json().catch(() => ({ error: "Kaldırma işlemi başarısız oldu" }));
+      setError((err as { error: string }).error);
+    }
   }
 
   if (loading) return <div className="flex items-center justify-center h-24"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>;
@@ -438,7 +442,6 @@ export default function CampaignDetailPage() {
 
   const [campaign, setCampaign] = useState<InnovationCampaign | null>(null);
   const [ideas, setIdeas] = useState<InnovationIdea[]>([]);
-  const [stages, setStages] = useState<InnovationStage[]>([]);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -447,9 +450,6 @@ export default function CampaignDetailPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [search, setSearch] = useState("");
-
-  // Suppress unused variable warning for stages (fetched but not yet rendered)
-  void stages;
 
   const loadIdeas = useCallback(async (tok: string, q: string) => {
     const p = new URLSearchParams({ campaign_id: campaignId });
@@ -470,9 +470,8 @@ export default function CampaignDetailPage() {
       const tok = session.access_token;
       setToken(tok);
 
-      const [campaignRes, stagesRes, statsRes] = await Promise.all([
+      const [campaignRes, statsRes] = await Promise.all([
         fetch(`/api/innovation/campaigns/${campaignId}`, { headers: { Authorization: `Bearer ${tok}` } }),
-        fetch("/api/innovation/stages", { headers: { Authorization: `Bearer ${tok}` } }),
         fetch("/api/innovation/stats", { headers: { Authorization: `Bearer ${tok}` } }),
       ]);
 
@@ -480,7 +479,6 @@ export default function CampaignDetailPage() {
       const c = await campaignRes.json() as InnovationCampaign;
       setCampaign(c);
 
-      if (stagesRes.ok) setStages(await stagesRes.json());
       if (statsRes.ok) {
         const stats = await statsRes.json();
         const role = stats.user_role;
@@ -500,7 +498,9 @@ export default function CampaignDetailPage() {
   }, [campaignId, router, loadIdeas]);
 
   useEffect(() => {
-    if (token) loadIdeas(token, search);
+    if (!token) return;
+    const id = setTimeout(() => loadIdeas(token, search), 300);
+    return () => clearTimeout(id);
   }, [search, token, loadIdeas]);
 
   const canSubmit = campaign?.status === "active" && (isAdmin || isInvited);
