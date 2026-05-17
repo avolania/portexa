@@ -1,6 +1,6 @@
 -- supabase-innovation-campaigns.sql
 
-CREATE TABLE innovation_campaigns (
+CREATE TABLE IF NOT EXISTS innovation_campaigns (
   id             uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   org_id         uuid NOT NULL,
   created_by     uuid NOT NULL,
@@ -19,7 +19,7 @@ ALTER TABLE innovation_campaigns ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "service_role_only" ON innovation_campaigns
   USING (auth.role() = 'service_role');
 
-CREATE TABLE innovation_campaign_invites (
+CREATE TABLE IF NOT EXISTS innovation_campaign_invites (
   campaign_id uuid NOT NULL REFERENCES innovation_campaigns(id) ON DELETE CASCADE,
   user_id     uuid NOT NULL,
   created_at  timestamptz DEFAULT now(),
@@ -34,3 +34,5 @@ ALTER TABLE innovation_ideas
   ADD COLUMN IF NOT EXISTS campaign_id uuid REFERENCES innovation_campaigns(id) ON DELETE SET NULL;
 
 CREATE INDEX ON innovation_ideas (campaign_id);
+CREATE INDEX ON innovation_campaigns (org_id);
+CREATE INDEX ON innovation_campaign_invites (user_id);
