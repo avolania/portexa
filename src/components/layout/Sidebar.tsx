@@ -87,7 +87,7 @@ const navSections: NavSection[] = [
     icon: Lightbulb,
     defaultOpen: false,
     items: [
-      { href: "/innovation",          icon: LayoutDashboard, label: "Dashboard" },
+      { href: "/innovation",          icon: LayoutDashboard, label: "Dashboard", exact: true },
       { href: "/innovation/pipeline", icon: Lightbulb,       label: "Pipeline"  },
       { href: "/innovation/kampanyalar",  icon: Megaphone,         label: "Kampanyalar" },
       { href: "/innovation/settings", icon: SlidersHorizontal, label: "Ayarlar", innovationAdminOnly: true },

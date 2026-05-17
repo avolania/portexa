@@ -35,10 +35,10 @@ export async function GET(
   try {
     const campaign = await getCampaign(id);
     if (!campaign) return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 });
-    if (campaign.status === 'draft' && ctx.innovationRole !== 'innovation_admin') {
+    if (campaign.org_id !== ctx.orgId) {
       return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 });
     }
-    if (campaign.org_id !== ctx.orgId) {
+    if (campaign.status === 'draft' && ctx.innovationRole !== 'innovation_admin') {
       return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 });
     }
     const invited = campaign.is_invite_only
