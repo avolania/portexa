@@ -450,8 +450,10 @@ export default function CampaignDetailPage() {
   const [showNewModal, setShowNewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [search, setSearch] = useState("");
+  const [ideasError, setIdeasError] = useState("");
 
   const loadIdeas = useCallback(async (tok: string, q: string) => {
+    setIdeasError("");
     const p = new URLSearchParams({ campaign_id: campaignId });
     if (q) p.set("search", q);
     const res = await fetch(`/api/innovation/ideas?${p}`, {
@@ -460,6 +462,8 @@ export default function CampaignDetailPage() {
     if (res.ok) {
       const data = await res.json();
       setIdeas(data.ideas ?? []);
+    } else {
+      setIdeasError("Fikirler yüklenirken bir hata oluştu.");
     }
   }, [campaignId]);
 
@@ -647,6 +651,10 @@ export default function CampaignDetailPage() {
               />
             </div>
           </div>
+
+          {ideasError && (
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{ideasError}</p>
+          )}
 
           {ideas.length === 0 ? (
             <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-xl">

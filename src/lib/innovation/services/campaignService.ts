@@ -42,12 +42,25 @@ export async function createCampaign(params: {
 export async function updateCampaign(params: {
   campaign: InnovationCampaign;
   dto: UpdateCampaignDto;
-}): Promise<void> {
+}): Promise<InnovationCampaign> {
   const { campaign, dto } = params;
   const newStart = dto.start_date ?? campaign.start_date;
   const newEnd = dto.end_date ?? campaign.end_date;
   if (newEnd < newStart) throw new Error('Bitiş tarihi başlangıç tarihinden önce olamaz');
   await campaignsRepo.updateCampaign(campaign.id, dto);
+
+  // Build updated campaign from existing + dto, re-derive status
+  const merged: Omit<InnovationCampaign, 'status'> = {
+    ...campaign,
+    title: dto.title ?? campaign.title,
+    description: dto.description !== undefined ? dto.description : campaign.description,
+    goal: dto.goal !== undefined ? dto.goal : campaign.goal,
+    start_date: newStart,
+    end_date: newEnd,
+    is_invite_only: dto.is_invite_only ?? campaign.is_invite_only,
+    updated_at: new Date().toISOString(),
+  };
+  return { ...merged, status: deriveCampaignStatus(merged.start_date, merged.end_date) };
 }
 
 export async function deleteCampaign(campaignId: string): Promise<void> {

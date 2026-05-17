@@ -68,8 +68,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 });
     }
     const dto = await req.json() as UpdateCampaignDto;
-    await updateCampaign({ campaign, dto });
-    const updated = await getCampaign(id);
+    const updated = await updateCampaign({ campaign, dto });
     return NextResponse.json(updated);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
