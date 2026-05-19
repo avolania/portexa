@@ -287,21 +287,21 @@ export const DEMO_NOTIFICATIONS: Notification[] = [
   {
     id: "n1", type: "task_assigned", title: "Görev Atandı",
     message: "\"Ana sayfa tasarımını tamamla\" görevi size atandı.",
-    read: false, link: "/projeler/1", createdAt: "2026-03-19T10:00:00Z",
+    read: false, link: "/projeler/1", createdAt: "2026-03-19T10:00:00Z", recipientId: "u1",
   },
   {
     id: "n2", type: "deadline", title: "Deadline Yaklaşıyor",
     message: "\"Code review - Auth modülü\" görevi 2 gün içinde sona eriyor.",
-    read: false, link: "/projeler/1", createdAt: "2026-03-18T09:00:00Z",
+    read: false, link: "/projeler/1", createdAt: "2026-03-18T09:00:00Z", recipientId: "u1",
   },
   {
     id: "n3", type: "budget_alert", title: "Bütçe Uyarısı",
     message: "\"Mobil Uygulama Redesign\" projesinin bütçesi %88 oranında kullanıldı.",
-    read: true, link: "/projeler/2", createdAt: "2026-03-17T14:00:00Z",
+    read: true, link: "/projeler/2", createdAt: "2026-03-17T14:00:00Z", recipientId: "u1",
   },
   {
     id: "n4", type: "comment", title: "Yeni Yorum",
     message: "Ayşe Kaya göreve yorum ekledi: \"Renk paletini güncelledim.\"",
-    read: true, link: "/projeler/1", createdAt: "2026-03-16T16:30:00Z",
+    read: true, link: "/projeler/1", createdAt: "2026-03-16T16:30:00Z", recipientId: "u1",
   },
 ];

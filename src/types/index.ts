@@ -293,9 +293,12 @@ export interface Comment {
 
 export interface Notification {
   id: string;
-  type: "task_assigned" | "task_updated" | "comment" | "deadline" | "budget_alert" | "mention" | "approval_requested" | "approval_resolved";
-  /** Sadece approval bildirimleri için: hangi kullanıcıya ait */
-  recipientId?: string;
+  type:
+    | "task_assigned" | "task_updated" | "comment" | "deadline"
+    | "budget_alert" | "mention" | "approval_requested" | "approval_resolved"
+    | "idea_submitted" | "idea_stage_advanced" | "idea_evaluated"
+    | "campaign_invite" | "campaign_ended";
+  recipientId: string;
   title: string;
   message: string;
   read: boolean;
