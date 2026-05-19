@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Plus, Search, X, ChevronUp, ChevronDown,
@@ -9,7 +9,8 @@ import {
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/useAuthStore";
-import type { InnovationIdea, InnovationStage, InnovationRole } from "@/lib/innovation/types";
+import type { InnovationIdea, InnovationStage, InnovationRole, SimilarIdea } from "@/lib/innovation/types";
+import { SimilarIdeasModal } from "@/components/innovation/SimilarIdeasModal";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 
@@ -325,9 +326,39 @@ function NewIdeaModal({ onClose, onCreated, token }: {
   const [form, setForm] = useState({ title: "", description: "", category: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [similarIdeas, setSimilarIdeas] = useState<SimilarIdea[]>([]);
+  const [checkingSimilarity, setCheckingSimilarity] = useState(false);
+  const [showSimilarModal, setShowSimilarModal] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  async function handleTitleBlur() {
+    const words = form.title.trim().split(/\s+/).filter(Boolean);
+    if (words.length < 2) return;
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+    setCheckingSimilarity(true);
+    try {
+      const res = await fetch(
+        `/api/innovation/ideas/similar?q=${encodeURIComponent(form.title)}`,
+        { headers: { Authorization: `Bearer ${token}` }, signal: abortRef.current.signal }
+      );
+      if (res.ok) {
+        const data = await res.json() as SimilarIdea[];
+        if (data.length > 0) {
+          setSimilarIdeas(data);
+          setShowSimilarModal(true);
+        }
+      }
+    } catch {
+      // sessizce yutulur (AbortError dahil)
+    } finally {
+      setCheckingSimilarity(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!form.title.trim()) { setError("Başlık zorunludur"); return; }
+    abortRef.current?.abort();
     setSubmitting(true);
     const res = await fetch("/api/innovation/ideas", {
       method: "POST",
@@ -358,12 +389,18 @@ function NewIdeaModal({ onClose, onCreated, token }: {
             {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Başlık *</label>
-              <input
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Fikrinizi kısaca özetleyin"
-                className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400"
-              />
+              <div className="relative">
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  onBlur={handleTitleBlur}
+                  placeholder="Fikrinizi kısaca özetleyin"
+                  className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 pr-8"
+                />
+                {checkingSimilarity && (
+                  <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-gray-400" />
+                )}
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Açıklama</label>
@@ -403,6 +440,16 @@ function NewIdeaModal({ onClose, onCreated, token }: {
           </div>
         </div>
       </div>
+      {showSimilarModal && (
+        <SimilarIdeasModal
+          ideas={similarIdeas}
+          onClose={() => setShowSimilarModal(false)}
+          onConfirm={() => {
+            setShowSimilarModal(false);
+            handleSubmit();
+          }}
+        />
+      )}
     </>
   );
 }
