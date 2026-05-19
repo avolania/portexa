@@ -12,7 +12,7 @@ async function getCtx(req: NextRequest) {
     .select('org_id')
     .eq('id', user.id)
     .single();
-  if (!p) return null;
+  if (!p?.org_id) return null;
   return { orgId: p.org_id as string };
 }
 
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const ctx = await getCtx(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const q = req.nextUrl.searchParams.get('q') ?? '';
+  const q = (req.nextUrl.searchParams.get('q') ?? '').slice(0, 200);
   const words = q.trim().split(/\s+/).filter(Boolean);
   if (words.length < 2) return NextResponse.json([]);
 
@@ -37,7 +37,8 @@ export async function GET(req: NextRequest) {
         stage:innovation_stages!innovation_ideas_stage_id_fkey(name, color)
       `)
       .eq('org_id', ctx.orgId)
-      .not('status', 'in', '("rejected","archived")')
+      .neq('status', 'rejected')
+      .neq('status', 'archived')
       .textSearch('title', q, { config: 'turkish', type: 'plain' })
       .limit(5);
 
