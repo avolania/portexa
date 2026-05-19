@@ -268,3 +268,13 @@ export interface UpdateCampaignDto {
   end_date?: string;
   is_invite_only?: boolean;
 }
+
+export interface SimilarIdea {
+  id: string;
+  idea_number: string;
+  title: string;
+  description: string | null;
+  stage: { name: string; color: string } | null;
+  submitter: { name: string } | null;
+  created_at: string;
+}
