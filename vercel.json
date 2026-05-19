@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/exchange-rates/refresh",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/innovation-campaign-ended",
+      "schedule": "0 1 * * *"
+    }
+  ]
+}
