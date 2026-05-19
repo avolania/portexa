@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createIdea, findIdeas } from '@/lib/innovation/services/ideasService';
 import type { CreateIdeaDto } from '@/lib/innovation/types';
+import { notifyIdeaSubmitted } from '@/lib/innovation/services/innovationNotifications';
 
 async function getCtx(req: NextRequest) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -10,14 +11,16 @@ async function getCtx(req: NextRequest) {
   if (error || !user) return null;
   const { data: p } = await supabaseAdmin
     .from('auth_profiles')
-    .select('org_id, innovation_role')
+    .select('org_id, innovation_role, data')
     .eq('id', user.id)
     .single();
   if (!p) return null;
+  const profileData = p.data as Record<string, unknown> | null;
   return {
     userId: user.id,
     orgId: p.org_id as string,
     innovationRole: (p.innovation_role ?? null) as string | null,
+    submitterName: (profileData?.name as string | undefined) ?? 'Kullanıcı',
   };
 }
 
@@ -52,6 +55,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const idea = await createIdea({ orgId: ctx.orgId, submitterId: ctx.userId, dto, innovationRole: ctx.innovationRole });
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin;
+    notifyIdeaSubmitted(idea, ctx.submitterName, appUrl).catch(console.error);
     return NextResponse.json(idea, { status: 201 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
