@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Loader2, Lock, Calendar, Target,
@@ -11,7 +11,9 @@ import { supabase } from "@/lib/supabase";
 import type {
   InnovationCampaign, InnovationIdea,
   CampaignInvite, CreateIdeaDto, UpdateCampaignDto, CampaignStatus,
+  SimilarIdea,
 } from "@/lib/innovation/types";
+import { SimilarIdeasModal } from "@/components/innovation/SimilarIdeasModal";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 
@@ -107,9 +109,39 @@ function NewIdeaModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [similarIdeas, setSimilarIdeas] = useState<SimilarIdea[]>([]);
+  const [checkingSimilarity, setCheckingSimilarity] = useState(false);
+  const [showSimilarModal, setShowSimilarModal] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  async function handleTitleBlur() {
+    const words = form.title.trim().split(/\s+/).filter(Boolean);
+    if (words.length < 2) return;
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+    setCheckingSimilarity(true);
+    try {
+      const res = await fetch(
+        `/api/innovation/ideas/similar?q=${encodeURIComponent(form.title)}`,
+        { headers: { Authorization: `Bearer ${token}` }, signal: abortRef.current.signal }
+      );
+      if (res.ok) {
+        const data = await res.json() as SimilarIdea[];
+        if (data.length > 0) {
+          setSimilarIdeas(data);
+          setShowSimilarModal(true);
+        }
+      }
+    } catch {
+      // sessizce yutulur (AbortError dahil)
+    } finally {
+      setCheckingSimilarity(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!form.title.trim()) { setError("Başlık zorunludur"); return; }
+    abortRef.current?.abort();
     setSaving(true);
     setError("");
     const res = await fetch("/api/innovation/ideas", {
@@ -136,12 +168,18 @@ function NewIdeaModal({
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Başlık *</label>
-              <input
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                placeholder="Fikrin başlığı"
-              />
+              <div className="relative">
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  onBlur={handleTitleBlur}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 pr-8"
+                  placeholder="Fikrin başlığı"
+                />
+                {checkingSimilarity && (
+                  <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-gray-400" />
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Açıklama</label>
@@ -181,6 +219,16 @@ function NewIdeaModal({
           </div>
         </div>
       </div>
+      {showSimilarModal && (
+        <SimilarIdeasModal
+          ideas={similarIdeas}
+          onClose={() => setShowSimilarModal(false)}
+          onConfirm={() => {
+            setShowSimilarModal(false);
+            handleSubmit();
+          }}
+        />
+      )}
     </>
   );
 }
