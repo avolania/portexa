@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import {
   getCampaign, getInvites, addInvites, removeInvite,
 } from '@/lib/innovation/services/campaignService';
+import { notifyCampaignInvite } from '@/lib/innovation/services/innovationNotifications';
 
 async function getCtx(req: NextRequest) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -70,6 +71,13 @@ export async function POST(
       return NextResponse.json({ error: 'user_ids dizisi zorunludur' }, { status: 400 });
     }
     const result = await addInvites(id, body.user_ids);
+
+    // Her davet edilen kullanıcıya bildirim (fire-and-forget)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin;
+    Promise.allSettled(
+      body.user_ids.map((uid) => notifyCampaignInvite(campaign, uid, appUrl))
+    ).catch(console.error);
+
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
