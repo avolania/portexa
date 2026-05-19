@@ -4,6 +4,8 @@ import { Bell, Search, LogOut, AlertCircle, ClipboardList, GitPullRequest, X } f
 import Image from "next/image";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { supabase } from "@/lib/supabase";
+import type { Notification } from "@/types";
 import { useIncidentStore } from "@/store/useIncidentStore";
 import { useServiceRequestStore } from "@/store/useServiceRequestStore";
 import { useChangeRequestStore } from "@/store/useChangeRequestStore";
@@ -28,6 +30,7 @@ const TYPE_CONFIG = {
 
 export default function Topbar() {
   const unreadCount = useNotificationStore((s) => s.unreadCount());
+  const receiveRealtime = useNotificationStore((s) => s.receiveRealtime);
   const { user, signOut } = useAuthStore();
   const { incidents }       = useIncidentStore();
   const { serviceRequests } = useServiceRequestStore();
@@ -78,6 +81,29 @@ export default function Topbar() {
     setShowDrop(true);
     setActiveIdx(-1);
   }, [incidents, serviceRequests, changeRequests]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`notifications:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const raw = payload.new as Record<string, unknown>;
+          // DB JSONB data kolonu kullanıyorsa payload.new.data içinde; değilse doğrudan payload.new
+          const notif = (raw?.data ?? raw) as Notification;
+          if (notif?.recipientId === user.id) {
+            receiveRealtime(notif);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, receiveRealtime]);
 
   useEffect(() => { search(query); }, [query, search]);
 
