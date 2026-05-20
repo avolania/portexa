@@ -50,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const idea = await findIdeaById(id);
   if (!idea) return NextResponse.json({ error: 'Bulunamadı' }, { status: 404 });
-  if (!(await canEdit(idea, ctx.userId, ctx.innovationRoles)))
+  if (!canEdit(idea, ctx.userId, ctx.innovationRoles))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const dto = await req.json() as UpdateIdeaDto;
@@ -67,7 +67,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const idea = await findIdeaById(id);
   if (!idea) return NextResponse.json({ error: 'Bulunamadı' }, { status: 404 });
-  if (!(await canDelete(idea, ctx.userId, ctx.innovationRoles)))
+  if (!canDelete(idea, ctx.userId, ctx.innovationRoles))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   await deleteIdea(id);

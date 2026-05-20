@@ -105,14 +105,12 @@ export async function advanceStage(params: {
   });
 }
 
-export async function canEdit(idea: InnovationIdea, userId: string, roles: InnovationRole | InnovationRole[]): Promise<boolean> {
-  const isAdmin = Array.isArray(roles) ? hasRole(roles, 'innovation_admin') : roles === 'innovation_admin';
-  return idea.submitter_id === userId || isAdmin;
+export function canEdit(idea: InnovationIdea, userId: string, roles: InnovationRole[]): boolean {
+  return idea.submitter_id === userId || hasRole(roles, 'innovation_admin');
 }
 
-export async function canDelete(idea: InnovationIdea, userId: string, roles: InnovationRole | InnovationRole[]): Promise<boolean> {
-  const isAdmin = Array.isArray(roles) ? hasRole(roles, 'innovation_admin') : roles === 'innovation_admin';
-  return (idea.submitter_id === userId && idea.status === 'draft') || isAdmin;
+export function canDelete(idea: InnovationIdea, userId: string, roles: InnovationRole[]): boolean {
+  return (idea.submitter_id === userId && idea.status === 'draft') || hasRole(roles, 'innovation_admin');
 }
 
 export { findIdeas, findIdeaById, updateIdea, deleteIdea } from '../repositories/ideasRepo';
