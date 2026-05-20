@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Plus, Search, X, ChevronUp, ChevronDown,
   Loader2, MessageCircle, Star, ArrowRight, LayoutList, LayoutGrid,
@@ -9,7 +9,7 @@ import {
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/useAuthStore";
-import type { InnovationIdea, InnovationStage, InnovationRole, SimilarIdea } from "@/lib/innovation/types";
+import type { InnovationIdea, InnovationStage, InnovationRole, SimilarIdea, IdeaType } from "@/lib/innovation/types";
 import { SimilarIdeasModal } from "@/components/innovation/SimilarIdeasModal";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -36,8 +36,8 @@ function IdeaCard({ idea, onOpen }: { idea: InnovationIdea; onOpen: (idea: Innov
             )}
           </div>
           <p className="font-semibold text-gray-900 mt-1 text-sm">{idea.title}</p>
-          {idea.description && (
-            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{idea.description}</p>
+          {idea.problem && (
+            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{idea.problem}</p>
           )}
           <div className="flex items-center gap-3 mt-2 flex-wrap">
             {idea.submitter && (
@@ -189,11 +189,11 @@ function DetailSlideOver({
             </div>
           )}
 
-          {/* Description */}
-          {d.description && (
+          {/* Problem / Opportunity */}
+          {d.problem && (
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Açıklama</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.description}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Problem / Fırsat</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.problem}</p>
             </div>
           )}
 
@@ -323,7 +323,8 @@ function NewIdeaModal({ onClose, onCreated, token }: {
   onCreated: () => void;
   token: string;
 }) {
-  const [form, setForm] = useState({ title: "", description: "", category: "" });
+  const router = useRouter();
+  const [form, setForm] = useState({ title: "", problem: "", category: "", idea_type: "" as IdeaType });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [similarIdeas, setSimilarIdeas] = useState<SimilarIdea[]>([]);
@@ -366,7 +367,8 @@ function NewIdeaModal({ onClose, onCreated, token }: {
       body: JSON.stringify(form),
     });
     if (res.ok) {
-      onCreated();
+      const idea = await res.json() as InnovationIdea;
+      router.push(`/innovation/ideas/${idea.id}`);
     } else {
       const d = await res.json();
       setError(d.error ?? "Hata oluştu");
@@ -403,11 +405,11 @@ function NewIdeaModal({ onClose, onCreated, token }: {
               </div>
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Açıklama</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Problem / Fırsat</label>
               <textarea
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Fikrinizi detaylandırın..."
+                value={form.problem}
+                onChange={(e) => setForm((f) => ({ ...f, problem: e.target.value }))}
+                placeholder="Çözülmek istenen problem veya yakalanmak istenen fırsatı açıklayın..."
                 rows={4}
                 className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 resize-none"
               />
@@ -420,6 +422,22 @@ function NewIdeaModal({ onClose, onCreated, token }: {
                 placeholder="Süreç İyileştirme, Müşteri Deneyimi..."
                 className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400"
               />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Fikir Tipi</label>
+              <select
+                value={form.idea_type}
+                onChange={(e) => setForm((f) => ({ ...f, idea_type: e.target.value as IdeaType }))}
+                className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 bg-white"
+              >
+                <option value="">Seçiniz...</option>
+                <option value="quick_win">Quick Win</option>
+                <option value="process">Süreç İyileştirme</option>
+                <option value="digital">Dijital / BT Projesi</option>
+                <option value="ai_data">Yapay Zeka / Veri</option>
+                <option value="ot">BT-OT / Akıllı Fabrika</option>
+                <option value="strategic">Stratejik İnovasyon</option>
+              </select>
             </div>
           </div>
           <div className="flex gap-3 p-5 border-t">
