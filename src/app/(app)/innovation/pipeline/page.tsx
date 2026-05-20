@@ -318,9 +318,8 @@ function DetailSlideOver({
 
 // ── New Idea Modal ─────────────────────────────────────────────────────────────
 
-function NewIdeaModal({ onClose, onCreated, token }: {
+function NewIdeaModal({ onClose, token }: {
   onClose: () => void;
-  onCreated: () => void;
   token: string;
 }) {
   const router = useRouter();
@@ -361,24 +360,27 @@ function NewIdeaModal({ onClose, onCreated, token }: {
     if (!form.title.trim()) { setError("Başlık zorunludur"); return; }
     abortRef.current?.abort();
     setSubmitting(true);
-    const res = await fetch("/api/innovation/ideas", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    if (res.ok) {
-      const idea = await res.json() as InnovationIdea;
-      router.push(`/innovation/ideas/${idea.id}`);
-    } else {
-      const d = await res.json();
-      setError(d.error ?? "Hata oluştu");
+    try {
+      const res = await fetch("/api/innovation/ideas", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        const idea = await res.json() as InnovationIdea;
+        router.push(`/innovation/ideas/${idea.id}`);
+      } else {
+        const d = await res.json();
+        setError(d.error ?? "Hata oluştu");
+      }
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   }
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={submitting ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
           <div className="flex items-center justify-between p-5 border-b">
@@ -873,10 +875,6 @@ export default function InnovationPipeline() {
         <NewIdeaModal
           onClose={() => setShowNewModal(false)}
           token={token}
-          onCreated={() => {
-            setShowNewModal(false);
-            loadIdeas(token, filters);
-          }}
         />
       )}
 
