@@ -80,12 +80,12 @@ function IdeaCard({ idea, onOpen }: { idea: InnovationIdea; onOpen: (idea: Innov
 // ── Detail Slide-Over ─────────────────────────────────────────────────────────
 
 function DetailSlideOver({
-  idea, onClose, token, userRole, userId, onVote,
+  idea, onClose, token, innovationRoles, userId, onVote,
 }: {
   idea: InnovationIdea;
   onClose: () => void;
   token: string;
-  userRole: InnovationRole;
+  innovationRoles: InnovationRole[];
   userId: string;
   onVote: (ideaId: string, newCount: number, userVote: number | null) => void;
 }) {
@@ -252,9 +252,9 @@ function DetailSlideOver({
           )}
 
           {/* Admin: advance stage */}
-          {userRole === "innovation_admin" && (
+          {innovationRoles.includes("innovation_admin") && (
             <div className="border border-purple-200 rounded-lg p-4 bg-purple-50">
-              <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-2">Stage İlerlet</p>
+              <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-2">Stage İlerlet (Admin)</p>
               <input
                 value={advanceReason}
                 onChange={(e) => setAdvanceReason(e.target.value)}
@@ -550,7 +550,7 @@ export default function InnovationPipeline() {
   const [loading, setLoading] = useState(true);
   const [selectedIdea, setSelectedIdea] = useState<InnovationIdea | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
-  const [userRole, setUserRole] = useState<InnovationRole>(null);
+  const [innovationRoles, setInnovationRoles] = useState<InnovationRole[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [pendingAdvance, setPendingAdvance] = useState<{
     ideaId: string;
@@ -588,16 +588,8 @@ export default function InnovationPipeline() {
       if (!session) return;
       setToken(session.access_token);
 
-      const [stagesRes, statsRes] = await Promise.all([
-        fetch("/api/innovation/stages", { headers: { Authorization: `Bearer ${session.access_token}` } }),
-        fetch("/api/innovation/stats", { headers: { Authorization: `Bearer ${session.access_token}` } }),
-      ]);
-
+      const stagesRes = await fetch("/api/innovation/stages", { headers: { Authorization: `Bearer ${session.access_token}` } });
       if (stagesRes.ok) setStages(await stagesRes.json());
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setUserRole(statsData.user_role ?? null);
-      }
 
       await loadIdeas(session.access_token, filters);
 
@@ -612,6 +604,17 @@ export default function InnovationPipeline() {
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('innovation_user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .then(({ data }) => {
+        setInnovationRoles((data ?? []).map((r) => (r as { role: InnovationRole }).role));
+      });
+  }, [user?.id]);
 
   useEffect(() => {
     if (token) loadIdeas(token, filters);
@@ -810,7 +813,7 @@ export default function InnovationPipeline() {
                             key={idea.id}
                             draggableId={idea.id}
                             index={index}
-                            isDragDisabled={userRole !== 'innovation_admin'}
+                            isDragDisabled={!innovationRoles.includes('innovation_admin')}
                           >
                             {(dragProvided, dragSnapshot) => (
                               <div
@@ -820,7 +823,7 @@ export default function InnovationPipeline() {
                                 onClick={() => setSelectedIdea(idea)}
                                 className={`bg-white border border-gray-200 rounded-lg p-3 transition-all ${
                                   dragSnapshot.isDragging ? 'shadow-lg rotate-1 border-blue-300' : 'hover:border-blue-200'
-                                } ${userRole === 'innovation_admin' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                                } ${innovationRoles.includes('innovation_admin') ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
                               >
                                 <p className="font-mono text-xs text-gray-400 mb-1">{idea.idea_number}</p>
                                 <p className="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug">{idea.title}</p>
@@ -864,7 +867,7 @@ export default function InnovationPipeline() {
           idea={selectedIdea}
           onClose={() => setSelectedIdea(null)}
           token={token}
-          userRole={userRole}
+          innovationRoles={innovationRoles}
           userId={user?.id ?? ""}
           onVote={handleVote}
         />
