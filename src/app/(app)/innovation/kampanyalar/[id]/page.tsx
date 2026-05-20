@@ -105,6 +105,7 @@ function NewIdeaModal({
     title: "",
     problem: "",
     category: "",
+    idea_type: "" as IdeaType,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

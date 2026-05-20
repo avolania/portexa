@@ -52,6 +52,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const dto = await req.json() as UpdateIdeaDto;
+  if (dto.status !== undefined && ctx.innovationRole !== 'innovation_admin')
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   await updateIdea(id, dto);
   return NextResponse.json({ ok: true });
 }
