@@ -2,7 +2,13 @@ export type IdeaStatus =
   | 'draft' | 'submitted' | 'under_review' | 'approved'
   | 'rejected' | 'implemented' | 'archived';
 
-export type InnovationRole = 'innovation_evaluator' | 'innovation_admin' | null;
+export type InnovationRole =
+  | 'innovation_evaluator'
+  | 'innovation_admin'
+  | 'business_sponsor'
+  | 'finance'
+  | 'pmo_manager'
+  | 'executive';
 
 export type IdeaType =
   | 'quick_win' | 'process' | 'digital' | 'ai_data' | 'ot' | 'strategic' | '';
@@ -130,7 +136,7 @@ export interface InnovationStats {
   this_month: number;
   under_review: number;
   implemented: number;
-  user_role: InnovationRole;
+  user_roles: InnovationRole[];
   by_stage: Array<{
     stage_id: string;
     stage_name: string;

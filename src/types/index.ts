@@ -1,3 +1,5 @@
+import type { InnovationRole } from '@/lib/innovation/types';
+
 export type UserRole = "system_admin" | "admin" | "pm" | "member" | "approver" | "viewer" | "end_user";
 
 // ─── Workflow Requests ─────────────────────────────────────────────────────────
@@ -117,7 +119,7 @@ export interface User {
   language: "tr" | "en";
   rememberMe?: boolean;
   orgId: string;
-  innovation_role?: 'innovation_evaluator' | 'innovation_admin' | null;
+  innovation_roles?: InnovationRole[];
 }
 
 export interface Organization {
