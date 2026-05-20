@@ -4,6 +4,13 @@ export type IdeaStatus =
 
 export type InnovationRole = 'innovation_evaluator' | 'innovation_admin' | null;
 
+export type IdeaType =
+  | 'quick_win' | 'process' | 'digital' | 'ai_data' | 'ot' | 'strategic' | '';
+
+export type EstimatedImpact = 'low' | 'medium' | 'high' | '';
+
+export type IdeaConfidentiality = 'open' | 'team' | 'private';
+
 export interface InnovationStage {
   id: string;
   order_index: number;
@@ -92,7 +99,15 @@ export interface InnovationIdea {
   stage?: InnovationStage;
   status: IdeaStatus;
   title: string;
-  description: string;
+  problem: string;
+  proposed_solution: string;
+  affected_area: string;
+  location_process: string;
+  idea_type: IdeaType;
+  estimated_impact: EstimatedImpact;
+  confidentiality: IdeaConfidentiality;
+  sponsor_id: string | null;
+  sponsor?: { name: string } | null;
   category: string;
   impact_score: number;
   feasibility_score: number;
@@ -146,8 +161,9 @@ export interface InnovationStats {
 
 export interface CreateIdeaDto {
   title: string;
-  description: string;
+  problem: string;
   category: string;
+  idea_type?: IdeaType;
   estimated_value?: number;
   currency_code?: string;
   tag_ids?: string[];
@@ -156,8 +172,15 @@ export interface CreateIdeaDto {
 
 export interface UpdateIdeaDto {
   title?: string;
-  description?: string;
+  problem?: string;
+  proposed_solution?: string;
   category?: string;
+  affected_area?: string;
+  location_process?: string;
+  idea_type?: IdeaType;
+  estimated_impact?: EstimatedImpact;
+  confidentiality?: IdeaConfidentiality;
+  sponsor_id?: string | null;
   estimated_value?: number;
   currency_code?: string;
   status?: IdeaStatus;
@@ -273,7 +296,7 @@ export interface SimilarIdea {
   id: string;
   idea_number: string;
   title: string;
-  description: string | null;
+  problem: string | null;
   stage: { name: string; color: string } | null;
   submitter: { name: string } | null;
   created_at: string;
