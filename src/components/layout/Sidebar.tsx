@@ -242,7 +242,7 @@ export default function Sidebar() {
               const isOpen = collapsed || (openSections[section.id] ?? section.defaultOpen);
               const SectionIcon = section.icon;
               const sectionActive = section.items.some((i) => pathname.startsWith(i.href));
-              const isInnovationAdmin = user?.innovation_role === 'innovation_admin';
+              const isInnovationAdmin = user?.innovation_roles?.includes('innovation_admin') ?? false;
               const visibleItems = section.items.filter((i) => {
                 if (i.adminOnly && !isAdmin && !isSystemAdmin) return false;
                 if (i.innovationAdminOnly && !isInnovationAdmin) return false;

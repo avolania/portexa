@@ -50,7 +50,7 @@ export default function IdeaDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [tab, setTab] = useState<Tab>('details');
 
-  const [innovationRole, setInnovationRole] = useState<InnovationRole>(null);
+  const [innovationRoles, setInnovationRoles] = useState<InnovationRole[]>([]);
   const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
   const [form, setForm] = useState<UpdateIdeaDto>({});
   const [saving, setSaving] = useState(false);
@@ -100,12 +100,11 @@ export default function IdeaDetailPage() {
   useEffect(() => {
     if (!userId) return;
     supabase
-      .from('auth_profiles')
-      .select('innovation_role')
-      .eq('id', userId)
-      .single()
+      .from('innovation_user_roles')
+      .select('role')
+      .eq('user_id', userId)
       .then(({ data }) => {
-        setInnovationRole((data?.innovation_role ?? null) as InnovationRole);
+        setInnovationRoles((data ?? []).map((r) => (r as { role: InnovationRole }).role));
       });
   }, [userId]);
 
@@ -118,7 +117,7 @@ export default function IdeaDetailPage() {
   }, [token]);
 
   const canEdit = idea
-    ? idea.submitter_id === userId || innovationRole === 'innovation_admin'
+    ? idea.submitter_id === userId || innovationRoles.includes('innovation_admin')
     : false;
 
   async function handleSave() {
