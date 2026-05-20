@@ -224,18 +224,52 @@ Fatma Kaya    |  ☐   |    ☑     |   ☐    |   ☑    |  ☐  |    ☐
 | Create | `src/lib/innovation/utils.ts` | `hasRole` helper |
 | Modify | `src/lib/innovation/types/index.ts` | `InnovationRole` genişletme |
 | Modify | `src/types/index.ts` | `User.innovation_roles` array |
-| Modify | `src/lib/db.ts` | `dbLoadProfile` junction table okuma |
+| Modify | `src/lib/db.ts` | `dbLoadProfile` junction table okuma, `dbUpsertProfile` güncelleme |
+| Modify | `src/components/layout/Sidebar.tsx` | `user.innovation_roles` array kontrolü |
 | Modify | `src/app/api/innovation/users/route.ts` | `innovation_roles[]` response |
 | Modify | `src/app/api/innovation/users/[id]/route.ts` | `add/remove` action body |
 | Modify | `src/app/(app)/innovation/settings/page.tsx` | Checkbox UI |
+| Modify | `src/app/(app)/innovation/ideas/[id]/page.tsx` | `innovation_roles` array okuma |
 | Modify | `src/app/api/innovation/ideas/route.ts` | `hasRole` güncelleme |
 | Modify | `src/app/api/innovation/ideas/[id]/route.ts` | `hasRole` güncelleme |
+| Modify | `src/app/api/innovation/ideas/[id]/evaluate/route.ts` | `hasRole` güncelleme |
+| Modify | `src/app/api/innovation/ideas/[id]/advance/route.ts` | `hasRole` güncelleme |
 | Modify | `src/app/api/innovation/campaigns/route.ts` | `hasRole` güncelleme |
 | Modify | `src/app/api/innovation/campaigns/[id]/route.ts` | `hasRole` güncelleme |
+| Modify | `src/app/api/innovation/campaigns/[id]/invites/route.ts` | `hasRole` güncelleme |
 | Modify | `src/app/api/innovation/stages/route.ts` | `hasRole` güncelleme |
 | Modify | `src/app/api/innovation/stages/[id]/route.ts` | `hasRole` güncelleme |
 | Modify | `src/app/api/innovation/criteria/route.ts` | `hasRole` güncelleme |
 | Modify | `src/app/api/innovation/criteria/[id]/route.ts` | `hasRole` güncelleme |
+| Modify | `src/app/api/innovation/stats/route.ts` | `hasRole` güncelleme |
+| Modify | `src/lib/innovation/services/innovationNotifications.ts` | Junction table üzerinden alıcı sorgusu |
+
+---
+
+## Özel Durum — `innovationNotifications.ts`
+
+Bu servis bildirim alıcılarını bulmak için `auth_profiles.innovation_role` kolonunu doğrudan sorgular:
+
+```ts
+// Mevcut
+.in('innovation_role', ['innovation_admin', 'innovation_evaluator'])
+```
+
+Junction table geçişinde bu sorgu şu şekilde değişir:
+
+```ts
+// Yeni: junction tablosundan admin/evaluator olan user_id'leri çek
+const { data: roleRows } = await supabaseAdmin
+  .from('innovation_user_roles')
+  .select('user_id')
+  .eq('org_id', orgId)
+  .in('role', ['innovation_admin', 'innovation_evaluator']);
+
+const adminUserIds = roleRows?.map(r => r.user_id) ?? [];
+
+// Sonra bu id'leri kullanarak profilleri sorgula
+.in('id', adminUserIds)
+```
 
 ---
 
