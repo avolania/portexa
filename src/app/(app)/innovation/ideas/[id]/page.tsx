@@ -63,7 +63,7 @@ export default function IdeaDetailPage() {
   // Resolve session once
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return;
+      if (!session) { setLoading(false); return; }
       setToken(session.access_token);
       setUserId(session.user.id);
     });
