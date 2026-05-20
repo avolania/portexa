@@ -229,12 +229,18 @@ export async function dbLoadProfiles(orgId?: string): Promise<Record<string, Use
 export async function dbLoadProfile(userId: string): Promise<User | null> {
   const { data, error } = await supabase
     .from("auth_profiles")
-    .select("data, innovation_role")
+    .select("data")
     .eq("id", userId)
     .single();
   if (error || !data) return null;
   const profile = data.data as User;
-  return { ...profile, innovation_role: (data.innovation_role ?? null) as User['innovation_role'] };
+  const { data: roleRows, error: roleError } = await supabase
+    .from("innovation_user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  if (roleError) console.error('[dbLoadProfile] role query error', roleError.message);
+  const innovation_roles = (roleRows ?? []).map((r) => (r as { role: string }).role) as import('@/lib/innovation/types').InnovationRole[];
+  return { ...profile, innovation_roles };
 }
 
 export async function dbUpsertProfile(userId: string, data: unknown): Promise<void> {
@@ -242,7 +248,6 @@ export async function dbUpsertProfile(userId: string, data: unknown): Promise<vo
   const orgId = d?.orgId as string | undefined;
   const row: Record<string, unknown> = { id: userId, data };
   if (orgId) row.org_id = orgId;
-  if ('innovation_role' in d) row.innovation_role = d.innovation_role ?? null;
   const { error } = await supabase.from("auth_profiles").upsert([row], { defaultToNull: false });
   if (error) {
     console.error("[db] upsert auth_profiles:", error.message);
