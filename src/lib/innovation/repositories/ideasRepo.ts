@@ -49,6 +49,7 @@ export async function findIdeaById(id: string): Promise<InnovationIdea | null> {
     .select(`
       *,
       submitter:auth_profiles!innovation_ideas_submitter_id_fkey(id, data),
+      sponsor:auth_profiles!innovation_ideas_sponsor_id_fkey(id, data),
       stage:innovation_stages!innovation_ideas_stage_id_fkey(id, name, color, order_index, min_score_to_advance, required_evaluations, is_active),
       innovation_comments(
         *,
@@ -76,6 +77,7 @@ export async function findIdeaById(id: string): Promise<InnovationIdea | null> {
   return {
     ...row,
     submitter: mapProfile(row.submitter as Record<string, unknown>),
+    sponsor: mapProfile(row.sponsor as Record<string, unknown>) ?? null,
     comments: ((row.innovation_comments ?? []) as Record<string, unknown>[]).map((c) => ({
       ...c,
       author: mapProfile(c.author as Record<string, unknown>),
@@ -98,8 +100,9 @@ export async function createIdea(params: {
   submitterId: string;
   stageId: string;
   title: string;
-  description: string;
+  problem: string;
   category: string;
+  ideaType?: string;
   estimatedValue?: number;
   currencyCode: string;
   campaignId?: string;
@@ -114,8 +117,9 @@ export async function createIdea(params: {
       stage_id: params.stageId,
       status: 'submitted',
       title: params.title,
-      description: params.description,
+      problem: params.problem,
       category: params.category,
+      idea_type: params.ideaType ?? '',
       estimated_value: params.estimatedValue ?? null,
       currency_code: params.currencyCode,
       campaign_id: params.campaignId ?? null,
@@ -133,10 +137,21 @@ export async function createIdea(params: {
   return data as unknown as InnovationIdea;
 }
 
+const ALLOWED_UPDATE_FIELDS = new Set([
+  'title', 'problem', 'proposed_solution', 'category',
+  'affected_area', 'location_process', 'idea_type',
+  'estimated_impact', 'confidentiality', 'sponsor_id',
+  'estimated_value', 'currency_code', 'status',
+]);
+
 export async function updateIdea(id: string, dto: UpdateIdeaDto): Promise<void> {
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  for (const [k, v] of Object.entries(dto)) {
+    if (ALLOWED_UPDATE_FIELDS.has(k)) patch[k] = v;
+  }
   const { error } = await supabaseAdmin
     .from('innovation_ideas')
-    .update({ ...dto, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq('id', id);
   if (error) throw new Error(error.message);
 }
