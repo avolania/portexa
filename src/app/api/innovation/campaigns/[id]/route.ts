@@ -4,7 +4,8 @@ import {
   getCampaign, updateCampaign, deleteCampaign,
 } from '@/lib/innovation/services/campaignService';
 import { isInvited } from '@/lib/innovation/repositories/campaignsRepo';
-import type { UpdateCampaignDto } from '@/lib/innovation/types';
+import { getInnovationRoles, hasRole } from '@/lib/innovation/utils';
+import type { UpdateCampaignDto, InnovationRole } from '@/lib/innovation/types';
 
 async function getCtx(req: NextRequest) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -13,14 +14,15 @@ async function getCtx(req: NextRequest) {
   if (error || !user) return null;
   const { data: p } = await supabaseAdmin
     .from('auth_profiles')
-    .select('org_id, innovation_role')
+    .select('org_id')
     .eq('id', user.id)
     .single();
   if (!p) return null;
+  const roles = await getInnovationRoles(user.id);
   return {
     userId: user.id,
     orgId: p.org_id as string,
-    innovationRole: (p.innovation_role ?? null) as string | null,
+    innovationRoles: roles as InnovationRole[],
   };
 }
 
@@ -38,7 +40,7 @@ export async function GET(
     if (campaign.org_id !== ctx.orgId) {
       return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 });
     }
-    if (campaign.status === 'draft' && ctx.innovationRole !== 'innovation_admin') {
+    if (campaign.status === 'draft' && !hasRole(ctx.innovationRoles, 'innovation_admin')) {
       return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 });
     }
     const invited = campaign.is_invite_only
@@ -57,7 +59,7 @@ export async function PATCH(
 ) {
   const ctx = await getCtx(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (ctx.innovationRole !== 'innovation_admin') {
+  if (!hasRole(ctx.innovationRoles, 'innovation_admin')) {
     return NextResponse.json({ error: 'Yetkisiz' }, { status: 403 });
   }
 
@@ -82,7 +84,7 @@ export async function DELETE(
 ) {
   const ctx = await getCtx(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (ctx.innovationRole !== 'innovation_admin') {
+  if (!hasRole(ctx.innovationRoles, 'innovation_admin')) {
     return NextResponse.json({ error: 'Yetkisiz' }, { status: 403 });
   }
 

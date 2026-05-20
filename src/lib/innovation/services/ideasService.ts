@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import * as ideasRepo from '../repositories/ideasRepo';
 import * as stagesRepo from '../repositories/stagesRepo';
 import type { InnovationIdea, CreateIdeaDto, AdvanceStageDto, InnovationRole } from '../types';
+import { hasRole } from '../utils';
 import { getCampaign, checkSubmissionAccess } from './campaignService';
 
 async function generateIdeaNumber(orgId: string): Promise<string> {
@@ -104,12 +105,14 @@ export async function advanceStage(params: {
   });
 }
 
-export async function canEdit(idea: InnovationIdea, userId: string, role: InnovationRole): Promise<boolean> {
-  return idea.submitter_id === userId || role === 'innovation_admin';
+export async function canEdit(idea: InnovationIdea, userId: string, roles: InnovationRole | InnovationRole[]): Promise<boolean> {
+  const isAdmin = Array.isArray(roles) ? hasRole(roles, 'innovation_admin') : roles === 'innovation_admin';
+  return idea.submitter_id === userId || isAdmin;
 }
 
-export async function canDelete(idea: InnovationIdea, userId: string, role: InnovationRole): Promise<boolean> {
-  return (idea.submitter_id === userId && idea.status === 'draft') || role === 'innovation_admin';
+export async function canDelete(idea: InnovationIdea, userId: string, roles: InnovationRole | InnovationRole[]): Promise<boolean> {
+  const isAdmin = Array.isArray(roles) ? hasRole(roles, 'innovation_admin') : roles === 'innovation_admin';
+  return (idea.submitter_id === userId && idea.status === 'draft') || isAdmin;
 }
 
 export { findIdeas, findIdeaById, updateIdea, deleteIdea } from '../repositories/ideasRepo';

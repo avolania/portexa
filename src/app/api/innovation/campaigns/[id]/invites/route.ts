@@ -4,6 +4,8 @@ import {
   getCampaign, getInvites, addInvites, removeInvite,
 } from '@/lib/innovation/services/campaignService';
 import { notifyCampaignInvite } from '@/lib/innovation/services/innovationNotifications';
+import { getInnovationRoles, hasRole } from '@/lib/innovation/utils';
+import type { InnovationRole } from '@/lib/innovation/types';
 
 async function getCtx(req: NextRequest) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -12,14 +14,15 @@ async function getCtx(req: NextRequest) {
   if (error || !user) return null;
   const { data: p } = await supabaseAdmin
     .from('auth_profiles')
-    .select('org_id, innovation_role')
+    .select('org_id')
     .eq('id', user.id)
     .single();
   if (!p) return null;
+  const roles = await getInnovationRoles(user.id);
   return {
     userId: user.id,
     orgId: p.org_id as string,
-    innovationRole: (p.innovation_role ?? null) as string | null,
+    innovationRoles: roles as InnovationRole[],
   };
 }
 
@@ -35,7 +38,7 @@ export async function GET(
 ) {
   const ctx = await getCtx(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (ctx.innovationRole !== 'innovation_admin') {
+  if (!hasRole(ctx.innovationRoles, 'innovation_admin')) {
     return NextResponse.json({ error: 'Yetkisiz' }, { status: 403 });
   }
 
@@ -57,7 +60,7 @@ export async function POST(
 ) {
   const ctx = await getCtx(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (ctx.innovationRole !== 'innovation_admin') {
+  if (!hasRole(ctx.innovationRoles, 'innovation_admin')) {
     return NextResponse.json({ error: 'Yetkisiz' }, { status: 403 });
   }
 
@@ -90,7 +93,7 @@ export async function DELETE(
 ) {
   const ctx = await getCtx(req);
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (ctx.innovationRole !== 'innovation_admin') {
+  if (!hasRole(ctx.innovationRoles, 'innovation_admin')) {
     return NextResponse.json({ error: 'Yetkisiz' }, { status: 403 });
   }
 
