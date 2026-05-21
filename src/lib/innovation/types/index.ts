@@ -307,3 +307,86 @@ export interface SimilarIdea {
   submitter: { name: string } | null;
   created_at: string;
 }
+
+// ── POC ────────────────────────────────────────────────────────────────────
+
+export type PocStatus =
+  | 'draft'
+  | 'pending_sponsor_approval'
+  | 'active'
+  | 'on_hold'
+  | 'pending_completion_approval'
+  | 'completed'
+  | 'cancelled';
+
+export type PocTransitionAction =
+  | 'submit_for_approval'
+  | 'approve_start'
+  | 'reject_start'
+  | 'hold'
+  | 'resume'
+  | 'submit_completion'
+  | 'approve_completion'
+  | 'reject_completion'
+  | 'cancel';
+
+export interface InnovationPoc {
+  id: string;
+  org_id: string;
+  idea_id: string;
+  idea_title?: string;
+  title: string;
+  owner_id: string;
+  owner_name?: string;
+  sponsor_id: string | null;
+  sponsor_name?: string;
+  status: PocStatus;
+  budget: number | null;
+  goals: string | null;
+  success_criteria: string | null;
+  notes: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
+  updates?: PocUpdate[];
+}
+
+export interface PocUpdate {
+  id: string;
+  poc_id: string;
+  author_id: string;
+  author_name?: string;
+  content: string;
+  created_at: string;
+}
+
+export interface CreatePocDto {
+  idea_id: string;
+  title: string;
+  owner_id: string;
+  sponsor_id?: string | null;
+  budget?: number | null;
+  goals?: string;
+  success_criteria?: string;
+  notes?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface UpdatePocDto {
+  title?: string;
+  owner_id?: string;
+  sponsor_id?: string | null;
+  budget?: number | null;
+  goals?: string;
+  success_criteria?: string;
+  notes?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface TransitionPocDto {
+  action: PocTransitionAction;
+  note?: string;
+}
