@@ -1,9 +1,9 @@
 -- supabase-innovation-pocs.sql
 
 CREATE TABLE innovation_pocs (
-  id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id       TEXT NOT NULL,
-  idea_id      TEXT NOT NULL REFERENCES innovation_ideas(id) ON DELETE CASCADE,
+  idea_id      UUID NOT NULL REFERENCES innovation_ideas(id) ON DELETE CASCADE,
   title        TEXT NOT NULL,
   owner_id     TEXT NOT NULL REFERENCES auth_profiles(id),
   sponsor_id   TEXT REFERENCES auth_profiles(id),
@@ -27,8 +27,8 @@ CREATE INDEX idx_innovation_pocs_idea_id ON innovation_pocs(idea_id);
 CREATE INDEX idx_innovation_pocs_status  ON innovation_pocs(status);
 
 CREATE TABLE innovation_poc_updates (
-  id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  poc_id     TEXT NOT NULL REFERENCES innovation_pocs(id) ON DELETE CASCADE,
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  poc_id     UUID NOT NULL REFERENCES innovation_pocs(id) ON DELETE CASCADE,
   author_id  TEXT NOT NULL REFERENCES auth_profiles(id),
   content    TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
