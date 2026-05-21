@@ -2,7 +2,20 @@ export type IdeaStatus =
   | 'draft' | 'submitted' | 'under_review' | 'approved'
   | 'rejected' | 'implemented' | 'archived';
 
-export type InnovationRole = 'innovation_evaluator' | 'innovation_admin' | null;
+export type InnovationRole =
+  | 'innovation_evaluator'
+  | 'innovation_admin'
+  | 'business_sponsor'
+  | 'finance'
+  | 'pmo_manager'
+  | 'executive';
+
+export type IdeaType =
+  | 'quick_win' | 'process' | 'digital' | 'ai_data' | 'ot' | 'strategic' | '';
+
+export type EstimatedImpact = 'low' | 'medium' | 'high' | '';
+
+export type IdeaConfidentiality = 'open' | 'team' | 'private';
 
 export interface InnovationStage {
   id: string;
@@ -92,7 +105,15 @@ export interface InnovationIdea {
   stage?: InnovationStage;
   status: IdeaStatus;
   title: string;
-  description: string;
+  problem: string;
+  proposed_solution: string;
+  affected_area: string;
+  location_process: string;
+  idea_type: IdeaType;
+  estimated_impact: EstimatedImpact;
+  confidentiality: IdeaConfidentiality;
+  sponsor_id: string | null;
+  sponsor?: { name: string } | null;
   category: string;
   impact_score: number;
   feasibility_score: number;
@@ -115,7 +136,7 @@ export interface InnovationStats {
   this_month: number;
   under_review: number;
   implemented: number;
-  user_role: InnovationRole;
+  user_roles: InnovationRole[];
   by_stage: Array<{
     stage_id: string;
     stage_name: string;
@@ -146,8 +167,9 @@ export interface InnovationStats {
 
 export interface CreateIdeaDto {
   title: string;
-  description: string;
+  problem: string;
   category: string;
+  idea_type?: IdeaType;
   estimated_value?: number;
   currency_code?: string;
   tag_ids?: string[];
@@ -156,8 +178,15 @@ export interface CreateIdeaDto {
 
 export interface UpdateIdeaDto {
   title?: string;
-  description?: string;
+  problem?: string;
+  proposed_solution?: string;
   category?: string;
+  affected_area?: string;
+  location_process?: string;
+  idea_type?: IdeaType;
+  estimated_impact?: EstimatedImpact;
+  confidentiality?: IdeaConfidentiality;
+  sponsor_id?: string | null;
   estimated_value?: number;
   currency_code?: string;
   status?: IdeaStatus;
@@ -273,8 +302,91 @@ export interface SimilarIdea {
   id: string;
   idea_number: string;
   title: string;
-  description: string | null;
+  problem: string | null;
   stage: { name: string; color: string } | null;
   submitter: { name: string } | null;
   created_at: string;
+}
+
+// ── POC ────────────────────────────────────────────────────────────────────
+
+export type PocStatus =
+  | 'draft'
+  | 'pending_sponsor_approval'
+  | 'active'
+  | 'on_hold'
+  | 'pending_completion_approval'
+  | 'completed'
+  | 'cancelled';
+
+export type PocTransitionAction =
+  | 'submit_for_approval'
+  | 'approve_start'
+  | 'reject_start'
+  | 'hold'
+  | 'resume'
+  | 'submit_completion'
+  | 'approve_completion'
+  | 'reject_completion'
+  | 'cancel';
+
+export interface InnovationPoc {
+  id: string;
+  org_id: string;
+  idea_id: string;
+  idea_title?: string;
+  title: string;
+  owner_id: string;
+  owner_name?: string;
+  sponsor_id: string | null;
+  sponsor_name?: string;
+  status: PocStatus;
+  budget: number | null;
+  goals: string | null;
+  success_criteria: string | null;
+  notes: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
+  updates?: PocUpdate[];
+}
+
+export interface PocUpdate {
+  id: string;
+  poc_id: string;
+  author_id: string;
+  author_name?: string;
+  content: string;
+  created_at: string;
+}
+
+export interface CreatePocDto {
+  idea_id: string;
+  title: string;
+  owner_id: string;
+  sponsor_id?: string | null;
+  budget?: number | null;
+  goals?: string;
+  success_criteria?: string;
+  notes?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface UpdatePocDto {
+  title?: string;
+  owner_id?: string;
+  sponsor_id?: string | null;
+  budget?: number | null;
+  goals?: string;
+  success_criteria?: string;
+  notes?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface TransitionPocDto {
+  action: PocTransitionAction;
+  note?: string;
 }

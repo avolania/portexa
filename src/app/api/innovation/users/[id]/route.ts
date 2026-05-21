@@ -1,22 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { getInnovationRoles, hasRole } from '@/lib/innovation/utils';
 import type { InnovationRole } from '@/lib/innovation/types';
 
+const VALID_ROLES: InnovationRole[] = [
+  'innovation_evaluator', 'innovation_admin',
+  'business_sponsor', 'finance', 'pmo_manager', 'executive',
+];
+
 async function getAdminCtx(req: NextRequest): Promise<
-  | { ok: true; userId: string }
+  | { ok: true; userId: string; orgId: string }
   | { ok: false; status: 401 | 403 }
 > {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '');
   if (!token) return { ok: false, status: 401 };
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return { ok: false, status: 401 };
+  const roles = await getInnovationRoles(user.id);
+  if (!hasRole(roles, 'innovation_admin')) return { ok: false, status: 403 };
   const { data: profile } = await supabaseAdmin
     .from('auth_profiles')
-    .select('innovation_role')
+    .select('org_id')
     .eq('id', user.id)
     .single();
-  if ((profile?.innovation_role ?? null) !== 'innovation_admin') return { ok: false, status: 403 };
-  return { ok: true, userId: user.id };
+  if (!profile?.org_id) return { ok: false, status: 403 };
+  return { ok: true, userId: user.id, orgId: profile.org_id as string };
 }
 
 export async function PATCH(
@@ -28,49 +36,53 @@ export async function PATCH(
 
   const { id } = await params;
 
-  let body: { innovation_role: InnovationRole };
+  let body: { role: InnovationRole; action: 'add' | 'remove' };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Geçersiz JSON' }, { status: 400 });
   }
 
-  const validRoles: Array<InnovationRole> = ['innovation_evaluator', 'innovation_admin', null];
-  if (body.innovation_role === undefined || !validRoles.includes(body.innovation_role)) {
-    return NextResponse.json({ error: 'Geçersiz rol değeri' }, { status: 400 });
+  if (!VALID_ROLES.includes(body.role) || !['add', 'remove'].includes(body.action)) {
+    return NextResponse.json({ error: 'Geçersiz rol veya aksiyon' }, { status: 400 });
   }
 
-  // Verify target user belongs to the same org as the caller
-  const { data: callerRow } = await supabaseAdmin
+  // Verify target user belongs to the same org
+  const { data: targetRow, error: targetError } = await supabaseAdmin
     .from('auth_profiles')
-    .select('org_id')
-    .eq('id', ctx.userId)
-    .single();
-
-  const { data: targetRow } = await supabaseAdmin
-    .from('auth_profiles')
-    .select('org_id')
+    .select('org_id, data')
     .eq('id', id)
     .single();
 
-  if (!callerRow?.org_id || callerRow.org_id !== targetRow?.org_id) {
+  if (targetError && targetError.code !== 'PGRST116') {
+    return NextResponse.json({ error: targetError.message }, { status: 500 });
+  }
+
+  if (!targetRow || targetRow.org_id !== ctx.orgId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('auth_profiles')
-    .update({ innovation_role: body.innovation_role })
-    .eq('id', id)
-    .select('id, data, innovation_role')
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (body.action === 'add') {
+    const { error } = await supabaseAdmin
+      .from('innovation_user_roles')
+      .upsert({ user_id: id, org_id: ctx.orgId, role: body.role }, { onConflict: 'user_id,role' });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  } else {
+    const { error } = await supabaseAdmin
+      .from('innovation_user_roles')
+      .delete()
+      .eq('user_id', id)
+      .eq('role', body.role);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
-  const p = (data.data as Record<string, unknown>);
+  const updatedRoles = await getInnovationRoles(id);
+  const p = targetRow.data as Record<string, unknown>;
   return NextResponse.json({
-    id: data.id as string,
+    id,
     name: (p?.name as string) ?? 'Bilinmiyor',
     email: (p?.email as string) ?? '',
     department: (p?.department as string | null) ?? null,
-    innovation_role: (data.innovation_role ?? null) as InnovationRole,
+    innovation_roles: updatedRoles,
   });
 }

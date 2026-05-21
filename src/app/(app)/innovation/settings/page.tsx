@@ -21,7 +21,7 @@ type OrgUser = {
   name: string;
   email: string;
   department: string | null;
-  innovation_role: InnovationRole;
+  innovation_roles: InnovationRole[];
 };
 
 function apiCall(url: string, method: string, token: string, body?: unknown) {
@@ -32,27 +32,6 @@ function apiCall(url: string, method: string, token: string, body?: unknown) {
   });
 }
 
-function RoleBadge({ role }: { role: InnovationRole }) {
-  if (role === 'innovation_admin') {
-    return (
-      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "#F3E8FF", color: "#7C3AED" }}>
-        Admin
-      </span>
-    );
-  }
-  if (role === 'innovation_evaluator') {
-    return (
-      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "#DBEAFE", color: "#2563EB" }}>
-        Değerlendirici
-      </span>
-    );
-  }
-  return (
-    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "#F3F4F6", color: "#9CA3AF" }}>
-      Yok
-    </span>
-  );
-}
 
 export default function InnovationSettings() {
   const router = useRouter();
@@ -84,8 +63,7 @@ export default function InnovationSettings() {
 
   // Users state
   const [users, setUsers] = useState<OrgUser[]>([]);
-  const [pendingRoles, setPendingRoles] = useState<Record<string, InnovationRole>>({});
-  const [userSaving, setUserSaving] = useState(false);
+  const [savingToggle, setSavingToggle] = useState<Record<string, boolean>>({});
   const [userErrors, setUserErrors] = useState<Record<string, string>>({});
   const [currentUserId, setCurrentUserId] = useState<string>("");
 
@@ -102,7 +80,7 @@ export default function InnovationSettings() {
         });
         if (!statsRes.ok) { setLoading(false); router.push("/innovation"); return; }
         const stats = await statsRes.json();
-        if (stats.user_role !== "innovation_admin") { setLoading(false); router.push("/innovation"); return; }
+        if (!stats.user_roles?.includes("innovation_admin")) { setLoading(false); router.push("/innovation"); return; }
 
         const [stagesRes, criteriaRes, usersRes] = await Promise.all([
           fetch("/api/innovation/stages?all=1", { headers: { Authorization: `Bearer ${session.access_token}` } }),
@@ -255,50 +233,23 @@ export default function InnovationSettings() {
     });
   }, [token, criteria]);
 
-  const handleRoleSelect = useCallback((userId: string, newRole: InnovationRole) => {
-    const savedRole = users.find((u) => u.id === userId)?.innovation_role ?? null;
-    if (newRole === savedRole) {
-      setPendingRoles((prev) => { const next = { ...prev }; delete next[userId]; return next; });
+  const handleToggleRole = useCallback(async (userId: string, role: InnovationRole, currentlyOn: boolean) => {
+    const key = `${userId}:${role}`;
+    setSavingToggle((prev) => ({ ...prev, [key]: true }));
+    setUserErrors((prev) => { const next = { ...prev }; delete next[key]; return next; });
+
+    const action = currentlyOn ? 'remove' : 'add';
+    const res = await apiCall(`/api/innovation/users/${userId}`, 'PATCH', token, { role, action });
+
+    if (res.ok) {
+      const updated = await res.json();
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, innovation_roles: updated.innovation_roles } : u));
     } else {
-      setPendingRoles((prev) => ({ ...prev, [userId]: newRole }));
+      const err = await res.json().catch(() => ({}));
+      setUserErrors((prev) => ({ ...prev, [key]: (err as { error?: string }).error ?? 'Hata' }));
     }
-    setUserErrors((prev) => { const next = { ...prev }; delete next[userId]; return next; });
-  }, [users]);
-
-  const handleSaveRoles = useCallback(async () => {
-    setUserSaving(true);
-    try {
-      const entries = Object.entries(pendingRoles) as [string, InnovationRole][];
-      const results = await Promise.all(
-        entries.map(async ([userId, newRole]) => {
-          const res = await apiCall(`/api/innovation/users/${userId}`, "PATCH", token, { innovation_role: newRole });
-          if (res.ok) return { userId, newRole, ok: true as const, error: null };
-          const err = await res.json().catch(() => ({}));
-          return { userId, newRole, ok: false as const, error: ((err as { error?: string }).error ?? "Hata") as string };
-        })
-      );
-      const succeeded: Record<string, InnovationRole> = {};
-      const failed: Record<string, string> = {};
-      for (const r of results) {
-        if (r.ok) succeeded[r.userId] = r.newRole;
-        else failed[r.userId] = r.error;
-      }
-      setUsers((prev) => prev.map((u) => u.id in succeeded ? { ...u, innovation_role: succeeded[u.id] } : u));
-      setPendingRoles((prev) => {
-        const next = { ...prev };
-        for (const id of Object.keys(succeeded)) delete next[id];
-        return next;
-      });
-      setUserErrors(failed);
-    } finally {
-      setUserSaving(false);
-    }
-  }, [pendingRoles, token]);
-
-  const handleCancelRoles = useCallback(() => {
-    setPendingRoles({});
-    setUserErrors({});
-  }, []);
+    setSavingToggle((prev) => { const next = { ...prev }; delete next[key]; return next; });
+  }, [token]);
 
   const totalWeight = criteria.filter((c) => c.is_active).reduce((sum, c) => sum + c.weight, 0);
 
@@ -322,7 +273,7 @@ export default function InnovationSettings() {
         {(["stages", "criteria", "users"] as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => { setTab(t); setStageError(""); setCriterionError(""); setUserErrors({}); setPendingRoles({}); }}
+            onClick={() => { setTab(t); setStageError(""); setCriterionError(""); setUserErrors({}); }}
             className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
               tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
@@ -692,101 +643,80 @@ export default function InnovationSettings() {
             <h2 className="text-sm font-semibold text-gray-700">Kullanıcılar</h2>
             <span className="text-xs text-gray-400">{users.length} kullanıcı</span>
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="text-left px-4 py-2">Kullanıcı</th>
-                <th className="text-left px-4 py-2">E-posta</th>
-                <th className="text-left px-4 py-2">Departman</th>
-                <th className="text-left px-4 py-2">İnovasyon Rolü</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => {
-                const isSelf = u.id === currentUserId;
-                const isPending = u.id in pendingRoles;
-                const displayRole = pendingRoles[u.id] ?? u.innovation_role;
-                const errMsg = userErrors[u.id];
-                const initials = u.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-                return (
-                  <tr
-                    key={u.id}
-                    className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors"
-                  >
-                    <td className={`px-4 py-3 ${isPending ? "border-l-4 border-l-yellow-400" : ""}`}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold flex-shrink-0">
-                          {initials}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <th className="text-left px-4 py-2">Kullanıcı</th>
+                  <th className="text-left px-4 py-2">E-posta</th>
+                  <th className="text-center px-3 py-2">Admin</th>
+                  <th className="text-center px-3 py-2">Evaluator</th>
+                  <th className="text-center px-3 py-2">Sponsor</th>
+                  <th className="text-center px-3 py-2">Finance</th>
+                  <th className="text-center px-3 py-2">PMO</th>
+                  <th className="text-center px-3 py-2">Executive</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => {
+                  const isSelf = u.id === currentUserId;
+                  const initials = u.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+                  const roles: InnovationRole[] = ['innovation_admin', 'innovation_evaluator', 'business_sponsor', 'finance', 'pmo_manager', 'executive'];
+                  return (
+                    <tr key={u.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold flex-shrink-0">
+                            {initials}
+                          </div>
+                          <span className="font-medium text-gray-800">{u.name}</span>
                         </div>
-                        <span className="font-medium text-gray-800">{u.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">{u.email}</td>
-                    <td className="px-4 py-3 text-gray-500">{u.department ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <RoleBadge role={displayRole} />
-                        <div className="relative group">
-                          <select
-                            disabled={isSelf || userSaving}
-                            value={displayRole ?? ""}
-                            onChange={(e) => handleRoleSelect(u.id, (e.target.value || null) as InnovationRole)}
-                            className="text-xs border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          >
-                            <option value="">Yok</option>
-                            <option value="innovation_evaluator">Değerlendirici</option>
-                            <option value="innovation_admin">Admin</option>
-                          </select>
-                          {isSelf && (
-                            <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                              Kendi rolünüzü değiştiremezsiniz
-                            </span>
-                          )}
-                        </div>
-                        {errMsg && (
-                          <span className="text-xs text-red-600 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            {errMsg}
-                          </span>
-                        )}
-                      </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{u.email}</td>
+                      {roles.map((role) => {
+                        const key = `${u.id}:${role}`;
+                        const isOn = u.innovation_roles.includes(role);
+                        const isSaving = !!savingToggle[key];
+                        const errMsg = userErrors[key];
+                        return (
+                          <td key={role} className="px-3 py-3 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="relative group">
+                                {isSaving ? (
+                                  <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    checked={isOn}
+                                    disabled={isSelf}
+                                    onChange={() => handleToggleRole(u.id, role, isOn)}
+                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                )}
+                                {isSelf && (
+                                  <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                    Kendi rolünüzü değiştiremezsiniz
+                                  </span>
+                                )}
+                              </div>
+                              {errMsg && <span className="text-xs text-red-500 mt-1" title={errMsg}>!</span>}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400 italic">
+                      Kullanıcı bulunamadı.
                     </td>
                   </tr>
-                );
-              })}
-              {users.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-400">
-                    Kullanıcı bulunamadı
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          {Object.keys(pendingRoles).length > 0 && (
-            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between rounded-b-lg shadow-md">
-              <span className="text-sm text-gray-600">
-                {Object.keys(pendingRoles).length} değişiklik var
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCancelRoles}
-                  disabled={userSaving}
-                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                >
-                  İptal
-                </button>
-                <button
-                  onClick={handleSaveRoles}
-                  disabled={userSaving}
-                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
-                >
-                  {userSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Değişiklikleri Kaydet
-                </button>
-              </div>
-            </div>
-          )}
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

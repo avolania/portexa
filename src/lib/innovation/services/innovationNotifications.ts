@@ -50,13 +50,14 @@ async function notify({
 }
 
 async function getEvaluatorsAndAdmins(orgId: string, excludeUserId: string): Promise<string[]> {
-  const { data } = await supabaseAdmin
-    .from('auth_profiles')
-    .select('id')
+  const { data: roleRows, error } = await supabaseAdmin
+    .from('innovation_user_roles')
+    .select('user_id')
     .eq('org_id', orgId)
-    .in('innovation_role', ['innovation_admin', 'innovation_evaluator'])
-    .neq('id', excludeUserId);
-  return (data ?? []).map((r) => r.id as string);
+    .in('role', ['innovation_admin', 'innovation_evaluator'])
+    .neq('user_id', excludeUserId);
+  if (error) console.error('[getEvaluatorsAndAdmins]', error.message);
+  return [...new Set((roleRows ?? []).map((r) => (r as { user_id: string }).user_id))];
 }
 
 export async function notifyIdeaSubmitted(

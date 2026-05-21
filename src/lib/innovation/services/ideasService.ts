@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import * as ideasRepo from '../repositories/ideasRepo';
 import * as stagesRepo from '../repositories/stagesRepo';
 import type { InnovationIdea, CreateIdeaDto, AdvanceStageDto, InnovationRole } from '../types';
+import { hasRole } from '../utils';
 import { getCampaign, checkSubmissionAccess } from './campaignService';
 
 async function generateIdeaNumber(orgId: string): Promise<string> {
@@ -51,8 +52,9 @@ export async function createIdea(params: {
     submitterId: params.submitterId,
     stageId,
     title: params.dto.title,
-    description: params.dto.description ?? '',
+    problem: params.dto.problem ?? '',
     category: params.dto.category ?? '',
+    ideaType: params.dto.idea_type,
     estimatedValue: params.dto.estimated_value,
     currencyCode: params.dto.currency_code ?? 'TRY',
     campaignId,
@@ -103,12 +105,12 @@ export async function advanceStage(params: {
   });
 }
 
-export async function canEdit(idea: InnovationIdea, userId: string, role: InnovationRole): Promise<boolean> {
-  return idea.submitter_id === userId || role === 'innovation_admin';
+export function canEdit(idea: InnovationIdea, userId: string, roles: InnovationRole[]): boolean {
+  return idea.submitter_id === userId || hasRole(roles, 'innovation_admin');
 }
 
-export async function canDelete(idea: InnovationIdea, userId: string, role: InnovationRole): Promise<boolean> {
-  return (idea.submitter_id === userId && idea.status === 'draft') || role === 'innovation_admin';
+export function canDelete(idea: InnovationIdea, userId: string, roles: InnovationRole[]): boolean {
+  return (idea.submitter_id === userId && idea.status === 'draft') || hasRole(roles, 'innovation_admin');
 }
 
 export { findIdeas, findIdeaById, updateIdea, deleteIdea } from '../repositories/ideasRepo';

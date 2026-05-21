@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase";
 import type {
   InnovationCampaign, InnovationIdea,
   CampaignInvite, CreateIdeaDto, UpdateCampaignDto, CampaignStatus,
-  SimilarIdea,
+  SimilarIdea, IdeaType,
 } from "@/lib/innovation/types";
 import { SimilarIdeasModal } from "@/components/innovation/SimilarIdeasModal";
 import { formatDistanceToNow } from "date-fns";
@@ -48,8 +48,8 @@ function IdeaCard({ idea }: { idea: InnovationIdea }) {
             )}
           </div>
           <p className="font-semibold text-gray-900 mt-1 text-sm">{idea.title}</p>
-          {idea.description && (
-            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{idea.description}</p>
+          {idea.problem && (
+            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{idea.problem}</p>
           )}
           <div className="flex items-center gap-3 mt-2 flex-wrap">
             {idea.submitter && (
@@ -94,18 +94,18 @@ function IdeaCard({ idea }: { idea: InnovationIdea }) {
 function NewIdeaModal({
   campaignId,
   token,
-  onCreated,
   onClose,
 }: {
   campaignId: string;
   token: string;
-  onCreated: (idea: InnovationIdea) => void;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [form, setForm] = useState<Omit<CreateIdeaDto, 'campaign_id'>>({
     title: "",
-    description: "",
+    problem: "",
     category: "",
+    idea_type: "" as IdeaType,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -144,17 +144,21 @@ function NewIdeaModal({
     abortRef.current?.abort();
     setSaving(true);
     setError("");
-    const res = await fetch("/api/innovation/ideas", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, campaign_id: campaignId }),
-    });
-    setSaving(false);
-    if (res.ok) {
-      onCreated(await res.json() as InnovationIdea);
-    } else {
-      const err = await res.json().catch(() => ({ error: "Bir hata oluştu" }));
-      setError((err as { error: string }).error);
+    try {
+      const res = await fetch("/api/innovation/ideas", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, campaign_id: campaignId }),
+      });
+      if (res.ok) {
+        const idea = await res.json() as InnovationIdea;
+        router.push(`/innovation/ideas/${idea.id}`);
+      } else {
+        const err = await res.json().catch(() => ({ error: "Bir hata oluştu" }));
+        setError((err as { error: string }).error);
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -182,13 +186,13 @@ function NewIdeaModal({
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Açıklama</label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Problem / Fırsat</label>
               <textarea
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                value={form.problem}
+                onChange={(e) => setForm((f) => ({ ...f, problem: e.target.value }))}
                 rows={3}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 resize-none"
-                placeholder="Fikrin detayları"
+                placeholder="Çözülmek istenen problem veya fırsatı açıklayın"
               />
             </div>
             <div>
@@ -200,10 +204,26 @@ function NewIdeaModal({
                 placeholder="Örn: Verimlilik, Müşteri Deneyimi"
               />
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Fikir Tipi</label>
+              <select
+                value={form.idea_type ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, idea_type: e.target.value as IdeaType }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white"
+              >
+                <option value="">Seçiniz...</option>
+                <option value="quick_win">Quick Win</option>
+                <option value="process">Süreç İyileştirme</option>
+                <option value="digital">Dijital / BT Projesi</option>
+                <option value="ai_data">Yapay Zeka / Veri</option>
+                <option value="ot">BT-OT / Akıllı Fabrika</option>
+                <option value="strategic">Stratejik İnovasyon</option>
+              </select>
+            </div>
           </div>
           <div className="flex gap-3 pt-2">
             <button
-              onClick={onClose}
+              onClick={saving ? undefined : onClose}
               className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
             >
               İptal
@@ -736,10 +756,6 @@ export default function CampaignDetailPage() {
         <NewIdeaModal
           campaignId={campaignId}
           token={token}
-          onCreated={(idea) => {
-            setIdeas((prev) => [idea, ...prev]);
-            setShowNewModal(false);
-          }}
           onClose={() => setShowNewModal(false)}
         />
       )}

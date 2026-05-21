@@ -44,8 +44,8 @@ export function SimilarIdeasModal({
                   )}
                 </div>
                 <p className="text-sm font-semibold text-gray-900 mt-0.5">{idea.title}</p>
-                {idea.description && (
-                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{idea.description}</p>
+                {idea.problem && (
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{idea.problem}</p>
                 )}
                 <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
                   {idea.submitter && <span>{idea.submitter.name}</span>}

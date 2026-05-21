@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { findIdeaById, updateIdea, deleteIdea, canEdit, canDelete } from '@/lib/innovation/services/ideasService';
+import { getInnovationRoles, hasRole } from '@/lib/innovation/utils';
 import type { UpdateIdeaDto, InnovationRole } from '@/lib/innovation/types';
 
 async function getCtx(req: NextRequest) {
@@ -10,14 +11,15 @@ async function getCtx(req: NextRequest) {
   if (error || !user) return null;
   const { data: p } = await supabaseAdmin
     .from('auth_profiles')
-    .select('org_id, innovation_role')
+    .select('org_id')
     .eq('id', user.id)
     .single();
   if (!p) return null;
+  const roles = await getInnovationRoles(user.id);
   return {
     userId: user.id,
     orgId: p.org_id as string,
-    innovationRole: (p.innovation_role ?? null) as InnovationRole,
+    innovationRoles: roles as InnovationRole[],
   };
 }
 
@@ -48,10 +50,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const idea = await findIdeaById(id);
   if (!idea) return NextResponse.json({ error: 'Bulunamadı' }, { status: 404 });
-  if (!(await canEdit(idea, ctx.userId, ctx.innovationRole)))
+  if (!canEdit(idea, ctx.userId, ctx.innovationRoles))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const dto = await req.json() as UpdateIdeaDto;
+  if (dto.status !== undefined && !hasRole(ctx.innovationRoles, 'innovation_admin'))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   await updateIdea(id, dto);
   return NextResponse.json({ ok: true });
 }
@@ -63,7 +67,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const idea = await findIdeaById(id);
   if (!idea) return NextResponse.json({ error: 'Bulunamadı' }, { status: 404 });
-  if (!(await canDelete(idea, ctx.userId, ctx.innovationRole)))
+  if (!canDelete(idea, ctx.userId, ctx.innovationRoles))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   await deleteIdea(id);

@@ -1,21 +1,21 @@
 import * as evaluationsRepo from '../repositories/evaluationsRepo';
 import * as ideasRepo from '../repositories/ideasRepo';
 import type { CreateEvaluationDto, InnovationRole } from '../types';
+import { hasRole } from '../utils';
 
 export async function saveEvaluation(params: {
   ideaId: string;
   evaluatorId: string;
   stageId: string;
-  role: InnovationRole;
+  roles: InnovationRole[];
   dto: CreateEvaluationDto;
 }): Promise<{ evaluationId: string; totalScore: number; compositeScore: number }> {
-  if (params.role !== 'innovation_evaluator' && params.role !== 'innovation_admin') {
+  if (!hasRole(params.roles, 'innovation_evaluator') && !hasRole(params.roles, 'innovation_admin')) {
     throw new Error('Değerlendirme yapmak için innovation_evaluator veya innovation_admin rolü gereklidir');
   }
 
   const criteria = await evaluationsRepo.findActiveCriteria();
 
-  // Σ (score / max_score) × weight × 100
   let totalScore = 0;
   for (const scoreInput of params.dto.scores) {
     const criterion = criteria.find((c) => c.id === scoreInput.criterion_id);

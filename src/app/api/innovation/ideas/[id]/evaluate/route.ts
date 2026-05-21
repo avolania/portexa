@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { saveEvaluation } from '@/lib/innovation/services/evaluationService';
-import type { CreateEvaluationDto, InnovationRole } from '@/lib/innovation/types';
+import { getInnovationRoles } from '@/lib/innovation/utils';
+import type { CreateEvaluationDto } from '@/lib/innovation/types';
 import { notifyIdeaEvaluated } from '@/lib/innovation/services/innovationNotifications';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -11,12 +12,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: profile } = await supabaseAdmin
-    .from('auth_profiles')
-    .select('innovation_role')
-    .eq('id', user.id)
-    .single();
-  const role = (profile?.innovation_role ?? null) as InnovationRole;
+  const roles = await getInnovationRoles(user.id);
 
   const { data: idea } = await supabaseAdmin
     .from('innovation_ideas')
@@ -33,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ideaId: id,
       evaluatorId: user.id,
       stageId: idea.stage_id as string,
-      role,
+      roles,
       dto,
     });
 

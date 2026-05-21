@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         id,
         idea_number,
         title,
-        description,
+        problem,
         created_at,
         submitter:auth_profiles!innovation_ideas_submitter_id_fkey(data),
         stage:innovation_stages!innovation_ideas_stage_id_fkey(name, color)
@@ -51,13 +51,9 @@ export async function GET(req: NextRequest) {
         id: row.id as string,
         idea_number: row.idea_number as string,
         title: row.title as string,
-        description: row.description
-          ? (row.description as string).slice(0, 120)
-          : null,
+        problem: row.problem ? (row.problem as string).slice(0, 120) : null,
         stage: stageRow ?? null,
-        submitter: profileData?.name
-          ? { name: profileData.name as string }
-          : null,
+        submitter: profileData?.name ? { name: profileData.name as string } : null,
         created_at: row.created_at as string,
       };
     });

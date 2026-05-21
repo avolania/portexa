@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createIdea, findIdeas } from '@/lib/innovation/services/ideasService';
-import type { CreateIdeaDto } from '@/lib/innovation/types';
+import { getInnovationRoles, hasRole } from '@/lib/innovation/utils';
+import type { CreateIdeaDto, InnovationRole } from '@/lib/innovation/types';
 import { notifyIdeaSubmitted } from '@/lib/innovation/services/innovationNotifications';
 
 async function getCtx(req: NextRequest) {
@@ -11,15 +12,16 @@ async function getCtx(req: NextRequest) {
   if (error || !user) return null;
   const { data: p } = await supabaseAdmin
     .from('auth_profiles')
-    .select('org_id, innovation_role, data')
+    .select('org_id, data')
     .eq('id', user.id)
     .single();
   if (!p) return null;
   const profileData = p.data as Record<string, unknown> | null;
+  const roles = await getInnovationRoles(user.id);
   return {
     userId: user.id,
     orgId: p.org_id as string,
-    innovationRole: (p.innovation_role ?? null) as string | null,
+    innovationRoles: roles as InnovationRole[],
     submitterName: (profileData?.name as string | undefined) ?? 'Kullanıcı',
   };
 }
@@ -54,7 +56,12 @@ export async function POST(req: NextRequest) {
   if (!dto.title?.trim()) return NextResponse.json({ error: 'Başlık zorunludur' }, { status: 400 });
 
   try {
-    const idea = await createIdea({ orgId: ctx.orgId, submitterId: ctx.userId, dto, innovationRole: ctx.innovationRole });
+    const idea = await createIdea({
+      orgId: ctx.orgId,
+      submitterId: ctx.userId,
+      dto,
+      innovationRole: hasRole(ctx.innovationRoles, 'innovation_admin') ? 'innovation_admin' : (ctx.innovationRoles[0] ?? null),
+    });
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin;
     notifyIdeaSubmitted(idea, ctx.submitterName, appUrl).catch(console.error);
     return NextResponse.json(idea, { status: 201 });
