@@ -2,7 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, Lock, Loader2, RotateCcw, Users } from "lucide-react";
+import {
+  Check, X, Lock, Loader2, RotateCcw, Users,
+  FolderKanban, CheckSquare, Wallet, BarChart3, ShieldCheck, Settings, ClipboardList,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/useAuthStore";
 import { ROLE_PERMISSIONS, ROLE_META } from "@/lib/permissions";
@@ -68,6 +71,16 @@ const ACTIONS_BY_PREFIX: Record<string, string[]> = (() => {
   }
   return map;
 })();
+
+const GROUP_ICONS: Record<string, React.ElementType> = {
+  project:    FolderKanban,
+  task:       CheckSquare,
+  budget:     Wallet,
+  report:     BarChart3,
+  team:       Users,
+  governance: ClipboardList,
+  settings:   Settings,
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -457,45 +470,67 @@ export default function RollerPage() {
                 {GROUPS.map(({ label, prefix }) => {
                   const actions = ACTIONS_BY_PREFIX[prefix] ?? [];
                   if (actions.length === 0) return null;
+                  const GroupIcon = GROUP_ICONS[prefix] ?? ShieldCheck;
+                  const activeCount = actions.filter(
+                    (a) => displayPerms.includes(`${prefix}.${a}` as Permission)
+                  ).length;
+                  const allActive = activeCount === actions.length;
                   return (
                     <div key={prefix} className="px-5 py-4">
-                      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                        {label}
-                      </h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <GroupIcon className="w-3.5 h-3.5 text-gray-400" />
+                          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            {label}
+                          </h3>
+                        </div>
+                        <span className={`text-xs font-medium tabular-nums ${
+                          allActive ? "text-indigo-500" : "text-gray-400"
+                        }`}>
+                          {activeCount}/{actions.length}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
                         {actions.map((action) => {
                           const perm = `${prefix}.${action}` as Permission;
                           const has = displayPerms.includes(perm);
                           const wasHas = (effectivePerms[selectedSystemRole] ?? ROLE_PERMISSIONS[selectedSystemRole]).includes(perm);
                           const changed = isSelectedPending && has !== wasHas;
-                          return (
-                            <label
-                              key={action}
-                              htmlFor={isSystemAdmin ? undefined : `perm-${perm}`}
-                              className={`flex items-center gap-2 rounded-md px-2 py-1 transition-colors ${
-                                isSystemAdmin ? "cursor-not-allowed" : "cursor-pointer hover:bg-gray-50"
-                              } ${changed ? "border-l-2 border-yellow-400 pl-1.5" : ""}`}
-                            >
-                              {isSystemAdmin ? (
-                                has ? (
-                                  <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                                ) : (
-                                  <X className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                                )
-                              ) : (
-                                <input
-                                  id={`perm-${perm}`}
-                                  type="checkbox"
-                                  checked={has}
-                                  disabled={saving || resetting}
-                                  onChange={(e) => handleTogglePerm(perm, e.target.checked)}
-                                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 flex-shrink-0"
-                                />
-                              )}
-                              <span className={`text-sm ${has ? "text-gray-700" : "text-gray-400"}`}>
+
+                          if (isSystemAdmin) {
+                            return (
+                              <span
+                                key={action}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
+                                  has
+                                    ? "bg-gray-700 text-white"
+                                    : "bg-gray-50 text-gray-300 border border-gray-200"
+                                }`}
+                              >
+                                {has && <Check className="w-3 h-3" />}
                                 {ACTION_LABELS[action] ?? action}
                               </span>
-                            </label>
+                            );
+                          }
+
+                          return (
+                            <button
+                              key={action}
+                              onClick={() => handleTogglePerm(perm, !has)}
+                              disabled={saving || resetting}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all disabled:opacity-50 ${
+                                changed
+                                  ? has
+                                    ? "bg-amber-400 text-white ring-2 ring-amber-300 ring-offset-1"
+                                    : "bg-white text-amber-600 border-2 border-amber-400"
+                                  : has
+                                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                                    : "bg-white text-gray-400 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50"
+                              }`}
+                            >
+                              {has && <Check className="w-3 h-3" />}
+                              {ACTION_LABELS[action] ?? action}
+                            </button>
                           );
                         })}
                       </div>
