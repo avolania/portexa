@@ -10,6 +10,7 @@ import {
   AlertCircle, GitPullRequest, LifeBuoy, Ticket,
   SlidersHorizontal, ClipboardList, ChevronDown, Wallet,
   Globe, Building2, MonitorCheck, ClipboardCheck, Lightbulb, KeyRound, Megaphone,
+  FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -90,6 +91,7 @@ const navSections: NavSection[] = [
       { href: "/innovation",          icon: LayoutDashboard, label: "Dashboard", exact: true },
       { href: "/innovation/pipeline", icon: Lightbulb,       label: "Pipeline"  },
       { href: "/innovation/kampanyalar",  icon: Megaphone,         label: "Kampanyalar" },
+      { href: "/innovation/pocs",        icon: FlaskConical,       label: "POC'lar"     },
       { href: "/innovation/settings", icon: SlidersHorizontal, label: "Ayarlar", innovationAdminOnly: true },
     ],
   },

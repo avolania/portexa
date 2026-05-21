@@ -7,12 +7,12 @@ import { supabase } from "@/lib/supabase";
 import type {
   InnovationIdea, UpdateIdeaDto, IdeaType, EstimatedImpact,
   IdeaConfidentiality, InnovationRole, IdeaComment, IdeaEvaluation,
-  StageHistoryEntry,
+  StageHistoryEntry, InnovationPoc,
 } from "@/lib/innovation/types";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 
-type Tab = 'details' | 'comments' | 'evaluations' | 'history';
+type Tab = 'details' | 'comments' | 'evaluations' | 'history' | 'poc';
 type OrgUser = { id: string; name: string };
 
 const IDEA_TYPE_LABELS: Record<string, string> = {
@@ -59,6 +59,8 @@ export default function IdeaDetailPage() {
 
   const [commentBody, setCommentBody] = useState('');
   const [postingComment, setPostingComment] = useState(false);
+
+  const [poc, setPoc] = useState<InnovationPoc | null | undefined>(undefined);
 
   // Resolve session once
   useEffect(() => {
@@ -115,6 +117,16 @@ export default function IdeaDetailPage() {
       .then((data: OrgUser[]) => setOrgUsers(data))
       .catch(() => {});
   }, [token]);
+
+  useEffect(() => {
+    if (!idea || !token) return;
+    fetch(`/api/innovation/pocs?idea_id=${idea.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data: InnovationPoc[]) => setPoc(data[0] ?? null))
+      .catch(() => setPoc(null));
+  }, [idea?.id, token]);
 
   const canEdit = idea
     ? idea.submitter_id === userId || innovationRoles.includes('innovation_admin')
@@ -186,6 +198,7 @@ export default function IdeaDetailPage() {
     { key: 'comments', label: `Yorumlar (${(idea.comments ?? []).length})` },
     { key: 'evaluations', label: `Değerlendirmeler (${(idea.evaluations ?? []).length})` },
     { key: 'history', label: 'Geçmiş' },
+    { key: 'poc', label: 'POC' },
   ];
 
   return (
@@ -258,6 +271,15 @@ export default function IdeaDetailPage() {
         )}
         {tab === 'history' && (
           <HistoryTab history={idea.stage_history ?? []} />
+        )}
+        {tab === 'poc' && (
+          <PocTab
+            poc={poc}
+            idea={idea}
+            token={token}
+            innovationRoles={innovationRoles}
+            userId={userId}
+          />
         )}
       </div>
     </div>
@@ -562,6 +584,137 @@ function HistoryTab({ history }: { history: StageHistoryEntry[] }) {
           </p>
         </div>
       ))}
+    </div>
+  );
+}
+
+function PocTab({
+  poc,
+  idea,
+  token,
+  innovationRoles,
+  userId,
+}: {
+  poc: InnovationPoc | null | undefined;
+  idea: InnovationIdea;
+  token: string;
+  innovationRoles: InnovationRole[];
+  userId: string;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+  const canManage =
+    innovationRoles.includes('innovation_admin') ||
+    innovationRoles.includes('business_sponsor');
+
+  const handleCreate = async () => {
+    if (!token) return;
+    setCreating(true);
+    setError('');
+    const res = await fetch('/api/innovation/pocs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        idea_id: idea.id,
+        title: `${idea.title} — POC`,
+        owner_id: userId,
+      }),
+    });
+    setCreating(false);
+    if (res.ok) {
+      window.location.href = `/innovation/pocs/${(await res.json()).id}`;
+    } else {
+      const d = await res.json();
+      setError(d.error ?? 'Hata');
+    }
+  };
+
+  if (poc === undefined) {
+    return <div className="py-8 text-center text-sm text-gray-400">Yükleniyor…</div>;
+  }
+
+  if (!poc) {
+    return (
+      <div className="py-8 text-center">
+        <p className="text-sm text-gray-500 mb-4">Bu fikre ait POC bulunamadı.</p>
+        {canManage && idea.status === 'approved' && (
+          <>
+            <button
+              onClick={handleCreate}
+              disabled={creating}
+              style={{
+                background: '#3B82F6', color: '#fff', border: 'none',
+                borderRadius: 8, padding: '9px 20px', fontSize: 13,
+                fontWeight: 600, cursor: creating ? 'not-allowed' : 'pointer',
+                opacity: creating ? 0.7 : 1,
+              }}
+            >
+              {creating ? 'Oluşturuluyor…' : '+ POC Başlat'}
+            </button>
+            {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+          </>
+        )}
+        {canManage && idea.status !== 'approved' && (
+          <p className="text-xs text-gray-400">POC başlatmak için fikrin onaylı olması gerekir.</p>
+        )}
+      </div>
+    );
+  }
+
+  const STATUS_LABELS: Record<string, string> = {
+    draft: 'Taslak', pending_sponsor_approval: 'Sponsor Onayı Bekliyor',
+    active: 'Aktif', on_hold: 'Beklemede',
+    pending_completion_approval: 'Tamamlama Onayı Bekliyor',
+    completed: 'Tamamlandı', cancelled: 'İptal Edildi',
+  };
+  const STATUS_COLORS: Record<string, string> = {
+    draft: '#6B7280', pending_sponsor_approval: '#7C3AED', active: '#059669',
+    on_hold: '#D97706', pending_completion_approval: '#7C3AED',
+    completed: '#374151', cancelled: '#9CA3AF',
+  };
+
+  return (
+    <div style={{ padding: '16px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{poc.title}</p>
+          <span style={{
+            display: 'inline-block', marginTop: 4,
+            fontSize: 11, fontWeight: 600, borderRadius: 4, padding: '2px 8px',
+            background: STATUS_COLORS[poc.status] + '20',
+            color: STATUS_COLORS[poc.status],
+          }}>
+            {STATUS_LABELS[poc.status] ?? poc.status}
+          </span>
+        </div>
+        <a
+          href={`/innovation/pocs/${poc.id}`}
+          style={{
+            fontSize: 12, fontWeight: 600, color: '#3B82F6',
+            textDecoration: 'none', border: '1px solid #DBEAFE',
+            borderRadius: 6, padding: '6px 14px',
+          }}
+        >
+          Detayı Gör →
+        </a>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {poc.owner_name && (
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', marginBottom: 2 }}>Sorumlu</p>
+            <p style={{ fontSize: 12, color: '#374151' }}>{poc.owner_name}</p>
+          </div>
+        )}
+        {poc.budget !== null && (
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', marginBottom: 2 }}>Bütçe</p>
+            <p style={{ fontSize: 12, color: '#374151', fontFamily: 'monospace' }}>{poc.budget.toLocaleString('tr-TR')} ₺</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
