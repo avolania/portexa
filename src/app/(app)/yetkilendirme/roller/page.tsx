@@ -121,7 +121,9 @@ export default function RollerPage() {
   // Innovation role state
   const [innovUsers, setInnovUsers] = useState<InnovUser[]>([]);
   const [innovLoading, setInnovLoading] = useState(false);
+  const [innovLoadError, setInnovLoadError] = useState("");
   const [innovToggles, setInnovToggles] = useState<Record<string, boolean>>({});
+  const [innovErrors, setInnovErrors] = useState<Record<string, string>>({});
 
   // Loading / saving
   const [apiLoading, setApiLoading] = useState(true);
@@ -163,6 +165,7 @@ export default function RollerPage() {
 
   const loadInnovUsers = useCallback(async (tok: string) => {
     setInnovLoading(true);
+    setInnovLoadError("");
     try {
       const res = await fetch("/api/yetkilendirme/innovation-roles", {
         headers: { Authorization: `Bearer ${tok}` },
@@ -170,6 +173,8 @@ export default function RollerPage() {
       if (res.ok) {
         const data = await res.json() as InnovUser[];
         setInnovUsers(data);
+      } else {
+        setInnovLoadError("Kullanıcılar yüklenemedi.");
       }
     } finally {
       setInnovLoading(false);
@@ -270,6 +275,7 @@ export default function RollerPage() {
   const handleToggleInnovRole = useCallback(async (userId: string, role: InnovationRole, has: boolean) => {
     const key = `${userId}:${role}`;
     setInnovToggles((prev) => ({ ...prev, [key]: true }));
+    setInnovErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
     try {
       const action = has ? "remove" : "add";
       const res = await apiCall(
@@ -288,7 +294,13 @@ export default function RollerPage() {
             return { ...u, innovation_roles: roles };
           })
         );
+      } else {
+        const err = await res.json().catch(() => ({}));
+        const msg = (err as { error?: string }).error ?? "İşlem başarısız";
+        setInnovErrors((prev) => ({ ...prev, [key]: msg }));
       }
+    } catch {
+      setInnovErrors((prev) => ({ ...prev, [key]: "Bağlantı hatası" }));
     } finally {
       setInnovToggles((prev) => { const n = { ...prev }; delete n[key]; return n; });
     }
@@ -500,6 +512,16 @@ export default function RollerPage() {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
               </div>
+            ) : innovLoadError ? (
+              <div className="px-5 py-12 text-center">
+                <p className="text-sm text-red-500 mb-3">{innovLoadError}</p>
+                <button
+                  onClick={() => loadInnovUsers(token)}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Tekrar dene
+                </button>
+              </div>
             ) : (
               <div>
                 <div className="px-5 py-3 border-b border-gray-50 bg-gray-50">
@@ -515,6 +537,7 @@ export default function RollerPage() {
                       const has = u.innovation_roles.includes(selectedInnovRole);
                       const key = `${u.id}:${selectedInnovRole}`;
                       const toggling = !!innovToggles[key];
+                      const errMsg = innovErrors[key];
                       return (
                         <div key={u.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors">
                           <div className="flex items-center gap-3 min-w-0">
@@ -526,25 +549,37 @@ export default function RollerPage() {
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-gray-900 truncate">{u.name}</p>
                               <p className="text-xs text-gray-400 truncate">{u.department ?? u.email}</p>
+                              {errMsg && (
+                                <p className="text-xs text-red-500 mt-0.5">{errMsg}</p>
+                              )}
                             </div>
                           </div>
                           <button
                             onClick={() => handleToggleInnovRole(u.id, selectedInnovRole, has)}
                             disabled={toggling}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 flex-shrink-0 ${
+                            title={has ? "Rolü kaldır" : "Rol ata"}
+                            className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 flex-shrink-0 ${
                               has
-                                ? "bg-violet-100 text-violet-700 hover:bg-violet-200"
-                                : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                ? "bg-violet-100 text-violet-700 hover:bg-red-50 hover:text-red-600"
+                                : "bg-gray-100 text-gray-500 hover:bg-violet-50 hover:text-violet-700"
                             }`}
                           >
                             {toggling ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
                             ) : has ? (
-                              <Check className="w-3 h-3" />
+                              <>
+                                <Check className="w-3 h-3 group-hover:hidden" />
+                                <X className="w-3 h-3 hidden group-hover:block" />
+                              </>
                             ) : (
-                              <span className="w-3 h-3 flex items-center justify-center opacity-50">+</span>
+                              <span className="w-3 h-3 flex items-center justify-center text-base leading-none">+</span>
                             )}
-                            {has ? "Atandı" : "Ata"}
+                            <span className={has ? "group-hover:hidden" : ""}>
+                              {has ? "Atandı" : "Ata"}
+                            </span>
+                            {has && (
+                              <span className="hidden group-hover:inline">Kaldır</span>
+                            )}
                           </button>
                         </div>
                       );
