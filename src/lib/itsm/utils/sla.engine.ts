@@ -233,8 +233,10 @@ export function checkIncidentSLABreaches(
   resolvedAt?: string,
 ): { responseBreached: boolean; resolutionBreached: boolean } {
   return {
-    responseBreached:   !sla.respondedAt && now > new Date(sla.responseDeadline),
-    resolutionBreached: !resolvedAt && now > new Date(sla.resolutionDeadline),
+    // Sticky: bir kez ihlal yaşandıysa resolvedAt/respondedAt sonradan
+    // sağlansa bile false'a dönmez.
+    responseBreached:   sla.responseBreached   || (!sla.respondedAt && now > new Date(sla.responseDeadline)),
+    resolutionBreached: sla.resolutionBreached || (!resolvedAt       && now > new Date(sla.resolutionDeadline)),
   };
 }
 
@@ -242,7 +244,7 @@ export function checkSRSLABreach(
   sla: ServiceRequestSLA,
   now: Date = new Date(),
 ): boolean {
-  return now > new Date(sla.fulfillmentDeadline);
+  return sla.slaBreached || now > new Date(sla.fulfillmentDeadline);
 }
 
 // ─── SLA pause / resume ───────────────────────────────────────────────────────
