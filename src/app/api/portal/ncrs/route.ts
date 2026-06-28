@@ -10,10 +10,14 @@ export async function GET(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { org_id: orgId, supplier_id: supplierId } = ctx.user;
-  const stateFilter = req.nextUrl.searchParams.get('state') ?? undefined;
+
+  // Whitelist: supplier yalnızca izin verilen durumları sorgulayabilir.
+  // Geçersiz veya izinsiz değer → filtre yok, servis ACTIVE_STATES uygular.
+  const rawFilter = req.nextUrl.searchParams.get('state');
+  const stateFilter = rawFilter && ACTIVE_STATES.includes(rawFilter) ? rawFilter : null;
 
   try {
-    const allNcrs = await findNcrs(orgId, { supplierId, state: stateFilter });
+    const allNcrs = await findNcrs(orgId, { supplierId, state: stateFilter ?? undefined });
     const ncrs = stateFilter
       ? allNcrs
       : allNcrs.filter(n => ACTIVE_STATES.includes(n.state));

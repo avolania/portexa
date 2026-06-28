@@ -15,9 +15,9 @@ export async function GET(
 
   try {
     const ncr = await findNcrById(id);
-    if (!ncr) return NextResponse.json({ error: 'NCR bulunamadı' }, { status: 404 });
-    if (ncr.supplier_id !== ctx.user.supplier_id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Bulunamadı ve erişim yok durumu aynı 404 → UUID enumeration engellenir
+    if (!ncr || ncr.supplier_id !== ctx.user.supplier_id) {
+      return NextResponse.json({ error: 'NCR bulunamadı' }, { status: 404 });
     }
 
     const responses = await getNcrResponses(id);
