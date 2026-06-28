@@ -4,26 +4,63 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+const ROLE_LABELS: Record<string, string> = {
+  system_admin: "Sistem Yöneticisi",
+  admin:        "Admin",
+  pm:           "Proje Yöneticisi",
+  member:       "Proje Üyesi",
+  approver:     "Onaycı",
+  viewer:       "Görüntüleyici",
+  end_user:     "Son Kullanıcı",
+};
+
+/** Newline ve uzun string injection riskini azaltmak için temizle. */
+function sanitize(value: unknown, maxLen = 120): string {
+  return String(value ?? "").replace(/[\r\n\t]/g, " ").trim().slice(0, maxLen);
+}
+
 export async function POST(req: NextRequest) {
   const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-  if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { messages, context } = await req.json();
+  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // İstemciden yalnızca messages dizisi alınır — context istemciden ALINMAZ
+  const { messages } = await req.json() as { messages: { role: "user" | "assistant"; content: string }[] };
+
+  // Kullanıcı ve organizasyon bilgilerini sunucu tarafında DB'den çek
+  const [profileRes] = await Promise.all([
+    supabaseAdmin.from("auth_profiles").select("data, org_id").eq("id", user.id).single(),
+  ]);
+
+  const profileData = profileRes.data?.data as Record<string, unknown> | null;
+  const orgId = profileRes.data?.org_id as string | undefined;
+
+  const orgRow = orgId
+    ? await supabaseAdmin.from("organizations").select("data").eq("id", orgId).maybeSingle()
+    : null;
+  const orgData = orgRow?.data?.data as Record<string, unknown> | null;
+
+  // Güvenli alanlar: DB'den alınan değerler, newline injection'a karşı temizlendi
+  const userName  = sanitize(profileData?.name ?? "Bilinmiyor");
+  const userRole  = sanitize(profileData?.role ?? "member");
+  const roleLabel = ROLE_LABELS[userRole] ?? sanitize(userRole);
+  const orgName   = sanitize(orgData?.name ?? "Bilinmiyor");
+
+  const context = [
+    `Kullanıcı adı: ${userName}`,
+    `Rolü: ${roleLabel}`,
+    `Organizasyon: ${orgName}`,
+  ].join("\n");
 
   const system = `Sen Pixanto PPM platformunun yapay zeka asistanı Pixa'sın. Kullanıcıya proje yönetimi, görev takibi, ekip koordinasyonu, bütçe izleme ve yönetişim konularında yardım edersin.
 
 ## Davranış kuralları
 - Türkçe konuş, kısa ve net cevaplar ver.
 - Kullanıcının ROL ve YETKİLERİNE göre cevap ver. Yetkisi olmayan konularda işlem yapamayacağını belirt.
-- Sayısal verileri (bütçe, ilerleme, görev sayısı vb.) context'ten alarak somut cevaplar ver.
+- Sayısal verileri (bütçe, ilerleme, görev sayısı vb.) bağlamdan alarak somut cevaplar ver.
 - Öneri sunarken kullanıcının rolünü ve mevcut proje durumunu göz önünde bulundur.
-- Eğer kullanıcı bir proje, görev veya ekip üyesi hakkında soru sorarsa, context'teki verilerle yanıtla.
 - Yapamayacağın şeyler (gerçek zamanlı güncelleme, dosya yükleme vb.) için net sınırlarını belirt.
 
 ## Platform özellikleri
@@ -47,7 +84,7 @@ Pixanto şu modülleri içerir:
 - **Onaycı**: Sadece onay ve görüntüleme
 - **Görüntüleyici**: Sadece proje görüntüleme
 
-## Güncel kullanıcı ve uygulama bağlamı
+## Güncel kullanıcı bağlamı
 ${context}`;
 
   const stream = await client.messages.stream({

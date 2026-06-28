@@ -236,7 +236,6 @@ ${teamLines || "  Üye yok."}
             role: m.role,
             content: m.content,
           })),
-          context: buildContext(),
         }),
       });
 

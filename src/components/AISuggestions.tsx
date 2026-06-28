@@ -70,7 +70,6 @@ Ekip: ${members.length} üye
     setSuggestions([]);
 
     try {
-      const context = buildContext();
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -83,10 +82,9 @@ Ekip: ${members.length} üye
             {
               role: "user",
               content:
-                "Yukarıdaki verilere göre benim için bugün dikkate almam gereken 3 kısa ve eyleme dönüştürülebilir öneri sun. Her öneri ayrı satırda, uygun bir emoji ile başlasın. Sadece maddeler — başlık, açıklama veya selamlama ekleme.",
+                "Benim için bugün dikkate almam gereken 3 kısa ve eyleme dönüştürülebilir öneri sun. Her öneri ayrı satırda, uygun bir emoji ile başlasın. Sadece maddeler — başlık, açıklama veya selamlama ekleme.",
             },
           ],
-          context,
         }),
       });
 
