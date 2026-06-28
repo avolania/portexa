@@ -48,13 +48,23 @@ export async function findInvitesBySupplier(supplierId: string): Promise<Supplie
 }
 
 export async function acceptInvite(token: string, authUserId: string): Promise<SupplierUser> {
-  // 1. Find invite (must be not expired, not accepted)
-  const invite = await findInviteByToken(token);
-  if (!invite) throw new Error('Davet bulunamadı');
-  if (invite.accepted_at) throw new Error('Bu davet zaten kabul edildi');
-  if (new Date(invite.expires_at) < new Date()) throw new Error('Davet süresi dolmuş');
+  // Tek atomik UPDATE: sadece accepted_at NULL olan daveti işaretle.
+  // Eş zamanlı iki istek aynı daveti işaretlemeye çalışırsa
+  // yalnızca biri satırı günceller; diğeri boş sonuç alır.
+  const { data: invite, error: updateError } = await supabaseAdmin
+    .from('qms_supplier_invites')
+    .update({ accepted_at: new Date().toISOString() })
+    .eq('token', token)
+    .is('accepted_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .select()
+    .single();
 
-  // 2. Create qms_supplier_users record
+  if (updateError || !invite) {
+    throw new Error('Davet zaten kullanılmış, süresi dolmuş veya geçersiz.');
+  }
+
+  // Davet atomik olarak kilitlendi — şimdi kullanıcı kaydını oluştur
   const { data: su, error: suError } = await supabaseAdmin
     .from('qms_supplier_users')
     .insert({
@@ -70,14 +80,6 @@ export async function acceptInvite(token: string, authUserId: string): Promise<S
     .single();
 
   if (suError) throw new Error(suError.message);
-
-  // 3. Mark invite accepted_at = NOW()
-  await supabaseAdmin
-    .from('qms_supplier_invites')
-    .update({ accepted_at: new Date().toISOString() })
-    .eq('token', token);
-
-  // 4. Return created SupplierUser
   return su as SupplierUser;
 }
 
