@@ -8,26 +8,14 @@ async function getAuthHeader(): Promise<Record<string, string>> {
 
 // ─── PDF Export (server-side API route kullanır) ──────────────────────────────
 
-export async function exportReportPDF(
-  report: Report,
-  projectName: string,
-  stats: {
-    progress: number;
-    status: string;
-    done: number;
-    inProg: number;
-    todo: number;
-    openRisks: number;
-    openIssues: number;
-    overdue: number;
-    budget?: number;
-    budgetUsed?: number;
-  }
-): Promise<void> {
+// Rapor içeriği ve istatistikler sunucu tarafında DB'den alınır.
+// İstemciden sadece hangi proje+dönem olduğu gönderilir.
+export async function exportReportPDF(report: Report): Promise<void> {
+  if (!report.projectId) throw new Error("Bu rapor için PDF export desteklenmiyor");
   const res = await fetch("/api/reports/export-pdf", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-    body: JSON.stringify({ report, projectName, stats }),
+    body: JSON.stringify({ projectId: report.projectId, period: report.period }),
   });
   if (!res.ok) throw new Error("PDF oluşturulamadı");
   const blob = await res.blob();
@@ -41,26 +29,12 @@ export async function exportReportPDF(
 
 // ─── PowerPoint Export (server-side API route kullanır) ──────────────────────
 
-export async function exportReportPPTX(
-  report: Report,
-  projectName: string,
-  stats: {
-    progress: number;
-    status: string;
-    done: number;
-    inProg: number;
-    todo: number;
-    openRisks: number;
-    openIssues: number;
-    overdue: number;
-    budget?: number;
-    budgetUsed?: number;
-  }
-): Promise<void> {
+export async function exportReportPPTX(report: Report): Promise<void> {
+  if (!report.projectId) throw new Error("Bu rapor için PPTX export desteklenmiyor");
   const res = await fetch("/api/reports/export-pptx", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(await getAuthHeader()) },
-    body: JSON.stringify({ report, projectName, stats }),
+    body: JSON.stringify({ projectId: report.projectId, period: report.period }),
   });
   if (!res.ok) throw new Error("PPTX oluşturulamadı");
   const blob = await res.blob();

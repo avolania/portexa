@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jsPDF } from "jspdf";
-import type { Report, ReportStatus } from "@/types";
+import type { Report, ReportStatus, Project, Task, GovernanceItem } from "@/types";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const RAG_LABEL: Record<ReportStatus, string> = {
@@ -42,36 +42,69 @@ function slideFooter(pdf: jsPDF, projectName: string, report: Report, W: number,
 
 export async function POST(req: NextRequest) {
   const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-  if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const { error: authError } = await supabaseAdmin.auth.getUser(token);
-  if (authError) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Rapor içeriği istemciden alınmaz — sadece hangi proje+dönem olduğu alınır
+  const body = await req.json() as { projectId: string; period: string };
+  const { projectId, period } = body;
+  if (!projectId || !period) {
+    return NextResponse.json({ error: "projectId ve period zorunludur" }, { status: 400 });
   }
 
-  const body = await req.json();
-  const { report, projectName, stats } = body as {
-    report: Report;
-    projectName: string;
-    stats: {
-      progress: number; status: string;
-      done: number; inProg: number; todo: number;
-      openRisks: number; openIssues: number; overdue: number;
-      budget?: number; budgetUsed?: number;
-    };
+  // Kullanıcının org_id'sini çek
+  const { data: userProfile } = await supabaseAdmin
+    .from("auth_profiles").select("org_id").eq("id", user.id).single();
+  if (!userProfile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userOrgId = userProfile.org_id as string;
+
+  // Projeyi çek ve org_id kontrolü yap
+  const { data: projectRow } = await supabaseAdmin
+    .from("projects").select("data, org_id").eq("id", projectId).single();
+  if (!projectRow) return NextResponse.json({ error: "Proje bulunamadı" }, { status: 404 });
+  if ((projectRow.org_id as string) !== userOrgId)
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const project = projectRow.data as Project;
+
+  // Raporu DB'den çek (projectId + period eşleşmesi)
+  const { data: reportRows } = await supabaseAdmin
+    .from("reports")
+    .select("data")
+    .eq("org_id", userOrgId)
+    .filter("data->>'projectId'", "eq", projectId)
+    .filter("data->>'period'", "eq", period)
+    .limit(1);
+  const report = reportRows?.[0]?.data as Report | undefined;
+  if (!report) return NextResponse.json({ error: "Rapor bulunamadı" }, { status: 404 });
+
+  // İstatistikleri DB'den hesapla
+  const [taskRows, govRows] = await Promise.all([
+    supabaseAdmin.from("tasks").select("data").eq("org_id", userOrgId)
+      .filter("data->>'projectId'", "eq", projectId),
+    supabaseAdmin.from("governance_items").select("data").eq("org_id", userOrgId)
+      .filter("data->>'projectId'", "eq", projectId),
+  ]);
+
+  const now = new Date();
+  const tasks = ((taskRows.data ?? []).map((r) => r.data)) as Task[];
+  const govItems = ((govRows.data ?? []).map((r) => r.data)) as GovernanceItem[];
+
+  const projectName = project.name;
+  const stats = {
+    progress:   project.progress ?? 0,
+    status:     project.status ?? "active",
+    done:       tasks.filter((t) => t.status === "done").length,
+    inProg:     tasks.filter((t) => t.status === "in_progress").length,
+    todo:       tasks.filter((t) => t.status === "todo").length,
+    overdue:    tasks.filter((t) => t.dueDate && new Date(t.dueDate) < now && t.status !== "done").length,
+    openRisks:  govItems.filter((g) => g.category === "risk"  && g.status === "open").length,
+    openIssues: govItems.filter((g) => g.category === "issue" && g.status === "open").length,
+    budget:     project.budget,
+    budgetUsed: project.budgetUsed,
   };
-
-  if (
-    !report || typeof report !== "object" ||
-    !Array.isArray(report.sections) ||
-    typeof report.status !== "string" ||
-    typeof projectName !== "string" || !projectName.trim() ||
-    !stats || typeof stats !== "object" ||
-    typeof stats.progress !== "number"
-  ) {
-    return NextResponse.json({ error: "Geçersiz istek verisi" }, { status: 400 });
-  }
 
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const W = 297;

@@ -565,26 +565,22 @@ function ReportEditor({
   const handlePrint = useCallback(() => window.print(), []);
 
   const handleExportPDF = useCallback(async () => {
-    const stats = buildStats();
-    if (!stats) return;
     setExporting("pdf");
     try {
-      await exportReportPDF(report, proj?.name ?? "Portföy", stats);
+      await exportReportPDF(report);
     } finally {
       setExporting(null);
     }
-  }, [report, proj, buildStats]);
+  }, [report]);
 
   const handleExportPPTX = useCallback(async () => {
-    const stats = buildStats();
-    if (!stats) return;
     setExporting("pptx");
     try {
-      await exportReportPPTX(report, proj?.name ?? "Portföy", stats);
+      await exportReportPPTX(report);
     } finally {
       setExporting(null);
     }
-  }, [report, proj, buildStats]);
+  }, [report]);
 
   const handleDelete = useCallback(() => {
     if (confirm("Bu raporu silmek istediğinize emin misiniz?")) {
