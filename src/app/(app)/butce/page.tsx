@@ -1,13 +1,15 @@
 "use client";
 
-import { useRef, useState, useMemo } from "react";
-import { Plus, TrendingUp, TrendingDown, AlertTriangle, DollarSign, X, Upload, Download, CheckCircle2, AlertCircle as AlertCircleIcon } from "lucide-react";
+import { useRef, useState, useMemo, useEffect } from "react";
+import { Plus, TrendingUp, TrendingDown, AlertTriangle, DollarSign, X, Upload, Download, CheckCircle2, AlertCircle as AlertCircleIcon, RefreshCw } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { ProjectStatusBadge } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import * as XLSX from "xlsx";
-import { CURRENCIES, DEFAULT_CURRENCY, formatCurrency, getCurrency } from "@/lib/currencies";
+import { CURRENCIES, DEFAULT_CURRENCY, formatCurrency, getCurrency, convertAmount, ExchangeRates, FALLBACK_RATES } from "@/lib/currencies";
+import { formatDistanceToNow } from "date-fns";
+import { tr } from "date-fns/locale";
 
 const EXPENSE_CATEGORIES = ["İşgücü", "Yazılım", "Donanım", "Hizmet", "Diğer"];
 const PIE_COLORS = ["#4f46e5", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
@@ -55,22 +57,44 @@ export default function ButcePage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState(DEFAULT_CURRENCY);
+  const [rates, setRates] = useState<ExchangeRates>(FALLBACK_RATES);
+  const [ratesLoading, setRatesLoading] = useState(true);
   const [form, setForm] = useState({ description: "", projectId: projects[0]?.id ?? "", category: EXPENSE_CATEGORIES[0], amount: "", date: new Date().toISOString().slice(0, 10) });
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Para birimine göre filtrele — currency tanımsız projeleri varsayılan TRY kabul et
-  const filteredProjects = projects.filter((p) => (p.currency ?? DEFAULT_CURRENCY) === selectedCurrency);
+  // Döviz kurlarını API'den çek
+  useEffect(() => {
+    fetch("/api/exchange-rates")
+      .then((r) => r.json())
+      .then((data) => setRates(data))
+      .catch(() => {/* fallback rates kalır */})
+      .finally(() => setRatesLoading(false));
+  }, []);
+
+  // Tüm projeleri göster, tutarları selectedCurrency'ye çevir
+  const allProjects = projects;
   const usedCurrencies = Array.from(new Set(projects.map((p) => p.currency ?? DEFAULT_CURRENCY)));
 
-  // Giderler project.expenses'dan gelir (project detail sayfasıyla aynı kaynak)
-  const flatExpenses = useMemo<FlatExpense[]>(() => {
-    return filteredProjects.flatMap((p) =>
-      (p.expenses ?? []).map((e) => ({ ...e, projectId: p.id }))
-    );
-  }, [filteredProjects]);
+  // Proje tutarını seçili para birimine çeviren yardımcı
+  function cvt(amount: number, projectCurrency?: string) {
+    return convertAmount(amount, projectCurrency ?? DEFAULT_CURRENCY, selectedCurrency, rates);
+  }
 
-  const totalBudget    = filteredProjects.reduce((s, p) => s + (p.budget ?? 0), 0);
-  const totalUsed      = filteredProjects.reduce((s, p) => s + (p.budgetUsed ?? 0), 0);
+  // Giderler project.expenses'dan gelir (tüm projeler, seçili para birimine çevrilmiş)
+  const flatExpenses = useMemo<FlatExpense[]>(() => {
+    return allProjects.flatMap((p) =>
+      (p.expenses ?? []).map((e) => ({
+        ...e,
+        projectId: p.id,
+        amount: convertAmount(e.amount, p.currency ?? DEFAULT_CURRENCY, selectedCurrency, rates),
+        originalAmount: e.amount,
+        originalCurrency: p.currency ?? DEFAULT_CURRENCY,
+      }))
+    );
+  }, [allProjects, selectedCurrency, rates]);
+
+  const totalBudget    = allProjects.reduce((s, p) => s + cvt(p.budget ?? 0, p.currency), 0);
+  const totalUsed      = allProjects.reduce((s, p) => s + cvt(p.budgetUsed ?? 0, p.currency), 0);
   const totalRemaining = totalBudget - totalUsed;
   const overallPct     = totalBudget > 0 ? Math.round((totalUsed / totalBudget) * 100) : 0;
   const fmt = (n: number) => formatCurrency(n, selectedCurrency);
@@ -215,6 +239,22 @@ export default function ButcePage() {
           <p className="text-sm text-gray-500 mt-1">Tüm projelerin finansal durumu</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Kur bilgisi */}
+          {!ratesLoading && (
+            <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+              <RefreshCw className="w-3 h-3 flex-shrink-0" />
+              <span>
+                1 € = ₺{rates.EUR_TRY.toFixed(2)} &nbsp;·&nbsp;
+                1 $ = ₺{rates.USD_TRY.toFixed(2)} &nbsp;·&nbsp;
+                1 $ = €{rates.USD_EUR.toFixed(4)}
+              </span>
+              {rates.updatedAt && (
+                <span className="text-gray-300">·&nbsp;
+                  {formatDistanceToNow(new Date(rates.updatedAt), { addSuffix: true, locale: tr })}
+                </span>
+              )}
+            </div>
+          )}
           {/* Para birimi seçici */}
           <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2">
             <DollarSign className="w-4 h-4 text-gray-400" />
@@ -223,12 +263,11 @@ export default function ButcePage() {
               onChange={(e) => setSelectedCurrency(e.target.value)}
               className="text-sm font-medium text-gray-700 focus:outline-none bg-transparent"
             >
-              {usedCurrencies.map((code) => {
+              {["TRY", "USD", "EUR"].map((code) => {
                 const c = getCurrency(code);
                 return <option key={code} value={code}>{c.symbol} {code} — {c.label}</option>;
               })}
-              {/* Sistemde kullanılmayan para birimlerini de göster */}
-              {CURRENCIES.filter((c) => !usedCurrencies.includes(c.code)).map((c) => (
+              {CURRENCIES.filter((c) => !["TRY", "USD", "EUR"].includes(c.code)).map((c) => (
                 <option key={c.code} value={c.code} disabled className="text-gray-400">{c.symbol} {c.code} — {c.label}</option>
               ))}
             </select>
@@ -309,25 +348,33 @@ export default function ButcePage() {
       <div className="card">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">
           Proje Bazında Bütçe
-          <span className="ml-2 text-xs font-normal text-gray-400">({getCurrency(selectedCurrency).symbol} {selectedCurrency})</span>
+          <span className="ml-2 text-xs font-normal text-gray-400">({getCurrency(selectedCurrency).symbol} {selectedCurrency} cinsinden)</span>
         </h2>
-        {filteredProjects.filter((p) => p.budget).length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">{selectedCurrency} para biriminde bütçeli proje yok.</p>
+        {allProjects.filter((p) => p.budget).length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">Bütçeli proje yok.</p>
         ) : (
           <div className="space-y-4">
-            {filteredProjects.filter((p) => p.budget).map((p) => {
-              const pUsed = p.budgetUsed ?? 0;
-              const pct   = Math.round((pUsed / (p.budget ?? 1)) * 100);
+            {allProjects.filter((p) => p.budget).map((p) => {
+              const pCurrency = p.currency ?? DEFAULT_CURRENCY;
+              const pUsed = cvt(p.budgetUsed ?? 0, pCurrency);
+              const pBudget = cvt(p.budget ?? 0, pCurrency);
+              const pct = Math.round((pUsed / (pBudget || 1)) * 100);
+              const showBadge = pCurrency !== selectedCurrency;
               return (
                 <div key={p.id}>
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-gray-900">{p.name}</span>
                       <ProjectStatusBadge status={p.status} />
+                      {showBadge && (
+                        <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-mono">
+                          {pCurrency}
+                        </span>
+                      )}
                       {pct >= 90 && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full flex items-center gap-1"><AlertTriangle className="w-3 h-3" />Risk</span>}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {fmt(pUsed)} / {fmt(p.budget ?? 0)}
+                      {fmt(pUsed)} / {fmt(pBudget)}
                       <span className={`ml-2 font-semibold ${pct >= 90 ? "text-red-600" : pct >= 75 ? "text-amber-600" : "text-emerald-600"}`}>%{pct}</span>
                     </div>
                   </div>

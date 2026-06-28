@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { resolveEffectivePermissions } from '@/lib/permissions';
 import type { UserRole, Permission } from '@/types';
-import type { InnovationRole } from '@/lib/innovation/types';
 
-const VALID_ROLES: InnovationRole[] = [
+const BUILTIN_ROLES = [
   'innovation_evaluator', 'innovation_admin', 'business_sponsor',
   'finance', 'pmo_manager', 'executive',
 ];
@@ -43,6 +42,21 @@ async function getSettingsCtx(req: NextRequest): Promise<
   return { ok: true, orgId: profile.org_id as string };
 }
 
+async function isValidRole(orgId: string, role: string): Promise<boolean> {
+  if (BUILTIN_ROLES.includes(role)) return true;
+
+  const { data } = await supabaseAdmin
+    .from('innovation_role_definitions')
+    .select('role_key')
+    .eq('org_id', orgId)
+    .eq('role_key', role)
+    .eq('is_custom', true)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  return data !== null;
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
@@ -66,7 +80,9 @@ export async function PATCH(
   }
 
   const { role, action } = body as { role: string; action: 'add' | 'remove' };
-  if (!VALID_ROLES.includes(role as InnovationRole)) {
+
+  const valid = await isValidRole(ctx.orgId, role);
+  if (!valid) {
     return NextResponse.json({ error: 'Geçersiz rol' }, { status: 400 });
   }
 

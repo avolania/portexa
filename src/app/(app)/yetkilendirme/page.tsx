@@ -674,7 +674,7 @@ export default function YetkilendirmePage() {
               });
               setShowOrgEdit((v) => !v);
             }}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-indigo-50"
+            className={`flex items-center gap-1.5 text-sm transition-colors px-3 py-1.5 rounded-lg font-medium ${org ? "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50" : "text-white bg-indigo-600 hover:bg-indigo-700"}`}
           >
             <Pencil className="w-3.5 h-3.5" />
             {org ? "Düzenle" : "Tanımla"}
@@ -792,7 +792,10 @@ export default function YetkilendirmePage() {
       {isSystemAdmin && allOrgs.length > 0 && (
         <div className="flex items-center gap-3 p-3 bg-rose-50 border border-rose-200 rounded-xl">
           <Building2 className="w-4 h-4 text-rose-500 shrink-0" />
-          <span className="text-sm font-medium text-rose-700 shrink-0">Organizasyon:</span>
+          <div className="shrink-0">
+            <span className="text-sm font-medium text-rose-700 block">Yönetilen Organizasyon</span>
+            <span className="text-xs text-rose-400">Değişiklik anlık uygulanır</span>
+          </div>
           <select
             className="flex-1 px-3 py-1.5 border border-rose-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-rose-400"
             value={selectedOrgId ?? ""}

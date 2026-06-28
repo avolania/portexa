@@ -10,7 +10,7 @@ import {
   AlertCircle, GitPullRequest, LifeBuoy, Ticket,
   SlidersHorizontal, ClipboardList, ChevronDown, Wallet,
   Globe, Building2, MonitorCheck, ClipboardCheck, Lightbulb, KeyRound, Megaphone,
-  FlaskConical,
+  FlaskConical, FileText, PackageSearch, AlertTriangle, ListChecks, BarChart2, UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -93,6 +93,25 @@ const navSections: NavSection[] = [
       { href: "/innovation/kampanyalar",  icon: Megaphone,         label: "Kampanyalar" },
       { href: "/innovation/pocs",        icon: FlaskConical,       label: "POC'lar"     },
       { href: "/innovation/settings", icon: SlidersHorizontal, label: "Ayarlar", innovationAdminOnly: true },
+    ],
+  },
+  {
+    id: "qms",
+    label: "Kalite (QMS)",
+    icon: ClipboardCheck,
+    defaultOpen: false,
+    items: [
+      { href: "/qms",                        icon: LayoutDashboard, label: "QMS Dashboard",       exact: true },
+      { href: "/qms/tedarikci",              icon: Building2,       label: "Tedarikçiler"                       },
+      { href: "/qms/spesifikasyonlar",       icon: FileText,        label: "Spesifikasyonlar"                   },
+      { href: "/qms/spesifikasyonlar/onay",  icon: ClipboardCheck,  label: "Onay Kuyruğu"                       },
+      { href: "/qms/compliance",             icon: ClipboardCheck,  label: "Doküman Merkezi"                    },
+      { href: "/qms/kalite/lotlar",          icon: PackageSearch,   label: "Lot / Teslim Alma"                  },
+      { href: "/qms/kalite/coa",             icon: ClipboardList,   label: "COA & Karşılaştırma"                },
+      { href: "/qms/kalite/ncr",             icon: AlertTriangle,   label: "Uygunsuzluklar (NCR)"               },
+      { href: "/qms/kalite/capa",            icon: ListChecks,      label: "CAPA"                               },
+      { href: "/qms/kalite/skorkart",        icon: BarChart2,       label: "Tedarikçi Skorkart"                 },
+      { href: "/qms/portal/kullanicilar",   icon: UserCheck,       label: "Portal Kullanıcıları"                },
     ],
   },
   {

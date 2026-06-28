@@ -1,8 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import * as ideasRepo from '../repositories/ideasRepo';
 import * as stagesRepo from '../repositories/stagesRepo';
-import type { InnovationIdea, CreateIdeaDto, AdvanceStageDto, InnovationRole } from '../types';
-import { hasRole } from '../utils';
+import type { InnovationIdea, CreateIdeaDto, AdvanceStageDto } from '../types';
+import { hasInnovPerm, type InnovationPermission } from '../permissions';
 import { getCampaign, checkSubmissionAccess } from './campaignService';
 
 async function generateIdeaNumber(orgId: string): Promise<string> {
@@ -73,10 +73,11 @@ export async function createIdea(params: {
 
 export async function advanceStage(params: {
   ideaId: string;
+  orgId: string;
   userId: string;
   dto: AdvanceStageDto;
 }): Promise<void> {
-  const idea = await ideasRepo.findIdeaById(params.ideaId);
+  const idea = await ideasRepo.findIdeaById(params.ideaId, params.orgId);
   if (!idea) throw new Error('Fikir bulunamadı');
 
   const stages = await stagesRepo.findAllStages();
@@ -105,12 +106,12 @@ export async function advanceStage(params: {
   });
 }
 
-export function canEdit(idea: InnovationIdea, userId: string, roles: InnovationRole[]): boolean {
-  return idea.submitter_id === userId || hasRole(roles, 'innovation_admin');
+export function canEdit(idea: InnovationIdea, userId: string, permissions: Set<InnovationPermission>): boolean {
+  return idea.submitter_id === userId || hasInnovPerm(permissions, 'ideas.edit_any');
 }
 
-export function canDelete(idea: InnovationIdea, userId: string, roles: InnovationRole[]): boolean {
-  return (idea.submitter_id === userId && idea.status === 'draft') || hasRole(roles, 'innovation_admin');
+export function canDelete(idea: InnovationIdea, userId: string, permissions: Set<InnovationPermission>): boolean {
+  return (idea.submitter_id === userId && idea.status === 'draft') || hasInnovPerm(permissions, 'ideas.edit_any');
 }
 
 export { findIdeas, findIdeaById, updateIdea, deleteIdea } from '../repositories/ideasRepo';

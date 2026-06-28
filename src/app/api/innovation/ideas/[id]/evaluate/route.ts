@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { saveEvaluation } from '@/lib/innovation/services/evaluationService';
-import { getInnovationRoles } from '@/lib/innovation/utils';
+import { getInnovContext } from '@/lib/innovation/utils';
 import type { CreateEvaluationDto } from '@/lib/innovation/types';
 import { notifyIdeaEvaluated } from '@/lib/innovation/services/innovationNotifications';
 
@@ -12,12 +12,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const roles = await getInnovationRoles(user.id);
+  const { data: p } = await supabaseAdmin
+    .from('auth_profiles').select('org_id').eq('id', user.id).single();
+  if (!p) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { permissions } = await getInnovContext(user.id, p.org_id as string);
 
   const { data: idea } = await supabaseAdmin
     .from('innovation_ideas')
     .select('id, idea_number, title, org_id, submitter_id, stage_id')
     .eq('id', id)
+    .eq('org_id', p.org_id as string)
     .single();
   if (!idea) return NextResponse.json({ error: 'Fikir bulunamadı' }, { status: 404 });
 
@@ -29,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ideaId: id,
       evaluatorId: user.id,
       stageId: idea.stage_id as string,
-      roles,
+      permissions,
       dto,
     });
 

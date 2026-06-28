@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { getInnovationRoles, hasRole } from '@/lib/innovation/utils';
-import type { InnovationRole } from '@/lib/innovation/types';
-
-const VALID_ROLES: InnovationRole[] = [
-  'innovation_evaluator', 'innovation_admin',
-  'business_sponsor', 'finance', 'pmo_manager', 'executive',
-];
+import { getInnovContext, getInnovationRoles } from '@/lib/innovation/utils';
+import { hasInnovPerm } from '@/lib/innovation/permissions';
 
 async function getAdminCtx(req: NextRequest): Promise<
   | { ok: true; userId: string; orgId: string }
@@ -16,14 +11,11 @@ async function getAdminCtx(req: NextRequest): Promise<
   if (!token) return { ok: false, status: 401 };
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return { ok: false, status: 401 };
-  const roles = await getInnovationRoles(user.id);
-  if (!hasRole(roles, 'innovation_admin')) return { ok: false, status: 403 };
   const { data: profile } = await supabaseAdmin
-    .from('auth_profiles')
-    .select('org_id')
-    .eq('id', user.id)
-    .single();
+    .from('auth_profiles').select('org_id').eq('id', user.id).single();
   if (!profile?.org_id) return { ok: false, status: 403 };
+  const { permissions } = await getInnovContext(user.id, profile.org_id as string);
+  if (!hasInnovPerm(permissions, 'users.manage')) return { ok: false, status: 403 };
   return { ok: true, userId: user.id, orgId: profile.org_id as string };
 }
 
@@ -36,28 +28,22 @@ export async function PATCH(
 
   const { id } = await params;
 
-  let body: { role: InnovationRole; action: 'add' | 'remove' };
+  let body: { role: string; action: 'add' | 'remove' };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Geçersiz JSON' }, { status: 400 });
   }
 
-  if (!VALID_ROLES.includes(body.role) || !['add', 'remove'].includes(body.action)) {
+  if (!body.role || !['add', 'remove'].includes(body.action)) {
     return NextResponse.json({ error: 'Geçersiz rol veya aksiyon' }, { status: 400 });
   }
 
-  // Verify target user belongs to the same org
   const { data: targetRow, error: targetError } = await supabaseAdmin
-    .from('auth_profiles')
-    .select('org_id, data')
-    .eq('id', id)
-    .single();
-
+    .from('auth_profiles').select('org_id, data').eq('id', id).single();
   if (targetError && targetError.code !== 'PGRST116') {
     return NextResponse.json({ error: targetError.message }, { status: 500 });
   }
-
   if (!targetRow || targetRow.org_id !== ctx.orgId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -69,10 +55,7 @@ export async function PATCH(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   } else {
     const { error } = await supabaseAdmin
-      .from('innovation_user_roles')
-      .delete()
-      .eq('user_id', id)
-      .eq('role', body.role);
+      .from('innovation_user_roles').delete().eq('user_id', id).eq('role', body.role);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

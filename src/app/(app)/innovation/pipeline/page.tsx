@@ -617,8 +617,10 @@ export default function InnovationPipeline() {
   }, [user?.id]);
 
   useEffect(() => {
+    // skip initial load — handled by init() above; only re-run when filters change
     if (token) loadIdeas(token, filters);
-  }, [filters, token, loadIdeas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
   useEffect(() => {
     const saved = localStorage.getItem('innovation_view_mode');

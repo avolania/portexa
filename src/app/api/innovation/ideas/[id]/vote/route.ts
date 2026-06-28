@@ -9,6 +9,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const { data: p } = await supabaseAdmin
+    .from('auth_profiles').select('org_id').eq('id', user.id).single();
+  if (!p) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { data: idea } = await supabaseAdmin
+    .from('innovation_ideas')
+    .select('org_id')
+    .eq('id', id)
+    .single();
+  if (!idea) return NextResponse.json({ error: 'Fikir bulunamadı' }, { status: 404 });
+  if ((idea as Record<string, unknown>).org_id !== p.org_id)
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
   const { value } = await req.json() as { value: 1 | -1 };
   if (value !== 1 && value !== -1) return NextResponse.json({ error: 'value 1 veya -1 olmalı' }, { status: 400 });
 

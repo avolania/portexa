@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { advanceStage } from '@/lib/innovation/services/ideasService';
-import { getInnovationRoles, hasRole } from '@/lib/innovation/utils';
+import { getInnovContext } from '@/lib/innovation/utils';
+import { hasInnovPerm } from '@/lib/innovation/permissions';
 import type { AdvanceStageDto } from '@/lib/innovation/types';
 import { notifyIdeaStageAdvanced } from '@/lib/innovation/services/innovationNotifications';
 
@@ -12,13 +13,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const roles = await getInnovationRoles(user.id);
-  if (!hasRole(roles, 'innovation_admin'))
-    return NextResponse.json({ error: 'Sadece innovation_admin stage ilerletebilir' }, { status: 403 });
+  const { data: p } = await supabaseAdmin
+    .from('auth_profiles').select('org_id').eq('id', user.id).single();
+  if (!p) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { permissions } = await getInnovContext(user.id, p.org_id as string);
+  if (!hasInnovPerm(permissions, 'ideas.advance'))
+    return NextResponse.json({ error: 'Sadece ideas.advance yetkisi olanlar stage ilerletebilir' }, { status: 403 });
 
   const dto = await req.json() as AdvanceStageDto;
   try {
-    await advanceStage({ ideaId: id, userId: user.id, dto });
+    await advanceStage({ ideaId: id, orgId: p.org_id as string, userId: user.id, dto });
 
     const sendNotification = async () => {
       const { data: idea } = await supabaseAdmin

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { findAllCriteria, createCriterion } from '@/lib/innovation/repositories/evaluationsRepo';
-import { getInnovationRoles, hasRole } from '@/lib/innovation/utils';
+import { getInnovContext } from '@/lib/innovation/utils';
+import { hasInnovPerm } from '@/lib/innovation/permissions';
 import type { CreateCriterionDto } from '@/lib/innovation/types';
 
 async function getCtx(req: NextRequest) {
@@ -9,21 +10,11 @@ async function getCtx(req: NextRequest) {
   if (!token) return null;
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return null;
-  const roles = await getInnovationRoles(user.id);
-  return { userId: user.id, roles };
-}
-
-async function getAdminCtx(req: NextRequest): Promise<
-  | { ok: true; userId: string }
-  | { ok: false; status: 401 | 403 }
-> {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) return { ok: false, status: 401 };
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !user) return { ok: false, status: 401 };
-  const roles = await getInnovationRoles(user.id);
-  if (!hasRole(roles, 'innovation_admin')) return { ok: false, status: 403 };
-  return { ok: true, userId: user.id };
+  const { data: p } = await supabaseAdmin
+    .from('auth_profiles').select('org_id').eq('id', user.id).single();
+  if (!p) return null;
+  const { permissions } = await getInnovContext(user.id, p.org_id as string);
+  return { userId: user.id, orgId: p.org_id as string, permissions };
 }
 
 export async function GET(req: NextRequest) {
@@ -33,8 +24,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const ctx = await getAdminCtx(req);
-  if (!ctx.ok) return NextResponse.json({ error: 'Unauthorized veya yetersiz yetki' }, { status: ctx.status });
+  const ctx = await getCtx(req);
+  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!hasInnovPerm(ctx.permissions, 'criteria.manage'))
+    return NextResponse.json({ error: 'Unauthorized veya yetersiz yetki' }, { status: 403 });
   try {
     const dto = await req.json() as CreateCriterionDto;
     if (!dto.name?.trim()) return NextResponse.json({ error: 'İsim zorunlu' }, { status: 400 });

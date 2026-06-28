@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { getInnovationRoles } from '@/lib/innovation/utils';
+import { getInnovContext } from '@/lib/innovation/utils';
 import { findPocById } from '@/lib/innovation/repositories/pocsRepo';
 import { transitionPoc } from '@/lib/innovation/services/pocService';
-import type { TransitionPocDto, InnovationRole } from '@/lib/innovation/types';
+import type { TransitionPocDto } from '@/lib/innovation/types';
 
 async function getCtx(req: NextRequest) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -16,8 +16,8 @@ async function getCtx(req: NextRequest) {
     .eq('id', user.id)
     .single();
   if (!p) return null;
-  const roles = await getInnovationRoles(user.id);
-  return { userId: user.id, orgId: p.org_id as string, roles: roles as InnovationRole[] };
+  const { roles, permissions } = await getInnovContext(user.id, p.org_id as string);
+  return { userId: user.id, orgId: p.org_id as string, roles, permissions };
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const dto = await req.json() as TransitionPocDto;
     if (!dto.action) return NextResponse.json({ error: 'action zorunlu' }, { status: 400 });
-    await transitionPoc({ poc, userId: ctx.userId, roles: ctx.roles, dto });
+    await transitionPoc({ poc, userId: ctx.userId, permissions: ctx.permissions, dto });
     return NextResponse.json({ ok: true });
   } catch (err) {
     const msg = (err as Error).message;

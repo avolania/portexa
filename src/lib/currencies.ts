@@ -30,3 +30,42 @@ export function formatCurrency(amount: number, currencyCode?: string): string {
     maximumFractionDigits: cur.code === "JPY" ? 0 : 0,
   });
 }
+
+// ─── Exchange rate conversion ──────────────────────────────────────────────────
+
+export interface ExchangeRates {
+  EUR_TRY: number;
+  USD_TRY: number;
+  USD_EUR: number;
+  updatedAt: string | null;
+}
+
+export const FALLBACK_RATES: ExchangeRates = {
+  EUR_TRY: 38.5,
+  USD_TRY: 35.5,
+  USD_EUR: 0.923,
+  updatedAt: null,
+};
+
+/** Tutarı bir para biriminden diğerine çevirir. EUR pivot olarak kullanılır. */
+export function convertAmount(
+  amount: number,
+  from: string,
+  to: string,
+  rates: ExchangeRates
+): number {
+  if (from === to || !isFinite(amount)) return amount;
+
+  // 1. from → EUR
+  let eur: number;
+  if (from === "EUR") eur = amount;
+  else if (from === "TRY") eur = amount / rates.EUR_TRY;
+  else if (from === "USD") eur = amount * rates.USD_EUR;
+  else return amount; // bilinmeyen para birimi → dönüştürme
+
+  // 2. EUR → to
+  if (to === "EUR") return eur;
+  if (to === "TRY") return eur * rates.EUR_TRY;
+  if (to === "USD") return eur / rates.USD_EUR;
+  return amount;
+}

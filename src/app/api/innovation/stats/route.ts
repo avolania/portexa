@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { getInnovationRoles } from '@/lib/innovation/utils';
-import type { InnovationStats, InnovationRole } from '@/lib/innovation/types';
+import type { InnovationStats } from '@/lib/innovation/types';
 
 async function getAuthContext(req: NextRequest) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -14,12 +13,7 @@ async function getAuthContext(req: NextRequest) {
     .eq('id', user.id)
     .single();
   if (!profile) return null;
-  const roles = await getInnovationRoles(user.id);
-  return {
-    userId: user.id,
-    orgId: profile.org_id as string,
-    innovationRoles: roles as InnovationRole[],
-  };
+  return { userId: user.id, orgId: profile.org_id as string };
 }
 
 export async function GET(req: NextRequest) {
@@ -122,7 +116,7 @@ export async function GET(req: NextRequest) {
     this_month: monthRes.count ?? 0,
     under_review: underReviewRes.count ?? 0,
     implemented: implementedRes.count ?? 0,
-    user_roles: ctx.innovationRoles,
+    user_roles: [],
     by_stage: byStage,
     top_ideas: topIdeas,
     recent_activity: recentActivity,

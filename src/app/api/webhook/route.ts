@@ -115,12 +115,33 @@ export async function POST(req: NextRequest) {
   const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
   if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Only accept ticketId and payload — never URLs from the client (SSRF prevention)
   const body = await req.json() as {
-    slackUrl?: string;
-    teamsUrl?: string;
     ticketId: string;
     payload: WebhookPayload;
   };
+
+  // Resolve webhook URLs from DB using server-side admin client
+  const { data: profile } = await supabaseAdmin
+    .from("auth_profiles")
+    .select("org_id")
+    .eq("id", user.id)
+    .single();
+
+  const orgId = profile?.org_id as string | undefined;
+  const results: { slack?: string; teams?: string } = {};
+
+  if (!orgId) return NextResponse.json({ ok: true, results });
+
+  const { data: configRow } = await supabaseAdmin
+    .from("itsm_config")
+    .select("data")
+    .eq("id", orgId)
+    .maybeSingle();
+
+  const integrations = (configRow?.data as Record<string, unknown> | null)?.integrations as Record<string, unknown> | undefined;
+  const slackUrl = typeof integrations?.slackWebhookUrl === "string" ? integrations.slackWebhookUrl.trim() : "";
+  const teamsUrl = typeof integrations?.teamsWebhookUrl === "string" ? integrations.teamsWebhookUrl.trim() : "";
 
   const appUrl = getAppUrl(req);
   const payload: WebhookPayload = {
@@ -128,11 +149,9 @@ export async function POST(req: NextRequest) {
     ticketUrl: ticketUrl(appUrl, body.payload.ticketType, body.ticketId),
   };
 
-  const results: { slack?: string; teams?: string } = {};
-
-  if (body.slackUrl) {
+  if (slackUrl) {
     try {
-      const r = await fetch(body.slackUrl, {
+      const r = await fetch(slackUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(slackMessage(payload)),
@@ -143,9 +162,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (body.teamsUrl) {
+  if (teamsUrl) {
     try {
-      const r = await fetch(body.teamsUrl, {
+      const r = await fetch(teamsUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(teamsMessage(payload)),

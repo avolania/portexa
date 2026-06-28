@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { updateCriterion, deleteCriterion } from '@/lib/innovation/repositories/evaluationsRepo';
-import { getInnovationRoles, hasRole } from '@/lib/innovation/utils';
+import { getInnovContext } from '@/lib/innovation/utils';
+import { hasInnovPerm } from '@/lib/innovation/permissions';
 import type { UpdateCriterionDto } from '@/lib/innovation/types';
 
 async function getAdminCtx(req: NextRequest): Promise<
@@ -12,8 +13,11 @@ async function getAdminCtx(req: NextRequest): Promise<
   if (!token) return { ok: false, status: 401 };
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return { ok: false, status: 401 };
-  const roles = await getInnovationRoles(user.id);
-  if (!hasRole(roles, 'innovation_admin')) return { ok: false, status: 403 };
+  const { data: p } = await supabaseAdmin
+    .from('auth_profiles').select('org_id').eq('id', user.id).single();
+  if (!p) return { ok: false, status: 403 };
+  const { permissions } = await getInnovContext(user.id, p.org_id as string);
+  if (!hasInnovPerm(permissions, 'criteria.manage')) return { ok: false, status: 403 };
   return { ok: true, userId: user.id };
 }
 

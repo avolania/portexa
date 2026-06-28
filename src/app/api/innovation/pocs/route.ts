@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { getInnovationRoles } from '@/lib/innovation/utils';
+import { getInnovContext } from '@/lib/innovation/utils';
 import { findPocs } from '@/lib/innovation/repositories/pocsRepo';
 import { createPoc } from '@/lib/innovation/services/pocService';
-import type { CreatePocDto, InnovationRole } from '@/lib/innovation/types';
+import type { CreatePocDto } from '@/lib/innovation/types';
 
 async function getCtx(req: NextRequest) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -16,8 +16,8 @@ async function getCtx(req: NextRequest) {
     .eq('id', user.id)
     .single();
   if (!p) return null;
-  const roles = await getInnovationRoles(user.id);
-  return { userId: user.id, orgId: p.org_id as string, roles: roles as InnovationRole[] };
+  const { roles, permissions } = await getInnovContext(user.id, p.org_id as string);
+  return { userId: user.id, orgId: p.org_id as string, roles, permissions };
 }
 
 export async function GET(req: NextRequest) {
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     if (!dto.idea_id?.trim()) return NextResponse.json({ error: 'idea_id zorunlu' }, { status: 400 });
     if (!dto.title?.trim()) return NextResponse.json({ error: 'Başlık zorunlu' }, { status: 400 });
     if (!dto.owner_id?.trim()) return NextResponse.json({ error: 'owner_id zorunlu' }, { status: 400 });
-    const poc = await createPoc({ orgId: ctx.orgId, userId: ctx.userId, roles: ctx.roles, dto });
+    const poc = await createPoc({ orgId: ctx.orgId, userId: ctx.userId, permissions: ctx.permissions, dto });
     return NextResponse.json(poc, { status: 201 });
   } catch (err) {
     const msg = (err as Error).message;

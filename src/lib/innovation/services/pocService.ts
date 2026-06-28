@@ -2,16 +2,16 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import * as pocsRepo from '../repositories/pocsRepo';
 import type {
   InnovationPoc, CreatePocDto, UpdatePocDto, TransitionPocDto,
-  PocStatus, PocTransitionAction, InnovationRole,
+  PocStatus, PocTransitionAction,
 } from '../types';
-import { hasRole } from '../utils';
+import { hasInnovPerm, type InnovationPermission } from '../permissions';
 
 // ── Transition rules ────────────────────────────────────────────────────────
 
 type TransitionRule = {
   from: PocStatus;
   to: PocStatus;
-  roles: InnovationRole[];
+  permission: InnovationPermission;
   ownerAllowed?: boolean;
 };
 
@@ -19,51 +19,51 @@ const TRANSITIONS: Record<PocTransitionAction, TransitionRule> = {
   submit_for_approval: {
     from: 'draft',
     to: 'pending_sponsor_approval',
-    roles: ['innovation_admin'],
+    permission: 'pocs.manage',
     ownerAllowed: true,
   },
   approve_start: {
     from: 'pending_sponsor_approval',
     to: 'active',
-    roles: ['business_sponsor', 'innovation_admin'],
+    permission: 'pocs.approve',
   },
   reject_start: {
     from: 'pending_sponsor_approval',
     to: 'draft',
-    roles: ['business_sponsor', 'innovation_admin'],
+    permission: 'pocs.approve',
   },
   hold: {
     from: 'active',
     to: 'on_hold',
-    roles: ['innovation_admin'],
+    permission: 'pocs.manage',
     ownerAllowed: true,
   },
   resume: {
     from: 'on_hold',
     to: 'active',
-    roles: ['innovation_admin'],
+    permission: 'pocs.manage',
     ownerAllowed: true,
   },
   submit_completion: {
     from: 'active',
     to: 'pending_completion_approval',
-    roles: ['innovation_admin'],
+    permission: 'pocs.manage',
     ownerAllowed: true,
   },
   approve_completion: {
     from: 'pending_completion_approval',
     to: 'completed',
-    roles: ['business_sponsor', 'innovation_admin'],
+    permission: 'pocs.approve',
   },
   reject_completion: {
     from: 'pending_completion_approval',
     to: 'active',
-    roles: ['business_sponsor', 'innovation_admin'],
+    permission: 'pocs.approve',
   },
   cancel: {
-    from: 'draft',          // placeholder — cancel checked separately
+    from: 'draft',
     to: 'cancelled',
-    roles: ['innovation_admin'],
+    permission: 'pocs.manage',
   },
 };
 
@@ -76,14 +76,13 @@ const CANCELLABLE: PocStatus[] = [
 export async function createPoc(params: {
   orgId: string;
   userId: string;
-  roles: InnovationRole[];
+  permissions: Set<InnovationPermission>;
   dto: CreatePocDto;
 }): Promise<InnovationPoc> {
-  if (!hasRole(params.roles, 'innovation_admin') && !hasRole(params.roles, 'business_sponsor')) {
-    throw new Error('POC oluşturmak için innovation_admin veya business_sponsor rolü gereklidir');
+  if (!hasInnovPerm(params.permissions, 'pocs.manage') && !hasInnovPerm(params.permissions, 'pocs.approve')) {
+    throw new Error('POC oluşturmak için pocs.manage veya pocs.approve yetkisi gereklidir');
   }
 
-  // Verify the idea exists, belongs to this org, and is approved
   const { data: idea } = await supabaseAdmin
     .from('innovation_ideas')
     .select('id, status, org_id')
@@ -96,9 +95,8 @@ export async function createPoc(params: {
     throw new Error('POC yalnızca onaylı fikirler için başlatılabilir');
   }
 
-  // Check for existing active/pending POC
   const existing = await pocsRepo.findActivePocByIdeaId(params.dto.idea_id);
-  if (existing) throw new Error('Bu fikrin zaten aktif bir POC\'u var');
+  if (existing) throw new Error("Bu fikrin zaten aktif bir POC'u var");
 
   return pocsRepo.createPoc({ orgId: params.orgId, dto: params.dto });
 }
@@ -106,13 +104,13 @@ export async function createPoc(params: {
 export async function updatePoc(params: {
   poc: InnovationPoc;
   userId: string;
-  roles: InnovationRole[];
+  permissions: Set<InnovationPermission>;
   dto: UpdatePocDto;
 }): Promise<void> {
-  const isAdmin = hasRole(params.roles, 'innovation_admin');
+  const canManage = hasInnovPerm(params.permissions, 'pocs.manage');
   const isOwner = params.poc.owner_id === params.userId;
-  if (!isAdmin && !isOwner) {
-    throw new Error('POC güncellemek için innovation_admin veya POC sahibi olmanız gerekir');
+  if (!canManage && !isOwner) {
+    throw new Error('POC güncellemek için pocs.manage yetkisi veya POC sahibi olmanız gerekir');
   }
   if (params.poc.status === 'completed' || params.poc.status === 'cancelled') {
     throw new Error('Tamamlanan veya iptal edilen POC güncellenemez');
@@ -123,14 +121,14 @@ export async function updatePoc(params: {
 export async function transitionPoc(params: {
   poc: InnovationPoc;
   userId: string;
-  roles: InnovationRole[];
+  permissions: Set<InnovationPermission>;
   dto: TransitionPocDto;
 }): Promise<void> {
-  const { poc, userId, roles, dto } = params;
+  const { poc, userId, permissions, dto } = params;
 
   if (dto.action === 'cancel') {
-    if (!hasRole(roles, 'innovation_admin')) {
-      throw new Error('İptal etmek için innovation_admin rolü gereklidir');
+    if (!hasInnovPerm(permissions, 'pocs.manage')) {
+      throw new Error('İptal etmek için pocs.manage yetkisi gereklidir');
     }
     if (!CANCELLABLE.includes(poc.status)) {
       throw new Error(`${poc.status} durumundaki POC iptal edilemez`);
@@ -146,9 +144,9 @@ export async function transitionPoc(params: {
     throw new Error(`Bu geçiş mevcut durumdan (${poc.status}) yapılamaz`);
   }
 
-  const hasRequiredRole = rule.roles.some((r) => hasRole(roles, r));
+  const hasPerm = hasInnovPerm(permissions, rule.permission);
   const isOwner = poc.owner_id === userId;
-  if (!hasRequiredRole && !(rule.ownerAllowed && isOwner)) {
+  if (!hasPerm && !(rule.ownerAllowed && isOwner)) {
     throw new Error('Bu geçiş için yetkiniz yok');
   }
 
@@ -158,15 +156,15 @@ export async function transitionPoc(params: {
 export async function addPocUpdate(params: {
   poc: InnovationPoc;
   userId: string;
-  roles: InnovationRole[];
+  permissions: Set<InnovationPermission>;
   content: string;
 }): Promise<void> {
   if (params.poc.status === 'cancelled') {
-    throw new Error('İptal edilen POC\'a güncelleme eklenemez');
+    throw new Error("İptal edilen POC'a güncelleme eklenemez");
   }
   const canUpdate =
-    hasRole(params.roles, 'innovation_admin') ||
-    hasRole(params.roles, 'innovation_evaluator') ||
+    hasInnovPerm(params.permissions, 'pocs.manage') ||
+    hasInnovPerm(params.permissions, 'ideas.evaluate') ||
     params.poc.owner_id === params.userId;
   if (!canUpdate) {
     throw new Error('Güncelleme eklemek için yetkiniz yok');

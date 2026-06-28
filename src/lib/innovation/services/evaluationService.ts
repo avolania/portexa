@@ -1,17 +1,17 @@
 import * as evaluationsRepo from '../repositories/evaluationsRepo';
 import * as ideasRepo from '../repositories/ideasRepo';
-import type { CreateEvaluationDto, InnovationRole } from '../types';
-import { hasRole } from '../utils';
+import type { CreateEvaluationDto } from '../types';
+import { hasInnovPerm, type InnovationPermission } from '../permissions';
 
 export async function saveEvaluation(params: {
   ideaId: string;
   evaluatorId: string;
   stageId: string;
-  roles: InnovationRole[];
+  permissions: Set<InnovationPermission>;
   dto: CreateEvaluationDto;
 }): Promise<{ evaluationId: string; totalScore: number; compositeScore: number }> {
-  if (!hasRole(params.roles, 'innovation_evaluator') && !hasRole(params.roles, 'innovation_admin')) {
-    throw new Error('Değerlendirme yapmak için innovation_evaluator veya innovation_admin rolü gereklidir');
+  if (!hasInnovPerm(params.permissions, 'ideas.evaluate')) {
+    throw new Error('Bu işlem için ideas.evaluate yetkisi gereklidir');
   }
 
   const criteria = await evaluationsRepo.findActiveCriteria();

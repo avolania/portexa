@@ -43,7 +43,7 @@ export async function findIdeas(params: IdeasListParams): Promise<{ ideas: Innov
   return { ideas, total: count ?? 0 };
 }
 
-export async function findIdeaById(id: string): Promise<InnovationIdea | null> {
+export async function findIdeaById(id: string, orgId: string): Promise<InnovationIdea | null> {
   const { data, error } = await supabaseAdmin
     .from('innovation_ideas')
     .select(`
@@ -68,6 +68,7 @@ export async function findIdeaById(id: string): Promise<InnovationIdea | null> {
       )
     `)
     .eq('id', id)
+    .eq('org_id', orgId)
     .single();
 
   if (error) return null;
