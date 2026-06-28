@@ -1,8 +1,8 @@
 import { create } from 'zustand';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from './useAuthStore';
 import {
   loadWorkflowInstances,
-  submitDecision,
   cancelWorkflowInstance,
 } from '@/services/workflowEngine';
 import type {
@@ -85,22 +85,24 @@ export const useWorkflowInstanceStore = create<WorkflowInstanceState>()(
     },
 
     decide: async (instanceId, stepDefId, decision, comment) => {
-      const user = useAuthStore.getState().user;
-      if (!user) return null;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return null;
 
-      const instance = get().instances.find((i) => i.id === instanceId);
-      if (!instance) return null;
-
-      let result;
+      let result: StepDecisionResult;
       try {
-        result = await submitDecision(
-          instance,
-          stepDefId,
-          user.id,
-          user.name,
-          decision,
-          comment,
-        );
+        const res = await fetch('/api/itsm/workflow/decide', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ instanceId, stepDefId, decision, comment }),
+        });
+        if (!res.ok) {
+          const { error } = await res.json() as { error: string };
+          throw new Error(error ?? `HTTP ${res.status}`);
+        }
+        result = await res.json() as StepDecisionResult;
       } catch (err) {
         console.error('[workflow] decide failed:', err);
         throw err;

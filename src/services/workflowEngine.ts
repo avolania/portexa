@@ -267,7 +267,7 @@ export async function submitDecision(
   if (step.status !== 'active') return noop;
 
   // Caller bu step'in onaylayıcılarından biri olmalı
-  if (step.resolvedApproverIds.length > 0 && !step.resolvedApproverIds.includes(approverId)) return noop;
+  if (!step.resolvedApproverIds.includes(approverId)) return noop;
 
   // Aynı onaylayıcıdan tekrar karar gelmesin
   if (step.decisions.some((d) => d.approverId === approverId)) return noop;
