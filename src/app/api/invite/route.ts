@@ -36,16 +36,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Eksik parametreler." }, { status: 400 });
   }
 
-  // ── 3. Caller'ın bu org'a üye olduğunu doğrula ──────────────────────────────
+  // ── 3. Caller'ın bu org'a üye olduğunu ve rolünü doğrula ────────────────────
   const { data: profile } = await supabaseAdmin
     .from("auth_profiles")
-    .select("id")
+    .select("id, data")
     .eq("id", user.id)
     .eq("org_id", orgId)
     .single();
 
   if (!profile) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const callerRole = (profile.data as { role?: string } | null)?.role;
+  const ALLOWED_ROLES = ["system_admin", "admin", "pm"];
+  if (!callerRole || !ALLOWED_ROLES.includes(callerRole)) {
+    return NextResponse.json(
+      { error: "Sadece admin ve proje yöneticileri davet gönderebilir." },
+      { status: 403 },
+    );
   }
 
   // invitedBy artık body'den değil, doğrulanmış session'dan geliyor
