@@ -25,8 +25,8 @@ export async function updateRequest(
   return updated;
 }
 
-export async function deleteRequest(id: string): Promise<void> {
-  await dbDelete("workflow_requests", id);
+export async function deleteRequest(id: string, orgId: string): Promise<void> {
+  await dbDelete("workflow_requests", id, orgId);
 }
 
 export async function reviewRequest(

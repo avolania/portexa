@@ -63,8 +63,8 @@ export async function loadChangeRequests(filters?: ChangeRequestFilters, orgId?:
   });
 }
 
-export async function loadChangeRequestById(id: string): Promise<ChangeRequest | null> {
-  return dbLoadOne<ChangeRequest>(TABLE, id);
+export async function loadChangeRequestById(id: string, orgId: string): Promise<ChangeRequest | null> {
+  return dbLoadOne<ChangeRequest>(TABLE, id, orgId);
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -424,6 +424,6 @@ export async function removeChangeRequestAttachment(
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
-export async function deleteChangeRequest(id: string): Promise<void> {
-  await dbDelete(TABLE, id);
+export async function deleteChangeRequest(id: string, orgId: string): Promise<void> {
+  await dbDelete(TABLE, id, orgId);
 }

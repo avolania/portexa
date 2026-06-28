@@ -21,8 +21,8 @@ export async function updateMember(
   return updated;
 }
 
-export async function removeMember(id: string): Promise<void> {
-  await dbDelete("team_members", id);
+export async function removeMember(id: string, orgId: string): Promise<void> {
+  await dbDelete("team_members", id, orgId);
 }
 
 export async function changeMemberRole(

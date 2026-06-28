@@ -306,7 +306,8 @@ export const useServiceRequestStore = create<SRStoreState>()((set, get) => ({
     const rollback = get().serviceRequests.find((sr) => sr.id === id);
     set((s) => ({ serviceRequests: s.serviceRequests.filter((sr) => sr.id !== id) }));
     try {
-      await deleteServiceRequest(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteServiceRequest(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ serviceRequests: [...s.serviceRequests, rollback] }));
       throw err;

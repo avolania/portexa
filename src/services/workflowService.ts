@@ -25,6 +25,6 @@ export async function updateWorkflowTemplate(
   return updated;
 }
 
-export async function deleteWorkflowTemplate(id: string): Promise<void> {
-  await dbDelete("workflow_templates", id);
+export async function deleteWorkflowTemplate(id: string, orgId: string): Promise<void> {
+  await dbDelete("workflow_templates", id, orgId);
 }

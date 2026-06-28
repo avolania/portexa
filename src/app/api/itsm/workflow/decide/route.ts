@@ -12,13 +12,14 @@ export async function POST(req: NextRequest) {
   // approverId ve approverName istemciden ALINMAZ — sunucu tarafında çözümlenir
   const { data: profile } = await supabaseAdmin
     .from('auth_profiles')
-    .select('data')
+    .select('data, org_id')
     .eq('id', user.id)
     .single();
   if (!profile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const approverName =
     ((profile.data as Record<string, unknown> | null)?.name as string | undefined) ?? 'Onaylayıcı';
+  const orgId = (profile as { org_id?: string }).org_id ?? '';
 
   const body = await req.json() as {
     instanceId: string;
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
       user.id,        // approverId — JWT'den alındı
       approverName,   // approverName — DB'den alındı
       decision,
+      orgId,          // orgId — DB'den alındı (çapraz-tenant koruması)
       comment,
     );
     return NextResponse.json(result);

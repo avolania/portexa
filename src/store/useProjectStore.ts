@@ -94,7 +94,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
       tasks:    s.tasks.filter((t) => t.projectId !== id),
     }));
     try {
-      await deleteProject(id, tasks);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteProject(id, tasks, orgId);
     } catch (err) {
       set((s) => ({
         projects: rollbackProject ? [...s.projects, rollbackProject] : s.projects,
@@ -170,7 +171,8 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     const rollback = get().tasks.find((t) => t.id === id);
     set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
     try {
-      await deleteTask(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteTask(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ tasks: [...s.tasks, rollback] }));
       throw err;

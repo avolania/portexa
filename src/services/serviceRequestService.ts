@@ -60,8 +60,8 @@ export async function loadServiceRequests(filters?: ServiceRequestFilters, orgId
   });
 }
 
-export async function loadServiceRequestById(id: string): Promise<ServiceRequest | null> {
-  return dbLoadOne<ServiceRequest>(TABLE, id);
+export async function loadServiceRequestById(id: string, orgId: string): Promise<ServiceRequest | null> {
+  return dbLoadOne<ServiceRequest>(TABLE, id, orgId);
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -474,8 +474,8 @@ export async function changeServiceRequestState(
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
-export async function deleteServiceRequest(id: string): Promise<void> {
-  await dbDelete(TABLE, id);
+export async function deleteServiceRequest(id: string, orgId: string): Promise<void> {
+  await dbDelete(TABLE, id, orgId);
 }
 
 // ─── L2 Workbench: Link CR to SR ──────────────────────────────────────────────

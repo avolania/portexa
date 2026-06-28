@@ -46,8 +46,8 @@ export async function deleteFolder(
 
   // DB first — if this fails nothing has been touched in storage
   await Promise.all([
-    ...[...deletedFolderIds].map((fid) => dbDelete("file_folders", fid)),
-    ...deletedFiles.map((f) => dbDelete("project_files", f.id)),
+    ...[...deletedFolderIds].map((fid) => dbDelete("file_folders", fid, orgId)),
+    ...deletedFiles.map((f) => dbDelete("project_files", f.id, orgId)),
   ]);
 
   // Storage best-effort — orphan storage files are recoverable; broken DB references are not
@@ -96,6 +96,6 @@ export async function uploadFile(
 export async function deleteFile(fileId: string, files: ProjectFile[], orgId: string): Promise<void> {
   const file = files.find((f) => f.id === fileId);
   if (!file) return;
-  await dbDelete("project_files", fileId);
+  await dbDelete("project_files", fileId, orgId);
   await dbDeleteFile(orgId, file.storagePath).catch(() => {});
 }

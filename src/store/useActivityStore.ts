@@ -79,7 +79,8 @@ export const useActivityStore = create<ActivityState>()((set, get) => ({
     const rollback = get().entries.find((e) => e.id === id);
     set((s) => ({ entries: s.entries.filter((e) => e.id !== id) }));
     try {
-      await deleteActivity(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteActivity(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ entries: [...s.entries, rollback] }));
       throw err;

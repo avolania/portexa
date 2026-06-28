@@ -23,8 +23,8 @@ export async function updateGovernanceItem(
   return updated;
 }
 
-export async function deleteGovernanceItem(id: string): Promise<void> {
-  await dbDelete("governance_items", id);
+export async function deleteGovernanceItem(id: string, orgId: string): Promise<void> {
+  await dbDelete("governance_items", id, orgId);
 }
 
 export async function resetGovernanceItems(items: GovernanceItem[], orgId: string): Promise<void> {

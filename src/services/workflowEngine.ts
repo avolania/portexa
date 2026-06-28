@@ -245,11 +245,12 @@ export async function submitDecision(
   approverId: string,
   approverName: string,
   decision: 'approved' | 'rejected',
+  orgId: string,
   comment?: string,
 ): Promise<StepDecisionResult> {
   // Always fetch a fresh copy from DB to avoid concurrent-write race conditions
   const instanceId = typeof instanceOrId === 'string' ? instanceOrId : instanceOrId.id;
-  const instance = await dbLoadOne<WorkflowInstance>(TABLE, instanceId);
+  const instance = await dbLoadOne<WorkflowInstance>(TABLE, instanceId, orgId);
 
   const noop: StepDecisionResult = {
     instance: instance ?? (typeof instanceOrId === 'object' ? instanceOrId : ({} as WorkflowInstance)),

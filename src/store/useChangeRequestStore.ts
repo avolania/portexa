@@ -216,7 +216,8 @@ export const useChangeRequestStore = create<ChangeRequestState>()((set, get) => 
     const rollback = get().changeRequests.find((cr) => cr.id === id);
     set((s) => ({ changeRequests: s.changeRequests.filter((cr) => cr.id !== id) }));
     try {
-      await deleteChangeRequest(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteChangeRequest(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ changeRequests: [...s.changeRequests, rollback] }));
       throw err;

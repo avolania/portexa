@@ -15,8 +15,10 @@ export async function dbLoadAll<T>(table: string, orgId?: string): Promise<T[]> 
   return (data ?? []).map((row) => row.data as T);
 }
 
-export async function dbLoadOne<T>(table: string, id: string): Promise<T | null> {
-  const { data, error } = await supabase.from(table).select("data").eq("id", id).single();
+export async function dbLoadOne<T>(table: string, id: string, orgId?: string): Promise<T | null> {
+  let query = supabase.from(table).select("data").eq("id", id);
+  if (orgId) query = query.eq("org_id", orgId);
+  const { data, error } = await query.single();
   if (error || !data) return null;
   return data.data as T;
 }
@@ -45,6 +47,7 @@ export async function dbConditionalUpdate(
     .from(table)
     .update({ data, org_id: orgId }, { count: 'exact' })
     .eq("id", id)
+    .eq("org_id", orgId)
     .filter("data->>version", "eq", String(expectedVersion));
   if (error) {
     console.error(`[db] conditionalUpdate ${table}:`, error.message);
@@ -200,8 +203,8 @@ export async function dbLoadFiltered<T>(
   return (data ?? []).map((r) => r.data as T);
 }
 
-export async function dbDelete(table: string, id: string): Promise<void> {
-  const { error } = await supabase.from(table).delete().eq("id", id);
+export async function dbDelete(table: string, id: string, orgId: string): Promise<void> {
+  const { error } = await supabase.from(table).delete().eq("id", id).eq("org_id", orgId);
   if (error) {
     console.error(`[db] delete ${table}:`, error.message);
     throw new Error(error.message);

@@ -68,7 +68,8 @@ export const useRequestStore = create<RequestState>()((set, get) => ({
     const rollback = get().requests.find((r) => r.id === id);
     set((s) => ({ requests: s.requests.filter((r) => r.id !== id) }));
     try {
-      await deleteRequest(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteRequest(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ requests: [...s.requests, rollback] }));
       throw err;

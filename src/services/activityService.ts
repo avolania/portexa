@@ -22,8 +22,8 @@ export async function updateActivity(
   return updated;
 }
 
-export async function deleteActivity(id: string): Promise<void> {
-  await dbDelete("activity_entries", id);
+export async function deleteActivity(id: string, orgId: string): Promise<void> {
+  await dbDelete("activity_entries", id, orgId);
 }
 
 export async function submitActivity(

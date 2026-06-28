@@ -64,7 +64,8 @@ export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
     const rollback = get().templates.find((t) => t.id === id);
     set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
     try {
-      await deleteWorkflowTemplate(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteWorkflowTemplate(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ templates: [...s.templates, rollback] }));
       throw err;

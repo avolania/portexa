@@ -30,13 +30,13 @@ export async function updateProject(
   return updated;
 }
 
-export async function deleteProject(id: string, tasks: Task[]): Promise<void> {
+export async function deleteProject(id: string, tasks: Task[], orgId: string): Promise<void> {
   const relatedTasks = tasks.filter((t) => t.projectId === id);
 
   // Step 1: delete all related tasks, collect failures
   if (relatedTasks.length > 0) {
     const taskResults = await Promise.allSettled(
-      relatedTasks.map((t) => dbDelete("tasks", t.id)),
+      relatedTasks.map((t) => dbDelete("tasks", t.id, orgId)),
     );
     const failed = taskResults.filter((r): r is PromiseRejectedResult => r.status === "rejected");
     if (failed.length > 0) {
@@ -46,7 +46,7 @@ export async function deleteProject(id: string, tasks: Task[]): Promise<void> {
   }
 
   // Step 2: delete the project only after all tasks are confirmed deleted
-  await dbDelete("projects", id);
+  await dbDelete("projects", id, orgId);
 }
 
 // ─── Task CRUD ─────────────────────────────────────────────────────────────────
@@ -77,8 +77,8 @@ export async function moveTask(
   return updateTask(taskId, { status: newStatus }, current, orgId);
 }
 
-export async function deleteTask(id: string): Promise<void> {
-  await dbDelete("tasks", id);
+export async function deleteTask(id: string, orgId: string): Promise<void> {
+  await dbDelete("tasks", id, orgId);
 }
 
 // ─── Bulk reset (demo data) ────────────────────────────────────────────────────

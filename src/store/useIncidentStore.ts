@@ -232,7 +232,8 @@ export const useIncidentStore = create<IncidentState>()((set, get) => ({
     const rollback = get().incidents.find((i) => i.id === id);
     set((s) => ({ incidents: s.incidents.filter((i) => i.id !== id) }));
     try {
-      await deleteIncident(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteIncident(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ incidents: [...s.incidents, rollback] }));
       throw err;

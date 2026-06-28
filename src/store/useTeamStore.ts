@@ -76,7 +76,8 @@ export const useTeamStore = create<TeamState>()((set, get) => ({
     const rollback = get().members.find((m) => m.id === id);
     set((s) => ({ members: s.members.filter((m) => m.id !== id) }));
     try {
-      await removeMember(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await removeMember(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ members: [...s.members, rollback] }));
       throw err;

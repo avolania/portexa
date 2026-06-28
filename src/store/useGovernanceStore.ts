@@ -70,7 +70,8 @@ export const useGovernanceStore = create<GovernanceState>()((set, get) => ({
     const rollback = get().items.find((i) => i.id === id);
     set((s) => ({ items: s.items.filter((i) => i.id !== id) }));
     try {
-      await deleteGovernanceItem(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteGovernanceItem(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ items: [...s.items, rollback] }));
       throw err;

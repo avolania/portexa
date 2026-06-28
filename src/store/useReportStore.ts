@@ -99,7 +99,8 @@ export const useReportStore = create<ReportState>()((set, get) => ({
     const rollback = get().reports.find((r) => r.id === id);
     set((s) => ({ reports: s.reports.filter((r) => r.id !== id) }));
     try {
-      await deleteReport(id);
+      const orgId = useAuthStore.getState().user?.orgId ?? "";
+      await deleteReport(id, orgId);
     } catch (err) {
       if (rollback) set((s) => ({ reports: [...s.reports, rollback] }));
       throw err;

@@ -40,8 +40,8 @@ export async function updateReportSection(
   return updated;
 }
 
-export async function deleteReport(id: string): Promise<void> {
-  await dbDelete("reports", id);
+export async function deleteReport(id: string, orgId: string): Promise<void> {
+  await dbDelete("reports", id, orgId);
 }
 
 export async function resetReports(reports: Report[], orgId: string): Promise<void> {

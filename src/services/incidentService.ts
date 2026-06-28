@@ -61,8 +61,8 @@ export async function loadIncidents(filters?: IncidentFilters, orgId?: string): 
   });
 }
 
-export async function loadIncidentById(id: string): Promise<Incident | null> {
-  return dbLoadOne<Incident>(TABLE, id);
+export async function loadIncidentById(id: string, orgId: string): Promise<Incident | null> {
+  return dbLoadOne<Incident>(TABLE, id, orgId);
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -472,8 +472,8 @@ export async function removeIncidentAttachment(
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
-export async function deleteIncident(id: string): Promise<void> {
-  await dbDelete(TABLE, id);
+export async function deleteIncident(id: string, orgId: string): Promise<void> {
+  await dbDelete(TABLE, id, orgId);
 }
 
 // ─── L2 Workbench: Convert & Merge ───────────────────────────────────────────
